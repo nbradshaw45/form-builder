@@ -1,0 +1,99 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Inter+Tight:wght@600;700;800&family=JetBrains+Mono:wght@400;500&display=swap");
+@import "tailwindcss";
+
+@theme {
+  /* Typography */
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-display: "Inter Tight", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  /* Brand — Adminator blue */
+  --color-primary-50: #eff6ff;
+  --color-primary-100: #dbeafe;
+  --color-primary-200: #bfdbfe;
+  --color-primary-300: #93c5fd;
+  --color-primary-400: #60a5fa;
+  --color-primary-500: #3b82f6;
+  --color-primary-600: #2563eb;
+  --color-primary-700: #1d4ed8;
+  --color-primary-800: #1e40af;
+  --color-primary-900: #1e3a8a;
+  --color-primary-950: #172554;
+
+  /* Surfaces */
+  --color-canvas: #f0f4f8;
+  --color-hover: #f8fafc;
+  --color-muted: #f1f5f9;
+
+  /* Text */
+  --color-ink: #1e293b;
+  --color-ink-muted: #64748b;
+  --color-ink-light: #94a3b8;
+
+  /* Borders */
+  --color-line: #e4e8ef;
+  --color-line-soft: #eef1f5;
+
+  /* Semantic */
+  --color-danger: #ef4444;
+  --color-danger-soft: #fef2f2;
+  --color-success: #10b981;
+  --color-success-soft: #ecfdf5;
+  --color-warning: #f59e0b;
+  --color-warning-soft: #fffbeb;
+  --color-info: #0ea5e9;
+  --color-info-soft: #f0f9ff;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px 0 rgb(15 23 42 / 0.04);
+  --shadow-card: 0 1px 3px 0 rgb(15 23 42 / 0.06),
+    0 1px 2px -1px rgb(15 23 42 / 0.04);
+  --shadow-lg: 0 10px 15px -3px rgb(15 23 42 / 0.08),
+    0 4px 6px -4px rgb(15 23 42 / 0.05);
+
+  /* Neutral scale mapped to Adminator slate tones */
+  --color-neutral-50: #f8fafc;
+  --color-neutral-100: #f0f4f8;
+  --color-neutral-200: #e4e8ef;
+  --color-neutral-300: #d4dae3;
+  --color-neutral-400: #94a3b8;
+  --color-neutral-500: #64748b;
+  --color-neutral-600: #475569;
+  --color-neutral-700: #334155;
+  --color-neutral-800: #1e293b;
+  --color-neutral-900: #0f172a;
+  --color-neutral-950: #020617;
+}
+
+@utility card {
+  @apply rounded-[14px] border border-neutral-200 bg-white shadow-card;
+}
+
+@utility label {
+  @apply text-xs font-semibold tracking-[-0.005em] text-neutral-800;
+}
+
+@utility select-input {
+  appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748B' stroke-width='2'><path d='m6 9 6 6 6-6'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 34px;
+}
+
+@utility table-head {
+  @apply border-b border-neutral-200 px-4 py-3 text-left font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-neutral-400;
+}
+
+@utility table-cell {
+  @apply border-b border-neutral-100 px-4 py-3 text-[13px] whitespace-nowrap text-neutral-800;
+}
+
+body {
+  @apply bg-canvas font-sans text-neutral-800 antialiased;
+  background-color: var(--color-canvas);
+}
+
+body {
+  @apply has-[dialog:open]:overflow-hidden;
+}
