@@ -38,7 +38,10 @@ export function CanvasElement({
     <div
       ref={setNodeRef}
       style={style}
-      onClick={() => onSelect(element.id)}
+      onClick={(event) => {
+        event.stopPropagation();
+        onSelect(element.id);
+      }}
       role="button"
       tabIndex={0}
       onKeyDown={(event) => {

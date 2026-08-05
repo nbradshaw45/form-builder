@@ -89,6 +89,10 @@ export function FieldControl({
   const isSystemDate = type === "created_date" || type === "modified_date";
   const isSystemUser = type === "updated_by_user";
   if ((isSystemDate || isSystemUser) && field.readonly !== false) {
+    const systemValue =
+      value === null || value === undefined || value === ""
+        ? ""
+        : String(value);
     return (
       <div className={fieldClasses}>
         <div className="flex items-center gap-2">
@@ -101,10 +105,10 @@ export function FieldControl({
         </div>
         <input
           id={field.key}
-          value=""
+          value={systemValue}
           readOnly
           disabled={disabled}
-          placeholder="Auto-filled on submit"
+          placeholder={systemValue ? undefined : "Auto-filled on submit"}
           className={`${inputClasses} font-mono`}
         />
         {helpText && (

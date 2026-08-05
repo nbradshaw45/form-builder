@@ -2,6 +2,7 @@ import { type FormEvent, useState } from "react";
 import { Button } from "../shared/components/Button";
 import { FieldControl } from "./FieldControl";
 import { isSystemField } from "./builder/elementFactory";
+import { gridColumnClasses, gridRowClasses, columnStyle } from "../shared/grid";
 import type {
   FormField,
   SubmissionData,
@@ -17,6 +18,8 @@ interface DynamicFormRendererProps {
   submitLabel?: string;
   hideSubmit?: boolean;
   submitterName?: string;
+  initialValues?: SubmissionData;
+  readOnly?: boolean;
 }
 
 const EDITTABLE_TYPES = new Set([
@@ -63,8 +66,12 @@ export function DynamicFormRenderer({
   submitLabel = "Submit",
   hideSubmit = false,
   submitterName,
+  initialValues,
+  readOnly = false,
 }: DynamicFormRendererProps) {
-  const [values, setValues] = useState<SubmissionData>({});
+  const [values, setValues] = useState<SubmissionData>(
+    () => initialValues ?? {},
+  );
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -146,21 +153,29 @@ export function DynamicFormRenderer({
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
-      {visibleFields.map((field) => (
-        <FieldControl
-          key={field.id}
-          field={field}
-          value={values[field.key] ?? null}
-          onChange={(value) => setValue(field.key, value)}
-          allValues={values}
-          error={errors[field.key]}
-        />
-      ))}
+      <div className={gridRowClasses}>
+        {visibleFields.map((field) => (
+          <div
+            key={field.id}
+            className={gridColumnClasses()}
+            style={columnStyle(field.width)}
+          >
+            <FieldControl
+              field={field}
+              value={values[field.key] ?? null}
+              onChange={(value) => setValue(field.key, value)}
+              allValues={values}
+              error={errors[field.key]}
+              disabled={readOnly}
+            />
+          </div>
+        ))}
+      </div>
 
-      {!hideSubmit && (
-        <div className="mt-2">
+      {!hideSubmit && !readOnly && (
+        <div className="mt-2 flex justify-end">
           <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? "Submitting..." : submitLabel}
+            {isSubmitting ? "Saving..." : submitLabel}
           </Button>
         </div>
       )}

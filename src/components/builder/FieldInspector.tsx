@@ -1,4 +1,8 @@
-import type { FormField, VisibilityOperator } from "../../types";
+import type {
+  FormField,
+  FormSettings,
+  VisibilityOperator,
+} from "../../types";
 import type { FieldType } from "../../types";
 import { inputClasses } from "../../shared/styles";
 import { isSystemField } from "./elementFactory";
@@ -6,9 +10,11 @@ import { isSystemField } from "./elementFactory";
 interface FieldInspectorProps {
   element: FormField | null;
   allElements: FormField[];
+  settings: FormSettings;
   onLabelChange: (element: FormField, label: string) => void;
   onKeyChange: (element: FormField, key: string) => void;
   onPatch: (id: string, patch: Partial<FormField>) => void;
+  onSettingsChange: (patch: Partial<FormSettings>) => void;
 }
 
 const labelClasses = "text-xs font-semibold tracking-[-0.005em] text-neutral-800";
@@ -18,6 +24,22 @@ const OPERATORS: { value: VisibilityOperator; label: string }[] = [
   { value: "not_equals", label: "does not equal" },
   { value: "is_set", label: "is set" },
   { value: "is_not_set", label: "is not set" },
+];
+
+const WIDTH_OPTIONS = Array.from({ length: 12 }, (_, index) => {
+  const columns = index + 1;
+  const percent = Math.round((columns / 12) * 100);
+  return { value: columns, label: `${columns} — ${percent}%` };
+}).reverse();
+
+const MODAL_WIDTHS = [440, 520, 560, 640, 720, 840, 960];
+
+const MODAL_HEIGHTS: { value: number | null; label: string }[] = [
+  { value: null, label: "Auto — fit content" },
+  { value: 480, label: "480px" },
+  { value: 600, label: "600px" },
+  { value: 720, label: "720px" },
+  { value: 900, label: "900px" },
 ];
 
 const TYPE_NAMES: Record<FieldType, string> = {
@@ -39,18 +61,14 @@ const TYPE_NAMES: Record<FieldType, string> = {
 export function FieldInspector({
   element,
   allElements,
+  settings,
   onLabelChange,
   onKeyChange,
   onPatch,
+  onSettingsChange,
 }: FieldInspectorProps) {
   if (!element) {
-    return (
-      <aside className="card p-4">
-        <p className="text-[13px] text-neutral-500">
-          Select an element on the canvas to edit its settings.
-        </p>
-      </aside>
-    );
+    return <FormSettingsPanel settings={settings} onChange={onSettingsChange} />;
   }
 
   const isLayout =
@@ -120,6 +138,30 @@ export function FieldInspector({
           </span>
         </div>
       )}
+
+      <div className="flex flex-col gap-1">
+        <label htmlFor="inspector-width" className={labelClasses}>
+          Column width
+        </label>
+        <select
+          id="inspector-width"
+          value={element.width ?? 12}
+          onChange={(event) =>
+            onPatch(element.id, { width: Number(event.target.value) })
+          }
+          className={inputClasses}
+        >
+          {WIDTH_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+        <span className="text-xs text-neutral-400">
+          Spans a 12-column grid; elements wrap to the next row when the row
+          is full.
+        </span>
+      </div>
 
       {!isLayout && element.type !== "checkbox" && element.type !== "date" && (
         <div className="flex flex-col gap-1">
@@ -286,6 +328,199 @@ export function FieldInspector({
         ruleTargets={ruleTargets}
         onPatch={onPatch}
       />
+    </aside>
+  );
+}
+
+function FormSettingsPanel({
+  settings,
+  onChange,
+}: {
+  settings: FormSettings;
+  onChange: (patch: Partial<FormSettings>) => void;
+}) {
+  const isModal = settings.displayMode === "modal";
+  const wantsRedirect =
+    settings.successMode === "redirect" || settings.successMode === "both";
+  const wantsMessage =
+    settings.successMode === "message" || settings.successMode === "both";
+
+  return (
+    <aside className="card flex flex-col gap-5 p-4">
+      <div className="flex flex-col gap-0.5 border-b border-neutral-100 pb-3">
+        <h2 className="font-display text-sm font-bold tracking-[-0.02em] text-neutral-800">
+          Form settings
+        </h2>
+        <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-neutral-400">
+          Display &amp; after submit
+        </span>
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label htmlFor="settings-display" className={labelClasses}>
+          How the form opens
+        </label>
+        <select
+          id="settings-display"
+          value={settings.displayMode ?? "page"}
+          onChange={(event) =>
+            onChange({
+              displayMode: event.target.value as FormSettings["displayMode"],
+            })
+          }
+          className={inputClasses}
+        >
+          <option value="page">New page</option>
+          <option value="modal">Popup / modal</option>
+        </select>
+      </div>
+
+      {isModal && (
+        <div className="flex flex-col gap-2.5 rounded-lg border border-neutral-100 bg-muted p-3">
+          <div className="flex flex-col gap-1">
+            <label htmlFor="settings-modal-width" className={labelClasses}>
+              Popup width
+            </label>
+            <select
+              id="settings-modal-width"
+              value={settings.modalWidth ?? 560}
+              onChange={(event) =>
+                onChange({ modalWidth: Number(event.target.value) })
+              }
+              className={inputClasses}
+            >
+              {MODAL_WIDTHS.map((width) => (
+                <option key={width} value={width}>
+                  {width}px
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label htmlFor="settings-modal-height" className={labelClasses}>
+              Popup height
+            </label>
+            <select
+              id="settings-modal-height"
+              value={settings.modalHeight ?? ""}
+              onChange={(event) =>
+                onChange({
+                  modalHeight:
+                    event.target.value === ""
+                      ? null
+                      : Number(event.target.value),
+                })
+              }
+              className={inputClasses}
+            >
+              {MODAL_HEIGHTS.map((option) => (
+                <option
+                  key={String(option.value)}
+                  value={option.value ?? ""}
+                >
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <p className="text-xs leading-snug text-neutral-400">
+            The form URL opens a centered popup with these window dimensions.
+          </p>
+        </div>
+      )}
+
+      <div className="flex flex-col gap-2.5 border-t border-neutral-100 pt-3">
+        <div className="flex flex-col gap-1">
+          <label htmlFor="settings-success" className={labelClasses}>
+            After submit
+          </label>
+          <select
+            id="settings-success"
+            value={settings.successMode ?? "message"}
+            onChange={(event) =>
+              onChange({
+                successMode: event.target.value as FormSettings["successMode"],
+              })
+            }
+            className={inputClasses}
+          >
+            <option value="message">Show a success message</option>
+            <option value="redirect">Redirect</option>
+            <option value="both">Show message, then redirect</option>
+          </select>
+        </div>
+
+        {wantsMessage && (
+          <div className="flex flex-col gap-1">
+            <label htmlFor="settings-success-message" className={labelClasses}>
+              Success message
+            </label>
+            <textarea
+              id="settings-success-message"
+              value={settings.successMessage ?? ""}
+              onChange={(event) =>
+                onChange({ successMessage: event.target.value })
+              }
+              rows={2}
+              placeholder="Thank you! Your response has been submitted."
+              className={inputClasses}
+            />
+            <span className="text-xs text-neutral-400">
+              Leave blank to use the default message.
+            </span>
+          </div>
+        )}
+
+        {wantsRedirect && (
+          <div className="flex flex-col gap-2.5 rounded-lg border border-neutral-100 bg-muted p-3">
+            <div className="flex flex-col gap-1">
+              <label
+                htmlFor="settings-redirect-target"
+                className={labelClasses}
+              >
+                Redirect to
+              </label>
+              <select
+                id="settings-redirect-target"
+                value={settings.redirectTarget ?? "submissions"}
+                onChange={(event) =>
+                  onChange({
+                    redirectTarget: event.target
+                      .value as FormSettings["redirectTarget"],
+                  })
+                }
+                className={inputClasses}
+              >
+                <option value="submissions">
+                  This form&apos;s submissions page
+                </option>
+                <option value="custom">A custom URL</option>
+              </select>
+            </div>
+            {settings.redirectTarget === "custom" && (
+              <div className="flex flex-col gap-1">
+                <label htmlFor="settings-redirect-url" className={labelClasses}>
+                  URL
+                </label>
+                <input
+                  id="settings-redirect-url"
+                  value={settings.redirectUrl ?? ""}
+                  onChange={(event) =>
+                    onChange({ redirectUrl: event.target.value })
+                  }
+                  placeholder="https://example.com/thanks"
+                  className={`${inputClasses} font-mono`}
+                />
+              </div>
+            )}
+            <ToggleRow
+              label="Append response data to URL"
+              checked={settings.appendData === true}
+              onChange={(checked) => onChange({ appendData: checked })}
+            />
+          </div>
+        )}
+      </div>
     </aside>
   );
 }

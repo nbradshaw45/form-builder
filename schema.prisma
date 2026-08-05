@@ -33,6 +33,7 @@ model Form {
   title        String
   description  String?
   fields       Json
+  settings     Json?
   userId       String
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   submissions  Submission[]

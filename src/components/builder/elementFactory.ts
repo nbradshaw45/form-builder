@@ -96,6 +96,7 @@ export function createElement(
     key,
     label,
     type,
+    width: 12,
   };
 
   switch (type) {

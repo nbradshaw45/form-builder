@@ -11,17 +11,14 @@ import {
   deleteSubmission,
   getForm,
   getFormSubmissions,
-  updateSubmission,
   useQuery,
 } from "wasp/client/operations";
 import { useParams } from "react-router";
 import { Button, ButtonLink } from "../shared/components/Button";
 import { Card, CardHead, DataFoot, DataToolbar } from "../shared/components/Card";
-import { ConfirmDialog, Modal } from "../components/Modal";
+import { ConfirmDialog } from "../components/Modal";
 import { EyeIcon, PencilIcon, ShareIcon, TrashIcon } from "../components/builder/icons";
-import { isSystemField } from "../components/builder/elementFactory";
-import { inputClasses, selectClasses } from "../shared/styles";
-import type { FormField, SubmissionData } from "../types";
+import type { FormField } from "../types";
 
 const columnHelper = createColumnHelper<Submission>();
 
@@ -49,8 +46,6 @@ function formatCellValue(key: string, value: unknown): string {
   return formatValue(value);
 }
 
-type ModalAction = { type: "view" | "edit" } | { type: "delete" };
-
 export function FormSubmissionsPage({ user }: { user: AuthUser }) {
   const { id = "" } = useParams<{ id: string }>();
   const { data: form } = useQuery(getForm, { id });
@@ -62,8 +57,7 @@ export function FormSubmissionsPage({ user }: { user: AuthUser }) {
   const submissions = submissionsData?.submissions;
   const access = submissionsData?.access ?? "view";
 
-  const [action, setAction] = useState<ModalAction | null>(null);
-  const [activeRow, setActiveRow] = useState<Submission | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Submission | null>(null);
   const [search, setSearch] = useState("");
 
   const canEdit = access === "owner" || access === "admin" || access === "edit";
@@ -149,16 +143,15 @@ export function FormSubmissionsPage({ user }: { user: AuthUser }) {
         header: "Actions",
         cell: (info) => (
           <RowActions
+            formId={id}
+            submissionId={info.row.original.id}
             canEdit={canEdit}
-            onAction={(action) => {
-              setActiveRow(info.row.original);
-              setAction(action);
-            }}
+            onDelete={() => setDeleteTarget(info.row.original)}
           />
         ),
       }),
     ];
-  }, [fields, submissions, canEdit]);
+  }, [fields, submissions, canEdit, id]);
 
   const table = useReactTable({
     data: filteredSubmissions,
@@ -304,25 +297,10 @@ export function FormSubmissionsPage({ user }: { user: AuthUser }) {
         )}
       </Card>
 
-      {activeRow && action?.type === "view" && (
-        <ViewSubmissionModal
-          submission={activeRow}
-          onClose={() => setAction(null)}
-        />
-      )}
-
-      {activeRow && action?.type === "edit" && (
-        <EditSubmissionModal
-          submission={activeRow}
-          fields={fields}
-          onClose={() => setAction(null)}
-        />
-      )}
-
-      {activeRow && action?.type === "delete" && (
+      {deleteTarget && (
         <DeleteSubmissionDialog
-          submission={activeRow}
-          onCancel={() => setAction(null)}
+          submission={deleteTarget}
+          onCancel={() => setDeleteTarget(null)}
         />
       )}
     </div>
@@ -330,223 +308,50 @@ export function FormSubmissionsPage({ user }: { user: AuthUser }) {
 }
 
 function RowActions({
+  formId,
+  submissionId,
   canEdit,
-  onAction,
+  onDelete,
 }: {
+  formId: string;
+  submissionId: string;
   canEdit: boolean;
-  onAction: (action: ModalAction) => void;
+  onDelete: () => void;
 }) {
   return (
     <div className="flex flex-wrap gap-1.5">
-      <Button size="xs" variant="ghost" onClick={() => onAction({ type: "view" })}>
+      <ButtonLink
+        to="/forms/:id/records/:submissionId"
+        params={{ id: formId, submissionId }}
+        size="xs"
+        variant="ghost"
+      >
         <EyeIcon className="size-3.5" />
         View
-      </Button>
+      </ButtonLink>
       {canEdit && (
-        <Button size="xs" variant="ghost" onClick={() => onAction({ type: "edit" })}>
+        <ButtonLink
+          to="/forms/:id/records/:submissionId/edit"
+          params={{ id: formId, submissionId }}
+          size="xs"
+          variant="ghost"
+        >
           <PencilIcon className="size-3.5" />
           Edit
-        </Button>
+        </ButtonLink>
       )}
       {canEdit && (
         <Button
           size="xs"
           variant="ghost"
           className="text-danger hover:border-danger hover:bg-danger-soft hover:text-danger"
-          onClick={() => onAction({ type: "delete" })}
+          onClick={onDelete}
         >
           <TrashIcon className="size-3.5" />
           Delete
         </Button>
       )}
     </div>
-  );
-}
-
-function ViewSubmissionModal({
-  submission,
-  onClose,
-}: {
-  submission: Submission;
-  onClose: () => void;
-}) {
-  const data = submission.data as Record<string, unknown>;
-  return (
-    <Modal title="Submission details" onClose={onClose}>
-      <div className="flex flex-col gap-4">
-        <table className="w-full border-collapse text-left text-sm">
-          <tbody>
-            {Object.entries(data).map(([key, value]) => (
-              <tr key={key} className="border-b border-neutral-100 last:border-b-0">
-                <th className="w-1/3 px-2 py-2 align-top font-mono text-[11px] font-medium uppercase tracking-[0.08em] text-neutral-400">
-                  {key}
-                </th>
-                <td className="px-2 py-2 text-[13px] text-neutral-800">
-                  {formatValue(value)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <p className="text-xs text-neutral-500">
-          Submitted {new Date(submission.createdAt).toLocaleString()}
-        </p>
-      </div>
-    </Modal>
-  );
-}
-
-function EditSubmissionModal({
-  submission,
-  fields,
-  onClose,
-}: {
-  submission: Submission;
-  fields: FormField[];
-  onClose: () => void;
-}) {
-  const originalData = submission.data as Record<string, unknown>;
-  const [draft, setDraft] = useState<Record<string, string>>(() => {
-    const out: Record<string, string> = {};
-    for (const [key, value] of Object.entries(originalData)) {
-      out[key] =
-        value === null || value === undefined ? "" : String(value);
-    }
-    return out;
-  });
-  const [isSaving, setIsSaving] = useState(false);
-
-  const fieldsByKey = useMemo(
-    () => new Map(fields.map((field) => [field.key, field])),
-    [fields],
-  );
-
-  function isCheckboxKey(key: string): boolean {
-    const field = fieldsByKey.get(key);
-    if (field) {
-      return field.type === "checkbox";
-    }
-    return typeof originalData[key] === "boolean";
-  }
-
-  function isNumberKey(key: string): boolean {
-    const field = fieldsByKey.get(key);
-    if (field) {
-      return field.type === "number";
-    }
-    return typeof originalData[key] === "number";
-  }
-
-  function getSelectOptions(key: string): string[] | null {
-    const field = fieldsByKey.get(key);
-    return field && field.type === "select" ? (field.options ?? []) : null;
-  }
-
-  function isReadOnlySystemKey(key: string): boolean {
-    const field = fieldsByKey.get(key);
-    return Boolean(field && isSystemField(field.type) && field.readonly !== false);
-  }
-
-  async function handleSave() {
-    const payload: SubmissionData = {};
-    for (const [key, raw] of Object.entries(draft)) {
-      if (isCheckboxKey(key)) {
-        payload[key] = raw === "true";
-      } else if (isNumberKey(key)) {
-        payload[key] = raw === "" ? null : Number(raw);
-      } else {
-        payload[key] = raw;
-      }
-    }
-    setIsSaving(true);
-    try {
-      await updateSubmission({
-        submissionId: submission.id,
-        data: payload,
-      });
-      onClose();
-    } catch (err) {
-      window.alert(`Error while updating submission: ${String(err)}`);
-      setIsSaving(false);
-    }
-  }
-
-  return (
-    <Modal
-      title="Edit submission"
-      onClose={onClose}
-      footer={
-        <>
-          <Button variant="ghost" onClick={onClose} disabled={isSaving}>
-            Cancel
-          </Button>
-          <Button onClick={handleSave} disabled={isSaving}>
-            {isSaving ? "Saving..." : "Save changes"}
-          </Button>
-        </>
-      }
-    >
-      <div className="flex flex-col gap-3">
-        {Object.keys(draft).map((key) => {
-          const field = fieldsByKey.get(key);
-          return (
-            <div key={key} className="flex flex-col gap-1">
-              <label htmlFor={`edit-${key}`} className="label">
-                {field?.label ?? key}
-              </label>
-              {isReadOnlySystemKey(key) ? (
-                <input
-                  id={`edit-${key}`}
-                  type="text"
-                  value={draft[key]}
-                  readOnly
-                  disabled
-                  className={`${inputClasses} font-mono`}
-                />
-              ) : isCheckboxKey(key) ? (
-                <input
-                  id={`edit-${key}`}
-                  type="checkbox"
-                  checked={draft[key] === "true"}
-                  onChange={(event) =>
-                    setDraft((prev) => ({
-                      ...prev,
-                      [key]: event.target.checked ? "true" : "false",
-                    }))
-                  }
-                  className="size-4 rounded border-neutral-300 text-primary-500 focus:ring-primary-500"
-                />
-              ) : getSelectOptions(key) ? (
-                <select
-                  id={`edit-${key}`}
-                  value={draft[key]}
-                  onChange={(event) =>
-                    setDraft((prev) => ({ ...prev, [key]: event.target.value }))
-                  }
-                  className={selectClasses}
-                >
-                  {getSelectOptions(key)!.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <input
-                  id={`edit-${key}`}
-                  type={isNumberKey(key) ? "number" : "text"}
-                  value={draft[key]}
-                  onChange={(event) =>
-                    setDraft((prev) => ({ ...prev, [key]: event.target.value }))
-                  }
-                  className={inputClasses}
-                />
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </Modal>
   );
 }
 

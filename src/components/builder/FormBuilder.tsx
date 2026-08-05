@@ -15,7 +15,8 @@ import {
 import type { Form } from "wasp/entities";
 import { createForm, updateForm } from "wasp/client/operations";
 import { useNavigate } from "react-router";
-import type { FieldType, FormField } from "../../types";
+import type { FieldType, FormField, FormSettings } from "../../types";
+import { DEFAULT_FORM_SETTINGS } from "../../types";
 import { Button, ButtonLink } from "../../shared/components/Button";
 import { inputClasses } from "../../shared/styles";
 import { Canvas } from "./Canvas";
@@ -41,6 +42,7 @@ export function FormBuilder({
   const navigate = useNavigate();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [settings, setSettings] = useState<FormSettings>(DEFAULT_FORM_SETTINGS);
   const [elements, setElements] = useState<FormField[]>(() =>
     initialForm ? [] : createDefaultSystemFields([]),
   );
@@ -54,6 +56,10 @@ export function FormBuilder({
       lastLoadedId.current = initialForm.id;
       setTitle(initialForm.title);
       setDescription(initialForm.description ?? "");
+      setSettings({
+        ...DEFAULT_FORM_SETTINGS,
+        ...((initialForm.settings as unknown as FormSettings | null) ?? {}),
+      });
       setElements(
         Array.isArray(initialForm.fields)
           ? (initialForm.fields as unknown as FormField[])
@@ -183,9 +189,15 @@ export function FormBuilder({
           title,
           description,
           fields: elements,
+          settings,
         });
       } else {
-        await createForm({ title, description, fields: elements });
+        await createForm({
+          title,
+          description,
+          fields: elements,
+          settings,
+        });
       }
       navigate("/forms");
     } catch (err) {
@@ -250,15 +262,20 @@ export function FormBuilder({
               elements={elements}
               selectedId={selectedId}
               onSelect={handleSelect}
+              onDeselect={() => setSelectedId(null)}
               onDuplicate={handleDuplicate}
               onDelete={handleDelete}
             />
             <FieldInspector
               element={selectedElement}
               allElements={elements}
+              settings={settings}
               onLabelChange={handleLabelChange}
               onKeyChange={handleKeyChange}
               onPatch={handlePatch}
+              onSettingsChange={(patch) =>
+                setSettings((prev) => ({ ...prev, ...patch }))
+              }
             />
           </div>
         </DndContext>

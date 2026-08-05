@@ -1,9 +1,16 @@
 import { useMemo, useState } from "react";
-import { getUsers, updateUser, useQuery } from "wasp/client/operations";
+import {
+  addUser,
+  deleteUser,
+  getUsers,
+  updateUser,
+  useQuery,
+} from "wasp/client/operations";
 import type { AuthUser } from "wasp/auth";
 import type { AdminUser } from "../queries";
 import { Button, ButtonLink } from "../shared/components/Button";
 import { Card, CardHead, DataFoot, DataToolbar } from "../shared/components/Card";
+import { ConfirmDialog } from "../components/Modal";
 import { inputClasses, selectClasses } from "../shared/styles";
 
 const ROLES = ["ADMIN", "EDITOR", "VIEWER"] as const;
@@ -15,6 +22,8 @@ const roleBadge: Record<Role, string> = {
   VIEWER: "bg-neutral-100 text-neutral-600",
 };
 
+const DEFAULT_EMAIL = "user@example.com";
+
 export function AdminUsersPage({ user }: { user: AuthUser }) {
   const { data: users, isLoading, isSuccess, refetch } = useQuery(getUsers);
   const [search, setSearch] = useState("");
@@ -23,6 +32,19 @@ export function AdminUsersPage({ user }: { user: AuthUser }) {
   const [role, setRole] = useState<Role>("EDITOR");
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [showAdd, setShowAdd] = useState(false);
+  const [newEmail, setNewEmail] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [newName, setNewName] = useState("");
+  const [newRole, setNewRole] = useState<Role>("EDITOR");
+  const [isAdding, setIsAdding] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
+
+  const [deleteState, setDeleteState] = useState<{
+    target: AdminUser;
+    isDeleting: boolean;
+  } | null>(null);
 
   const filteredUsers = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -73,6 +95,48 @@ export function AdminUsersPage({ user }: { user: AuthUser }) {
     }
   }
 
+  function openAdd() {
+    setNewEmail("");
+    setNewPassword("");
+    setNewName("");
+    setNewRole("EDITOR");
+    setAddError(null);
+    setShowAdd(true);
+  }
+
+  async function addNewUser() {
+    setIsAdding(true);
+    setAddError(null);
+    try {
+      await addUser({
+        email: newEmail.trim(),
+        password: newPassword,
+        name: newName.trim() || undefined,
+        role: newRole,
+      });
+      setShowAdd(false);
+      await refetch();
+    } catch (err) {
+      setAddError(String(err));
+      setIsAdding(false);
+    }
+  }
+
+  async function confirmDelete() {
+    if (!deleteState) {
+      return;
+    }
+    setDeleteState({ ...deleteState, isDeleting: true });
+    try {
+      await deleteUser({ userId: deleteState.target.id });
+      setDeleteState(null);
+      await refetch();
+    } catch (err) {
+      window.alert(`Error while deleting user: ${String(err)}`);
+      setDeleteState(null);
+    }
+  }
+
   return (
     <div className="mx-auto flex w-full max-w-(--breakpoint-2xl) flex-col gap-6 px-8 py-8">
       <div className="flex flex-wrap items-end justify-between gap-4">
@@ -89,9 +153,12 @@ export function AdminUsersPage({ user }: { user: AuthUser }) {
             see forms shared with them.
           </p>
         </div>
-        <ButtonLink to="/forms" variant="ghost">
-          Back to forms
-        </ButtonLink>
+        <div className="flex items-center gap-2">
+          <Button onClick={openAdd}>Add user</Button>
+          <ButtonLink to="/forms" variant="ghost">
+            Back to forms
+          </ButtonLink>
+        </div>
       </div>
 
       <Card className="w-full">
@@ -174,14 +241,30 @@ export function AdminUsersPage({ user }: { user: AuthUser }) {
                           {new Date(target.createdAt).toLocaleDateString()}
                         </td>
                         <td className="table-cell">
-                          <Button
-                            size="xs"
-                            variant="ghost"
-                            onClick={() => openEditor(target)}
-                            disabled={target.id === user.id}
-                          >
-                            Edit
-                          </Button>
+                          <div className="flex flex-wrap gap-1.5">
+                            <Button
+                              size="xs"
+                              variant="ghost"
+                              onClick={() => openEditor(target)}
+                              disabled={target.id === user.id}
+                            >
+                              Edit
+                            </Button>
+                            <Button
+                              size="xs"
+                              variant="ghost"
+                              className="text-danger hover:border-danger hover:bg-danger-soft hover:text-danger"
+                              disabled={target.id === user.id}
+                              onClick={() =>
+                                setDeleteState({
+                                  target,
+                                  isDeleting: false,
+                                })
+                              }
+                            >
+                              Delete
+                            </Button>
+                          </div>
                         </td>
                       </tr>
                     ))
@@ -277,6 +360,112 @@ export function AdminUsersPage({ user }: { user: AuthUser }) {
             </div>
           </div>
         </div>
+      )}
+
+      {showAdd && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => !isAdding && setShowAdd(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Add user"
+            className="flex w-full max-w-md flex-col gap-4 rounded-[14px] border border-neutral-200 bg-white p-6 shadow-lg"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2 className="border-b border-neutral-100 pb-3 font-display text-lg font-bold tracking-[-0.02em] text-neutral-800">
+              Add user
+            </h2>
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-1">
+                <label className="label" htmlFor="add-email">
+                  Email
+                </label>
+                <input
+                  id="add-email"
+                  type="email"
+                  value={newEmail}
+                  onChange={(event) => setNewEmail(event.target.value)}
+                  placeholder={DEFAULT_EMAIL}
+                  className={`${inputClasses} font-mono`}
+                />
+                <span className="text-xs text-neutral-400">
+                  Used to sign in; usernames are normalized to lowercase.
+                </span>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="label" htmlFor="add-password">
+                  Password
+                </label>
+                <input
+                  id="add-password"
+                  type="password"
+                  value={newPassword}
+                  onChange={(event) => setNewPassword(event.target.value)}
+                  placeholder="At least 8 characters with a number"
+                  className={inputClasses}
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="label" htmlFor="add-name">
+                  Display name
+                </label>
+                <input
+                  id="add-name"
+                  value={newName}
+                  onChange={(event) => setNewName(event.target.value)}
+                  placeholder="Full name (optional)"
+                  className={inputClasses}
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="label" htmlFor="add-role">
+                  Role
+                </label>
+                <select
+                  id="add-role"
+                  value={newRole}
+                  onChange={(event) => setNewRole(event.target.value as Role)}
+                  className={selectClasses}
+                >
+                  {ROLES.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {addError && <p className="text-sm text-red-500">{addError}</p>}
+            </div>
+            <div className="flex justify-end gap-2 border-t border-neutral-100 pt-4">
+              <Button
+                variant="ghost"
+                onClick={() => setShowAdd(false)}
+                disabled={isAdding}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={addNewUser}
+                disabled={isAdding || !newEmail.trim() || !newPassword}
+              >
+                {isAdding ? "Creating..." : "Create user"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deleteState && (
+        <ConfirmDialog
+          title="Delete user"
+          message={`Are you sure you want to delete "${deleteState.target.email ?? deleteState.target.id}"? Their forms, submissions, and shared access will be permanently removed.`}
+          confirmLabel="Delete user"
+          isLoading={deleteState.isDeleting}
+          onConfirm={confirmDelete}
+          onCancel={() => setDeleteState(null)}
+        />
       )}
     </div>
   );

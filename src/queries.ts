@@ -5,6 +5,7 @@ import type {
   GetFormAccess,
   GetFormSubmissions,
   GetForms,
+  GetSubmission,
   GetUsers,
 } from "wasp/server/operations";
 import {
@@ -47,6 +48,11 @@ export type FormAccessInfo = {
 export type SubmissionsResult = {
   access: "owner" | "admin" | "edit" | "view";
   submissions: Submission[];
+};
+
+export type SubmissionResult = {
+  access: "owner" | "admin" | "edit" | "view";
+  submission: Submission;
 };
 
 export const getForms: GetForms<void, FormWithAccess[]> = async (
@@ -153,6 +159,36 @@ export const getFormSubmissions: GetFormSubmissions<
           : "view";
 
   return { access: kind, submissions };
+};
+
+export const getSubmission: GetSubmission<
+  { submissionId: string },
+  SubmissionResult
+> = async ({ submissionId }, context) => {
+  if (!context.user) {
+    throw new HttpError(401);
+  }
+
+  const submission = await context.entities.Submission.findUnique({
+    where: { id: submissionId },
+  });
+  if (!submission) {
+    throw new HttpError(404, "Submission not found");
+  }
+
+  const access = await getFormAccessForUser(submission.formId, context.user);
+  assertCanView(access);
+
+  const kind: SubmissionResult["access"] =
+    access.kind === "admin"
+      ? "admin"
+      : access.kind === "owner"
+        ? "owner"
+        : access.level === "EDIT"
+          ? "edit"
+          : "view";
+
+  return { access: kind, submission };
 };
 
 export const getUsers: GetUsers<void, AdminUser[]> = async (_args, context) => {

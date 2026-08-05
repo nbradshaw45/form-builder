@@ -1,9 +1,12 @@
 import type { Form, Submission } from "wasp/entities";
 import { HttpError, prisma } from "wasp/server";
+import { Prisma } from "@prisma/client";
 import type {
+  AddUser,
   CreateForm,
   DeleteForm,
   DeleteSubmission,
+  DeleteUser,
   RemoveFormAccess,
   SetFormAccess,
   SubmitForm,
@@ -11,7 +14,15 @@ import type {
   UpdateSubmission,
   UpdateUser,
 } from "wasp/server/operations";
-import type { FormField, SubmissionData } from "./types";
+import {
+  createProviderId,
+  createUser,
+  ensurePasswordIsPresent,
+  ensureValidPassword,
+  ensureValidUsername,
+  sanitizeAndSerializeProviderData,
+} from "wasp/server/auth";
+import type { FormField, FormSettings, SubmissionData } from "./types";
 import {
   assertCanEdit,
   assertIsAdmin,
@@ -73,10 +84,11 @@ type CreateFormArgs = {
   title: string;
   description?: string;
   fields: FormField[];
+  settings?: FormSettings;
 };
 
 export const createForm: CreateForm<CreateFormArgs, Form> = async (
-  { title, description, fields },
+  { title, description, fields, settings },
   context,
 ) => {
   if (!context.user) {
@@ -99,6 +111,7 @@ export const createForm: CreateForm<CreateFormArgs, Form> = async (
       title: title.trim(),
       description: description?.trim() || null,
       fields: serialize(fields),
+      settings: settings ? serialize(settings) : undefined,
       user: {
         connect: {
           id: context.user.id,
@@ -113,10 +126,11 @@ type UpdateFormArgs = {
   title: string;
   description?: string;
   fields: FormField[];
+  settings?: FormSettings;
 };
 
 export const updateForm: UpdateForm<UpdateFormArgs, Form> = async (
-  { formId, title, description, fields },
+  { formId, title, description, fields, settings },
   context,
 ) => {
   if (!context.user) {
@@ -140,6 +154,7 @@ export const updateForm: UpdateForm<UpdateFormArgs, Form> = async (
       title: title.trim(),
       description: description?.trim() || null,
       fields: serialize(fields),
+      settings: settings ? serialize(settings) : undefined,
     },
   });
 };
@@ -357,6 +372,95 @@ export const updateUser: UpdateUser<UpdateUserArgs, UpdateUserResult> = async (
     name: updated.name,
     role: updated.role,
   };
+};
+
+type AddUserArgs = {
+  email: string;
+  password: string;
+  name?: string;
+  role?: string;
+};
+
+type AddUserResult = {
+  id: string;
+  name: string | null;
+  role: string;
+  email: string;
+};
+
+export const addUser: AddUser<AddUserArgs, AddUserResult> = async (
+  { email, password, name, role },
+  context,
+) => {
+  if (!context.user) {
+    throw new HttpError(401);
+  }
+  assertIsAdmin(context.user);
+
+  if (role && !["ADMIN", "EDITOR", "VIEWER"].includes(role)) {
+    throw new HttpError(400, "Invalid role");
+  }
+
+  const normalizedEmail = email?.trim().toLowerCase();
+  ensureValidUsername({ username: normalizedEmail });
+  ensurePasswordIsPresent({ password });
+  ensureValidPassword({ password });
+
+  const providerId = createProviderId("username", normalizedEmail);
+  const providerData = await sanitizeAndSerializeProviderData<"username">({
+    hashedPassword: password,
+  });
+
+  let user;
+  try {
+    user = await createUser(providerId, providerData, {
+      name: name?.trim() || null,
+      role: (role ?? "EDITOR") as never,
+    });
+  } catch (e: unknown) {
+    if (
+      e instanceof Prisma.PrismaClientKnownRequestError &&
+      e.code === "P2002"
+    ) {
+      throw new HttpError(409, "A user with that email already exists");
+    }
+    throw e;
+  }
+
+  return {
+    id: user.id,
+    name: user.name,
+    role: user.role,
+    email: normalizedEmail,
+  };
+};
+
+type DeleteUserArgs = {
+  userId: string;
+};
+
+export const deleteUser: DeleteUser<DeleteUserArgs, void> = async (
+  { userId },
+  context,
+) => {
+  if (!context.user) {
+    throw new HttpError(401);
+  }
+  assertIsAdmin(context.user);
+
+  if (userId === context.user.id) {
+    throw new HttpError(400, "You cannot delete your own account");
+  }
+
+  const user = await context.entities.User.findUnique({
+    where: { id: userId },
+    select: { id: true },
+  });
+  if (!user) {
+    throw new HttpError(404, "User not found");
+  }
+
+  await context.entities.User.delete({ where: { id: userId } });
 };
 
 type SetFormAccessArgs = {
