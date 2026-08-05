@@ -4,6 +4,7 @@ import { FieldControl } from "./FieldControl";
 import { isSystemField } from "./builder/elementFactory";
 import { gridColumnClasses, gridRowClasses, columnStyle } from "../shared/grid";
 import { getFormUsers, useQuery } from "wasp/client/operations";
+import { evaluateFormula } from "./builder/formula";
 import type {
   FormField,
   SubmissionData,
@@ -73,6 +74,35 @@ function isSubmittableField(field: FormField): boolean {
     return true;
   }
   return isSystemField(field.type) && field.readonly === false;
+}
+
+function applyOptionRules(
+  field: FormField,
+  values: SubmissionData,
+): FormField {
+  const rules = field.optionRules;
+  if (!rules || rules.length === 0) {
+    return field;
+  }
+  const options = field.options ?? [];
+  const labels = field.optionLabels;
+  const kept: string[] = [];
+  const keptLabels: string[] = [];
+  options.forEach((option, index) => {
+    const rule = rules[index];
+    if (rule && !isFieldVisible(rule, values)) {
+      return;
+    }
+    kept.push(option);
+    if (labels) {
+      keptLabels.push(labels[index] ?? option);
+    }
+  });
+  return {
+    ...field,
+    options: kept,
+    optionLabels: keptLabels.length > 0 ? keptLabels : undefined,
+  };
 }
 
 export function DynamicFormRenderer({
@@ -178,6 +208,86 @@ export function DynamicFormRenderer({
     }
   }
 
+  function validateField(
+    field: FormField,
+    value: unknown,
+    values: SubmissionData,
+    fields: FormField[],
+  ): string | null {
+    const required =
+      field.required ||
+      (field.requiredWhen ? isFieldVisible(field.requiredWhen, values) : false);
+    const empty = isEmptyValue(field, value);
+    if (required && empty) {
+      return "This field is required";
+    }
+    if (empty) {
+      return null;
+    }
+
+    const formatError = validateFieldFormat(field, value);
+    if (formatError) {
+      return formatError;
+    }
+
+    const validation = field.validation;
+    if (!validation) {
+      return null;
+    }
+    if (typeof value === "string") {
+      if (
+        validation.minLength !== undefined &&
+        value.length < validation.minLength
+      ) {
+        return `Must be at least ${validation.minLength} characters`;
+      }
+      if (
+        validation.maxLength !== undefined &&
+        value.length > validation.maxLength
+      ) {
+        return `Must be at most ${validation.maxLength} characters`;
+      }
+      if (validation.pattern) {
+        try {
+          const pattern = new RegExp(validation.pattern);
+          if (!pattern.test(value)) {
+            return (
+              validation.patternMessage ||
+              "Value does not match the required pattern"
+            );
+          }
+        } catch {
+          // Ignore invalid regex so it doesn't block submissions.
+        }
+      }
+    }
+    const numeric = Number(value);
+    if (Number.isFinite(numeric)) {
+      if (validation.min !== undefined && numeric < validation.min) {
+        return `Must be at least ${validation.min}`;
+      }
+      if (validation.max !== undefined && numeric > validation.max) {
+        return `Must be at most ${validation.max}`;
+      }
+    }
+    if (validation.mustMatch) {
+      const otherValue = values[validation.mustMatch];
+      const otherLabel =
+        fields.find((field) => field.key === validation.mustMatch)?.label ??
+        validation.mustMatch;
+      if (String(value) !== String(otherValue ?? "")) {
+        return `Does not match ${otherLabel}`;
+      }
+    }
+    if (validation.rule) {
+      const ruleResult = evaluateFormula(validation.rule, values, fields);
+      if (ruleResult === null || ruleResult === 0) {
+        return validation.ruleMessage || "Value does not satisfy the rule";
+      }
+    }
+    return null;
+  }
+
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
 
@@ -190,14 +300,14 @@ export function DynamicFormRenderer({
       ) {
         continue;
       }
-      const value = values[field.key];
-      if (field.required && isEmptyValue(field, value)) {
-        nextErrors[field.key] = "This field is required";
-        continue;
-      }
-      const formatError = validateFieldFormat(field, value);
-      if (formatError) {
-        nextErrors[field.key] = formatError;
+      const fieldError = validateField(
+        field,
+        values[field.key],
+        values,
+        effectiveFields,
+      );
+      if (fieldError) {
+        nextErrors[field.key] = fieldError;
       }
     }
     setErrors(nextErrors);
@@ -275,13 +385,14 @@ export function DynamicFormRenderer({
             style={columnStyle(field.width)}
           >
             <FieldControl
-              field={field}
+              field={applyOptionRules(field, values)}
               value={values[field.key] ?? null}
               onChange={(value) => setValue(field.key, value)}
               allValues={values}
               error={errors[field.key]}
               disabled={readOnly}
               formId={formId}
+              allFields={effectiveFields}
             />
           </div>
         ))}

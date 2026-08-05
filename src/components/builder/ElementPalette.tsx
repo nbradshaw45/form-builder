@@ -1,7 +1,9 @@
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
+import { useMemo, useState } from "react";
 import { FIELD_DEFINITIONS } from "./elementFactory";
-import { GripIcon, PlusIcon } from "./icons";
+import { GripIcon, PlusIcon, SearchIcon } from "./icons";
+import { inputClasses } from "../../shared/styles";
 import type { FieldType } from "../../types";
 
 interface ElementPaletteProps {
@@ -57,82 +59,140 @@ function PaletteItem({
 }
 
 export function ElementPalette({ onAdd }: ElementPaletteProps) {
+  const [query, setQuery] = useState("");
+  const normalizedQuery = query.trim().toLowerCase();
+
+  const results = useMemo(
+    () =>
+      normalizedQuery
+        ? FIELD_DEFINITIONS.filter((def) =>
+            `${def.name} ${def.description} ${def.type}`
+              .toLowerCase()
+              .includes(normalizedQuery),
+          )
+        : [],
+    [normalizedQuery],
+  );
+
   const inputs = FIELD_DEFINITIONS.filter((def) => def.category === "input");
   const advanced = FIELD_DEFINITIONS.filter((def) => def.category === "advanced");
   const layouts = FIELD_DEFINITIONS.filter((def) => def.category === "layout");
   const systems = FIELD_DEFINITIONS.filter((def) => def.category === "system");
 
+  const searching = normalizedQuery.length > 0;
+
   return (
     <aside className="card flex flex-col gap-4 p-4">
-      <div className="border-b border-neutral-100 pb-3">
+      <div className="flex flex-col gap-2.5 border-b border-neutral-100 pb-3">
         <h2 className="font-display text-sm font-bold tracking-[-0.02em] text-neutral-800">
           Elements
         </h2>
+        <div className="relative">
+          <SearchIcon className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-neutral-400" />
+          <input
+            type="search"
+            aria-label="Search elements"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search elements..."
+            className={`${inputClasses} pl-8`}
+          />
+        </div>
       </div>
-      <section className="flex flex-col gap-1.5">
-        <h3 className="px-1 font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-neutral-400">
-          Input fields
-        </h3>
-        <ul className="flex flex-col gap-2">
-          {inputs.map((def) => (
-            <PaletteItem
-              key={def.type}
-              type={def.type}
-              name={def.name}
-              description={def.description}
-              onAdd={onAdd}
-            />
-          ))}
-        </ul>
-      </section>
-      <section className="flex flex-col gap-1.5">
-        <h3 className="px-1 font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-neutral-400">
-          Advanced
-        </h3>
-        <ul className="flex flex-col gap-2">
-          {advanced.map((def) => (
-            <PaletteItem
-              key={def.type}
-              type={def.type}
-              name={def.name}
-              description={def.description}
-              onAdd={onAdd}
-            />
-          ))}
-        </ul>
-      </section>
-      <section className="flex flex-col gap-1.5">
-        <h3 className="px-1 font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-neutral-400">
-          Layout elements
-        </h3>
-        <ul className="flex flex-col gap-2">
-          {layouts.map((def) => (
-            <PaletteItem
-              key={def.type}
-              type={def.type}
-              name={def.name}
-              description={def.description}
-              onAdd={onAdd}
-            />
-          ))}
-        </ul>
-      </section>
-      <section className="flex flex-col gap-1.5">
-        <h3 className="px-1 font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-neutral-400">
-          System fields
-        </h3>
-        <ul className="flex flex-col gap-2">
-          {systems.map((def) => (
-            <PaletteItem
-              key={def.type}
-              type={def.type}
-              name={def.name}
-              description={def.description}
-              onAdd={onAdd}
-            />
-          ))}
-        </ul>
-      </section>
+
+      {searching ? (
+        <section className="flex flex-col gap-1.5">
+          <h3 className="px-1 font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-neutral-400">
+            {results.length === 0
+              ? "No matches"
+              : `${results.length} match${results.length === 1 ? "" : "es"}`}
+          </h3>
+          {results.length === 0 ? (
+            <p className="px-1 text-xs text-neutral-400">
+              No elements match &ldquo;{query.trim()}&rdquo;.
+            </p>
+          ) : (
+            <ul className="flex flex-col gap-2">
+              {results.map((def) => (
+                <PaletteItem
+                  key={def.type}
+                  type={def.type}
+                  name={def.name}
+                  description={def.description}
+                  onAdd={onAdd}
+                />
+              ))}
+            </ul>
+          )}
+        </section>
+      ) : (
+        <>
+          <section className="flex flex-col gap-1.5">
+            <h3 className="px-1 font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-neutral-400">
+              Input fields
+            </h3>
+            <ul className="flex flex-col gap-2">
+              {inputs.map((def) => (
+                <PaletteItem
+                  key={def.type}
+                  type={def.type}
+                  name={def.name}
+                  description={def.description}
+                  onAdd={onAdd}
+                />
+              ))}
+            </ul>
+          </section>
+          <section className="flex flex-col gap-1.5">
+            <h3 className="px-1 font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-neutral-400">
+              Advanced
+            </h3>
+            <ul className="flex flex-col gap-2">
+              {advanced.map((def) => (
+                <PaletteItem
+                  key={def.type}
+                  type={def.type}
+                  name={def.name}
+                  description={def.description}
+                  onAdd={onAdd}
+                />
+              ))}
+            </ul>
+          </section>
+          <section className="flex flex-col gap-1.5">
+            <h3 className="px-1 font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-neutral-400">
+              Layout elements
+            </h3>
+            <ul className="flex flex-col gap-2">
+              {layouts.map((def) => (
+                <PaletteItem
+                  key={def.type}
+                  type={def.type}
+                  name={def.name}
+                  description={def.description}
+                  onAdd={onAdd}
+                />
+              ))}
+            </ul>
+          </section>
+          <section className="flex flex-col gap-1.5">
+            <h3 className="px-1 font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-neutral-400">
+              System fields
+            </h3>
+            <ul className="flex flex-col gap-2">
+              {systems.map((def) => (
+                <PaletteItem
+                  key={def.type}
+                  type={def.type}
+                  name={def.name}
+                  description={def.description}
+                  onAdd={onAdd}
+                />
+              ))}
+            </ul>
+          </section>
+        </>
+      )}
       <p className="text-xs text-neutral-400">
         Drag elements onto the canvas, or click to append.
       </p>

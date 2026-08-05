@@ -20,6 +20,7 @@ interface FieldControlProps {
   disabled?: boolean;
   error?: string | null;
   formId?: string;
+  allFields?: FormField[];
 }
 
 export function FieldControl({
@@ -30,6 +31,7 @@ export function FieldControl({
   disabled = false,
   error = null,
   formId,
+  allFields,
 }: FieldControlProps) {
   const { type, label, required, helpText, placeholder } = field;
 
@@ -63,7 +65,7 @@ export function FieldControl({
 
   if (type === "math") {
     const computed = field.formula
-      ? formatFormulaValue(field.formula, allValues)
+      ? formatFormulaValue(field.formula, allValues, allFields, field.mathDecimals)
       : "";
     return (
       <div className={fieldClasses}>

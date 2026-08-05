@@ -34,7 +34,28 @@ export type VisibilityOperator =
 export type VisibilityRule = {
   field: string;
   operator: VisibilityOperator;
-  value: string;
+  value?: string;
+};
+
+export type FieldValidation = {
+  /** Text length minimum (text, textarea, email, url, phone). */
+  minLength?: number;
+  /** Text length maximum (text, textarea, email, url, phone). */
+  maxLength?: number;
+  /** Numeric minimum (number, slider, currency, rating). */
+  min?: number;
+  /** Numeric maximum (number, slider, currency, rating). */
+  max?: number;
+  /** Regex pattern the value must match. */
+  pattern?: string;
+  /** Custom message shown when the pattern fails. */
+  patternMessage?: string;
+  /** Key of another field the value must equal. */
+  mustMatch?: string;
+  /** Custom expression (with [key] references) that must evaluate truthy. */
+  rule?: string;
+  /** Custom message shown when the expression fails. */
+  ruleMessage?: string;
 };
 
 export type FormField = {
@@ -78,6 +99,14 @@ export type FormField = {
   penColor?: string;
   /** Signature: pen width in px. */
   penWidth?: number;
+  /** Advanced validation rules. */
+  validation?: FieldValidation;
+  /** Field is required only when this rule is satisfied. */
+  requiredWhen?: VisibilityRule;
+  /** Per-option visibility rules, parallel to `options`. */
+  optionRules?: VisibilityRule[];
+  /** Math field display rounding (number of decimals). */
+  mathDecimals?: number;
 };
 
 export type SubmissionData = Record<

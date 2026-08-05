@@ -1,7 +1,9 @@
 import type {
+  FieldValidation,
   FormField,
   FormSettings,
   VisibilityOperator,
+  VisibilityRule,
 } from "../../types";
 import type { FieldType } from "../../types";
 import { inputClasses } from "../../shared/styles";
@@ -195,7 +197,11 @@ export function FieldInspector({
       )}
 
       {["select", "radio", "multi_select"].includes(element.type) && (
-        <OptionsEditor element={element} onPatch={onPatch} />
+        <OptionsEditor
+          element={element}
+          ruleTargets={ruleTargets}
+          onPatch={onPatch}
+        />
       )}
 
       {["radio", "multi_select"].includes(element.type) && (
@@ -455,6 +461,34 @@ export function FieldInspector({
               ))}
             </div>
           )}
+          <div className="flex flex-col gap-1">
+            <label htmlFor="inspector-math-decimals" className={labelClasses}>
+              Rounding
+            </label>
+            <select
+              id="inspector-math-decimals"
+              value={element.mathDecimals ?? 2}
+              onChange={(event) =>
+                onPatch(element.id, {
+                  mathDecimals: Number(event.target.value),
+                })
+              }
+              className={inputClasses}
+            >
+              <option value={0}>0 decimals</option>
+              <option value={1}>1 decimal</option>
+              <option value={2}>2 decimals</option>
+              <option value={3}>3 decimals</option>
+              <option value={4}>4 decimals</option>
+            </select>
+            <span className="text-xs text-neutral-400">
+              Functions:{" "}
+              <code className="font-mono">
+                sum(..) avg(..) min(..) max(..) round(x,d) abs(x) count(..)
+                if(cond,a,b) dateDiff(a,b)
+              </code>
+            </span>
+          </div>
         </div>
       )}
 
@@ -503,6 +537,22 @@ export function FieldInspector({
           />
           Required
         </label>
+      )}
+
+      {!isLayout && !isMath && (
+        <ValidationEditor
+          element={element}
+          ruleTargets={ruleTargets}
+          onPatch={onPatch}
+        />
+      )}
+
+      {!isLayout && !isMath && (
+        <RequiredWhenEditor
+          element={element}
+          ruleTargets={ruleTargets}
+          onPatch={onPatch}
+        />
       )}
 
       <div className="flex flex-col gap-2.5 border-t border-neutral-100 pt-3">
@@ -816,12 +866,16 @@ function ToggleRow({
 
 function OptionsEditor({
   element,
+  ruleTargets,
   onPatch,
 }: {
   element: FormField;
+  ruleTargets: FormField[];
   onPatch: (id: string, patch: Partial<FormField>) => void;
 }) {
   const options = element.options ?? [];
+  const optionRules: (VisibilityRule | undefined)[] =
+    element.optionRules ?? [];
 
   function setOption(index: number, value: string) {
     const next = [...options];
@@ -830,40 +884,425 @@ function OptionsEditor({
   }
 
   function removeOption(index: number) {
+    const nextRules = [...optionRules];
+    nextRules.splice(index, 1);
+    const cleanRules = nextRules.filter(
+      (rule): rule is VisibilityRule => Boolean(rule),
+    );
     onPatch(element.id, {
       options: options.filter((_, i) => i !== index),
+      optionRules: cleanRules.length > 0 ? cleanRules : undefined,
     });
+  }
+
+  function setOptionRule(index: number, rule: VisibilityRule | undefined) {
+    const nextRules = [...optionRules];
+    if (rule) {
+      nextRules[index] = rule;
+    } else {
+      nextRules[index] = undefined;
+    }
+    const cleanRules = nextRules.filter(
+      (item): item is VisibilityRule => Boolean(item),
+    );
+    onPatch(element.id, {
+      optionRules: cleanRules.length > 0 ? cleanRules : undefined,
+    });
+  }
+
+  function addOption() {
+    onPatch(element.id, { options: [...options, ""] });
   }
 
   return (
     <div className="flex flex-col gap-2">
       <span className={labelClasses}>Options</span>
-      <ul className="flex flex-col gap-1.5">
-        {options.map((option, index) => (
-          <li key={index} className="flex items-center gap-1.5">
-            <input
-              value={option}
-              onChange={(event) => setOption(index, event.target.value)}
-              className={`${inputClasses} flex-1`}
-              aria-label={`Option ${index + 1}`}
-            />
-            <button
-              type="button"
-              onClick={() => removeOption(index)}
-              className="rounded px-2 py-1 text-xs font-semibold text-red-500 hover:bg-red-50"
+      <ul className="flex flex-col gap-2">
+        {options.map((option, index) => {
+          const rule = optionRules[index];
+          return (
+            <li
+              key={index}
+              className="flex flex-col gap-1.5 rounded-lg border border-neutral-100 bg-muted/60 p-2"
             >
-              Remove
-            </button>
-          </li>
-        ))}
+              <div className="flex items-center gap-1.5">
+                <input
+                  value={option}
+                  onChange={(event) => setOption(index, event.target.value)}
+                  className={`${inputClasses} flex-1`}
+                  aria-label={`Option ${index + 1}`}
+                />
+                <button
+                  type="button"
+                  onClick={() => removeOption(index)}
+                  className="rounded px-2 py-1 text-xs font-semibold text-red-500 hover:bg-red-50"
+                >
+                  Remove
+                </button>
+              </div>
+              {ruleTargets.length > 0 && (
+                <label className="flex items-center gap-2 text-xs text-neutral-600">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(rule)}
+                    onChange={(event) =>
+                      setOptionRule(
+                        index,
+                        event.target.checked
+                          ? {
+                              field: ruleTargets[0].key,
+                              operator: "equals",
+                              value: "",
+                            }
+                          : undefined,
+                      )
+                    }
+                    className="size-3.5 rounded border-neutral-300 text-primary-500 focus:ring-primary-500"
+                  />
+                  Show when...
+                </label>
+              )}
+              {rule && (
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex gap-1.5">
+                    <select
+                      value={rule.field}
+                      onChange={(event) =>
+                        setOptionRule(index, {
+                          ...rule,
+                          field: event.target.value,
+                        })
+                      }
+                      className={`${inputClasses} flex-1`}
+                    >
+                      {ruleTargets.map((target) => (
+                        <option key={target.id} value={target.key}>
+                          {target.label}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      value={rule.operator}
+                      onChange={(event) =>
+                        setOptionRule(index, {
+                          ...rule,
+                          operator: event.target
+                            .value as VisibilityOperator,
+                        })
+                      }
+                      className={`${inputClasses} w-32`}
+                    >
+                      {OPERATORS.map((op) => (
+                        <option key={op.value} value={op.value}>
+                          {op.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {(rule.operator === "equals" ||
+                    rule.operator === "not_equals") && (
+                    <input
+                      value={rule.value ?? ""}
+                      onChange={(event) =>
+                        setOptionRule(index, {
+                          ...rule,
+                          value: event.target.value,
+                        })
+                      }
+                      placeholder="Value"
+                      className={inputClasses}
+                    />
+                  )}
+                </div>
+              )}
+            </li>
+          );
+        })}
       </ul>
       <button
         type="button"
-        onClick={() => onPatch(element.id, { options: [...options, ""] })}
+        onClick={addOption}
         className="self-start rounded border border-neutral-300 bg-white px-2.5 py-1 text-xs font-semibold text-neutral-600 hover:border-primary-400 hover:text-primary-700"
       >
         + Add option
       </button>
+    </div>
+  );
+}
+
+function ValidationEditor({
+  element,
+  ruleTargets,
+  onPatch,
+}: {
+  element: FormField;
+  ruleTargets: FormField[];
+  onPatch: (id: string, patch: Partial<FormField>) => void;
+}) {
+  const validation = element.validation ?? {};
+  const isTextual = ["text", "textarea", "email", "url", "phone"].includes(
+    element.type,
+  );
+  const isNumeric = ["number", "slider", "currency", "rating"].includes(
+    element.type,
+  );
+
+  function setValidation(patch: Partial<FieldValidation>) {
+    onPatch(element.id, { validation: { ...validation, ...patch } });
+  }
+
+  function clearValidation(key: keyof FieldValidation) {
+    const next = { ...validation };
+    delete next[key];
+    onPatch(element.id, {
+      validation: Object.keys(next).length > 0 ? next : undefined,
+    });
+  }
+
+  function numberPatch(
+    key: "minLength" | "maxLength" | "min" | "max",
+    value: string,
+  ) {
+    if (value === "") {
+      clearValidation(key);
+    } else {
+      setValidation({ [key]: Number(value) });
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-2.5 rounded-lg border border-neutral-100 bg-muted p-3">
+      <span className={labelClasses}>Validation</span>
+
+      {isTextual && (
+        <div className="grid grid-cols-2 gap-2">
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-neutral-500">Min length</label>
+            <input
+              type="number"
+              min={0}
+              value={validation.minLength ?? ""}
+              onChange={(event) =>
+                numberPatch("minLength", event.target.value)
+              }
+              className={inputClasses}
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-neutral-500">Max length</label>
+            <input
+              type="number"
+              min={0}
+              value={validation.maxLength ?? ""}
+              onChange={(event) =>
+                numberPatch("maxLength", event.target.value)
+              }
+              className={inputClasses}
+            />
+          </div>
+        </div>
+      )}
+
+      {isNumeric && (
+        <div className="grid grid-cols-2 gap-2">
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-neutral-500">Min value</label>
+            <input
+              type="number"
+              value={validation.min ?? ""}
+              onChange={(event) => numberPatch("min", event.target.value)}
+              className={inputClasses}
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-neutral-500">Max value</label>
+            <input
+              type="number"
+              value={validation.max ?? ""}
+              onChange={(event) => numberPatch("max", event.target.value)}
+              className={inputClasses}
+            />
+          </div>
+        </div>
+      )}
+
+      <div className="flex flex-col gap-1">
+        <label className="text-xs text-neutral-500">Pattern (regex)</label>
+        <input
+          value={validation.pattern ?? ""}
+          onChange={(event) =>
+            event.target.value === ""
+              ? clearValidation("pattern")
+              : setValidation({ pattern: event.target.value })
+          }
+          placeholder="/^[A-Z]{3}\\d{3}$/"
+          className={`${inputClasses} font-mono`}
+        />
+      </div>
+      {validation.pattern && (
+        <div className="flex flex-col gap-1">
+          <label className="text-xs text-neutral-500">
+            Pattern error message
+          </label>
+          <input
+            value={validation.patternMessage ?? ""}
+            onChange={(event) =>
+              setValidation({ patternMessage: event.target.value })
+            }
+            placeholder="Must match the expected format"
+            className={inputClasses}
+          />
+        </div>
+      )}
+
+      <div className="flex flex-col gap-1">
+        <label className="text-xs text-neutral-500">Must match field</label>
+        <select
+          value={validation.mustMatch ?? ""}
+          onChange={(event) =>
+            event.target.value === ""
+              ? clearValidation("mustMatch")
+              : setValidation({ mustMatch: event.target.value })
+          }
+          className={inputClasses}
+        >
+          <option value="">None</option>
+          {ruleTargets.map((target) => (
+            <option key={target.id} value={target.key}>
+              {target.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label className="text-xs text-neutral-500">Custom rule</label>
+        <input
+          value={validation.rule ?? ""}
+          onChange={(event) =>
+            event.target.value === ""
+              ? clearValidation("rule")
+              : setValidation({ rule: event.target.value })
+          }
+          placeholder="[quantity] <= [max_quantity]"
+          className={`${inputClasses} font-mono`}
+        />
+      </div>
+      {validation.rule && (
+        <div className="flex flex-col gap-1">
+          <label className="text-xs text-neutral-500">Rule error message</label>
+          <input
+            value={validation.ruleMessage ?? ""}
+            onChange={(event) =>
+              setValidation({ ruleMessage: event.target.value })
+            }
+            placeholder="Value does not satisfy the rule"
+            className={inputClasses}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RequiredWhenEditor({
+  element,
+  ruleTargets,
+  onPatch,
+}: {
+  element: FormField;
+  ruleTargets: FormField[];
+  onPatch: (id: string, patch: Partial<FormField>) => void;
+}) {
+  const rule = element.requiredWhen;
+  const enabled = Boolean(rule);
+
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border border-neutral-100 bg-muted p-3">
+      <span className={labelClasses}>Conditional required</span>
+      <label className="flex items-center gap-2 text-sm font-medium text-neutral-800">
+        <input
+          type="checkbox"
+          checked={enabled}
+          onChange={(event) =>
+            onPatch(
+              element.id,
+              event.target.checked
+                ? {
+                    requiredWhen: {
+                      field: ruleTargets[0]?.key ?? "",
+                      operator: "equals",
+                      value: "",
+                    },
+                  }
+                : { requiredWhen: undefined },
+            )
+          }
+          disabled={ruleTargets.length === 0}
+          className="size-4 rounded border-neutral-300 text-primary-500 focus:ring-primary-500 disabled:cursor-not-allowed"
+        />
+        Required only when...
+      </label>
+
+      {enabled && rule && (
+        <div className="flex flex-col gap-1.5">
+          <div className="flex gap-1.5">
+            <select
+              value={rule.field}
+              onChange={(event) =>
+                onPatch(element.id, {
+                  requiredWhen: { ...rule, field: event.target.value },
+                })
+              }
+              className={`${inputClasses} flex-1`}
+            >
+              {ruleTargets.length === 0 && <option value="">No fields</option>}
+              {ruleTargets.map((target) => (
+                <option key={target.id} value={target.key}>
+                  {target.label}
+                </option>
+              ))}
+            </select>
+            <select
+              value={rule.operator}
+              onChange={(event) =>
+                onPatch(element.id, {
+                  requiredWhen: {
+                    ...rule,
+                    operator: event.target.value as VisibilityOperator,
+                  },
+                })
+              }
+              className={`${inputClasses} w-32`}
+            >
+              {OPERATORS.map((op) => (
+                <option key={op.value} value={op.value}>
+                  {op.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          {(rule.operator === "equals" ||
+            rule.operator === "not_equals") && (
+            <input
+              value={rule.value ?? ""}
+              onChange={(event) =>
+                onPatch(element.id, {
+                  requiredWhen: { ...rule, value: event.target.value },
+                })
+              }
+              placeholder="Value"
+              className={inputClasses}
+            />
+          )}
+        </div>
+      )}
+
+      {ruleTargets.length === 0 && (
+        <p className="text-xs text-neutral-400">
+          Add input fields before this one to use conditional required.
+        </p>
+      )}
     </div>
   );
 }

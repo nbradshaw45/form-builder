@@ -305,37 +305,45 @@ looks professional.
 
 ## 4. Advanced validation, calculations, and conditional logic
 
+> **Status: implemented.** Field-level validation rules, an expanded formula
+> engine, dynamic option filtering, and conditional-required are all live in
+> the builder and renderer.
+
 **Goal:** Support real-world business rules without code.
 
 Current validation is required/optional only, and `math` supports basic
 arithmetic. Extending both makes forms genuinely useful for pricing, quoting,
 and data entry.
 
-### Proposed scope
+### Delivered
 
-- **Validation rules** (per field, in `FieldInspector`):
-  - Min/max length (text) and min/max value (number, slider).
-  - Regex pattern with a friendly error message.
-  - Email / URL / phone format validation for the new element types.
-  - "Must match field X" (confirm-password style) cross-field rule.
-  - Custom JS-expression rule with an error message.
-- **Calculation enhancements** (`formula.ts`):
-  - Functions: `sum(...)`, `avg(...)`, `min/max`, `round`, `abs`, `dateDiff`,
-    `count`, and conditional `if(condition, a, b)`.
-  - Reference fields by key; live-recompute as inputs change (already the
-    pattern for `math` fields).
-  - Show a small "computed" badge and allow rounding/formatting settings.
-- **Dynamic option filtering** (user element / select): filter options based on
-  another field's value, e.g., "show users assigned to the selected team".
-- **Conditional required**: a field becomes required only when a condition is
-  true (extends `visibleWhen` into `requiredWhen`).
+- **Validation rules** (`FormField.validation`, edited in a "Validation" panel
+  in `FieldInspector`):
+  - Min/max length (text-ish types) and min/max value (number, slider,
+    currency, rating).
+  - Regex pattern with a custom error message.
+  - Email / URL / phone format validation (from the element library work).
+  - "Must match field X" cross-field rule (confirm-password style).
+  - Custom expression rule (`[quantity] <= [max_quantity]`) with an error
+    message, evaluated via the formula engine.
+- **Calculation enhancements** (`formula.ts`): a whitelisted expression parser
+  (no `eval`) that now supports functions — `sum`, `avg`, `min`, `max`,
+  `round(x, d)`, `abs`, `count`, `if(cond, a, b)`, `dateDiff(a, b)` — plus
+  comparison operators (`< > <= >= == !=`) and date substitution (date fields
+  evaluate as day numbers so `dateDiff` works). Math fields have a rounding
+  (decimals) setting.
+- **Dynamic option filtering**: select / radio / multi-select options can each
+  carry a "Show when..." rule (reusing the visibility engine) so options
+  appear based on another field's value.
+- **Conditional required**: a field can be "Required only when..." a rule is
+  satisfied (`requiredWhen`).
 
 ### Implementation notes
 
 - Validation rules live on `FormField` as an optional `validation` object;
-  the renderer's `validate()` function composes built-ins + custom expression.
+  the renderer's `validateField()` composes built-ins + custom expression.
 - Formulas run through a whitelisted expression parser in `formula.ts` — no
-  `eval`. Add functions incrementally with unit-testable pure functions.
+  `eval`. Functions are pure and unit-testable.
 - Keep error display consistent with the existing `error` state per field.
 
 ---
