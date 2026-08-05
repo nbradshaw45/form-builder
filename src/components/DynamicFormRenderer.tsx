@@ -1,8 +1,9 @@
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useMemo, useState } from "react";
 import { Button } from "../shared/components/Button";
 import { FieldControl } from "./FieldControl";
 import { isSystemField } from "./builder/elementFactory";
 import { gridColumnClasses, gridRowClasses, columnStyle } from "../shared/grid";
+import { getFormUsers, useQuery } from "wasp/client/operations";
 import type {
   FormField,
   SubmissionData,
@@ -30,6 +31,7 @@ const EDITTABLE_TYPES = new Set([
   "textarea",
   "checkbox",
   "date",
+  "user",
 ]);
 
 const LAYOUT_TYPES = new Set(["section_header", "divider", "paragraph"]);
@@ -77,6 +79,24 @@ export function DynamicFormRenderer({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const { data: userOptions } = useQuery(getFormUsers);
+
+  const effectiveFields = useMemo<FormField[]>(() => {
+    if (!userOptions || userOptions.length === 0) {
+      return fields;
+    }
+    return fields.map((field) => {
+      if (field.type !== "user") {
+        return field;
+      }
+      return {
+        ...field,
+        options: userOptions.map((user) => user.email),
+        optionLabels: userOptions.map((user) => user.name ?? user.email),
+      };
+    });
+  }, [fields, userOptions]);
+
   function setValue(fieldKey: string, value: string | boolean) {
     setValues((prev) => ({ ...prev, [fieldKey]: value }));
     setErrors((prev) => ({ ...prev, [fieldKey]: "" }));
@@ -86,7 +106,7 @@ export function DynamicFormRenderer({
     event.preventDefault();
 
     const nextErrors: Record<string, string> = {};
-    for (const field of fields) {
+    for (const field of effectiveFields) {
       if (
         !isSubmittableField(field) ||
         !isFieldVisible(field.visibleWhen, values) ||
@@ -114,7 +134,7 @@ export function DynamicFormRenderer({
     }
 
     const data: SubmissionData = {};
-    for (const field of fields) {
+    for (const field of effectiveFields) {
       if (
         !isSubmittableField(field) ||
         !isFieldVisible(field.visibleWhen, values) ||
@@ -148,7 +168,7 @@ export function DynamicFormRenderer({
     setErrors({});
   }
 
-  const visibleFields = fields.filter(
+  const visibleFields = effectiveFields.filter(
     (field) => !field.hidden && isFieldVisible(field.visibleWhen, values),
   );
 

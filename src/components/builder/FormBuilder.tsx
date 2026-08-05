@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import {
   DndContext,
+  DragOverlay,
   KeyboardSensor,
   PointerSensor,
   closestCorners,
   useSensor,
   useSensors,
   type DragEndEvent,
+  type DragStartEvent,
 } from "@dnd-kit/core";
 import {
   arrayMove,
@@ -21,7 +23,9 @@ import { Button, ButtonLink } from "../../shared/components/Button";
 import { inputClasses } from "../../shared/styles";
 import { Canvas } from "./Canvas";
 import { ElementPalette } from "./ElementPalette";
+import { FieldControl } from "../FieldControl";
 import { FieldInspector } from "./FieldInspector";
+import { GripIcon } from "./icons";
 import {
   createDefaultSystemFields,
   createElement,
@@ -35,6 +39,74 @@ interface FormBuilderProps {
   isInitialLoading?: boolean;
 }
 
+type DragTarget = {
+  index: number;
+  fits: boolean;
+};
+
+function simulateRows(items: FormField[]): number[] {
+  const rows: number[] = [];
+  let row = 0;
+  let used = 0;
+  for (const item of items) {
+    const width = (item.width ?? 12) / 12;
+    if (used > 0 && used + width > 1.0001) {
+      row += 1;
+      used = 0;
+    }
+    rows.push(row);
+    used += width;
+  }
+  return rows;
+}
+
+function computeDragTarget(
+  active: DragEndEvent["active"],
+  over: DragEndEvent["over"] | null,
+  elements: FormField[],
+): DragTarget | null {
+  if (!over) {
+    return null;
+  }
+  const activeId = active.id as string;
+  if (over.id === "canvas") {
+    return { index: elements.length, fits: true };
+  }
+  const overId = over.id as string;
+  if (activeId === overId) {
+    return null;
+  }
+  const oldIndex = elements.findIndex((e) => e.id === activeId);
+  const overIndex = elements.findIndex((e) => e.id === overId);
+  if (oldIndex < 0 || overIndex < 0) {
+    return null;
+  }
+
+  const translated = active.rect.current.translated;
+  const overRect = over.rect;
+  let insertAfter = false;
+  if (translated && overRect) {
+    const activeCenterX = translated.left + translated.width / 2;
+    const activeCenterY = translated.top + translated.height / 2;
+    const overCenterX = overRect.left + overRect.width / 2;
+    const overCenterY = overRect.top + overRect.height / 2;
+    insertAfter = activeCenterX > overCenterX || activeCenterY > overCenterY;
+  }
+
+  const next = [...elements];
+  const [moved] = next.splice(oldIndex, 1);
+  const overNewIndex = next.findIndex((e) => e.id === overId);
+  const insertAt = overNewIndex + (insertAfter ? 1 : 0);
+  next.splice(insertAt, 0, moved);
+
+  const movedNewIndex = insertAt;
+  const rows = simulateRows(next);
+  const overNewIndex2 = next.findIndex((e) => e.id === overId);
+  const fits = rows[movedNewIndex] === rows[overNewIndex2];
+
+  return { index: insertAt, fits };
+}
+
 export function FormBuilder({
   initialForm,
   isInitialLoading = false,
@@ -43,6 +115,14 @@ export function FormBuilder({
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [settings, setSettings] = useState<FormSettings>(DEFAULT_FORM_SETTINGS);
+  const [activeDrag, setActiveDrag] = useState<{
+    element: FormField;
+    width: number;
+  } | null>(null);
+  const [dragTarget, setDragTarget] = useState<{
+    index: number;
+    fits: boolean;
+  } | null>(null);
   const [elements, setElements] = useState<FormField[]>(() =>
     initialForm ? [] : createDefaultSystemFields([]),
   );
@@ -82,7 +162,43 @@ export function FormBuilder({
     setSelectedId(newElement.id);
   }
 
+  function handleDragStart(event: DragStartEvent) {
+    const { active } = event;
+    if (active.data.current?.source === "palette") {
+      return;
+    }
+    const element = elements.find((e) => e.id === active.id);
+    if (!element) {
+      return;
+    }
+    const initialRect = active.rect.current.initial;
+    let width = initialRect ? initialRect.width : 0;
+    if (!width) {
+      const node = document.querySelector(
+        `[data-element-id="${CSS.escape(element.id)}"]`,
+      );
+      if (node) {
+        width = node.getBoundingClientRect().width;
+      }
+    }
+    setActiveDrag({ element, width });
+  }
+
+  function handleDragMove(event: DragEndEvent) {
+    if (event.active.data.current?.source === "palette") {
+      return;
+    }
+    setDragTarget(computeDragTarget(event.active, event.over, elements));
+  }
+
+  function handleDragCancel() {
+    setActiveDrag(null);
+    setDragTarget(null);
+  }
+
   function handleDragEnd(event: DragEndEvent) {
+    setActiveDrag(null);
+    setDragTarget(null);
     const { active, over } = event;
     if (!over) {
       return;
@@ -105,23 +221,35 @@ export function FormBuilder({
       return;
     }
 
-    const activeId = active.id as string;
-    const overId = over.id as string;
-    if (activeId === overId) {
+    const target = computeDragTarget(active, over, elements);
+    if (!target) {
       return;
     }
     setElements((items) => {
-      const oldIndex = items.findIndex((e) => e.id === activeId);
-      const newIndex = items.findIndex((e) => e.id === overId);
-      if (oldIndex < 0 || newIndex < 0) {
+      const oldIndex = items.findIndex((e) => e.id === active.id);
+      if (oldIndex < 0) {
         return items;
       }
-      return arrayMove(items, oldIndex, newIndex);
+      const next = [...items];
+      const [moved] = next.splice(oldIndex, 1);
+      next.splice(target.index, 0, moved);
+      return next;
     });
   }
 
   function handleSelect(id: string) {
     setSelectedId(id);
+  }
+
+  function handleMove(id: string, direction: -1 | 1) {
+    setElements((items) => {
+      const index = items.findIndex((e) => e.id === id);
+      const target = index + direction;
+      if (index < 0 || target < 0 || target >= items.length) {
+        return items;
+      }
+      return arrayMove(items, index, target);
+    });
   }
 
   function handleDuplicate(id: string) {
@@ -254,15 +382,20 @@ export function FormBuilder({
         <DndContext
           sensors={sensors}
           collisionDetection={closestCorners}
+          onDragStart={handleDragStart}
+          onDragMove={handleDragMove}
           onDragEnd={handleDragEnd}
+          onDragCancel={handleDragCancel}
         >
           <div className="grid items-start gap-4 xl:grid-cols-[260px_minmax(0,1fr)_320px]">
             <ElementPalette onAdd={addElement} />
             <Canvas
               elements={elements}
               selectedId={selectedId}
+              dragTarget={dragTarget}
               onSelect={handleSelect}
               onDeselect={() => setSelectedId(null)}
+              onMove={handleMove}
               onDuplicate={handleDuplicate}
               onDelete={handleDelete}
             />
@@ -278,7 +411,60 @@ export function FormBuilder({
               }
             />
           </div>
+          <DragOverlay>
+            {activeDrag ? (
+              <DragPreview
+                element={activeDrag.element}
+                width={activeDrag.width}
+                fits={dragTarget?.fits ?? true}
+              />
+            ) : null}
+          </DragOverlay>
         </DndContext>
+      )}
+    </div>
+  );
+}
+
+function DragPreview({
+  element,
+  width,
+  fits,
+}: {
+  element: FormField;
+  width: number;
+  fits: boolean;
+}) {
+  return (
+    <div className="flex flex-col items-start gap-1.5">
+      <div
+        className={`flex cursor-grabbing items-start gap-2 rounded-lg border bg-white p-3 shadow-lg ${
+          fits ? "border-primary-600" : "border-red-400"
+        }`}
+        style={width > 0 ? { width } : { minWidth: 300 }}
+      >
+        <div className="mt-0.5 shrink-0 text-neutral-400">
+          <GripIcon />
+        </div>
+        <div className="pointer-events-none min-w-0 flex-1">
+          <FieldControl
+            field={element}
+            value={null}
+            onChange={() => {
+              /* Preview only */
+            }}
+            allValues={{}}
+            disabled
+          />
+        </div>
+      </div>
+      {!fits && (
+        <div
+          className="flex items-center gap-1.5 rounded-md border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs font-medium text-red-600 shadow-lg"
+          style={width > 0 ? { width } : { minWidth: 300 }}
+        >
+          Won&apos;t sit next to this field — it will wrap to the next row.
+        </div>
       )}
     </div>
   );

@@ -6,6 +6,7 @@ export type FieldType =
   | "checkbox"
   | "date"
   | "math"
+  | "user"
   | "section_header"
   | "divider"
   | "paragraph"
@@ -41,6 +42,8 @@ export type FormField = {
   readonly?: boolean;
   showInTable?: boolean;
   valueSource?: "email" | "name";
+  /** Display labels parallel to options (used for live user options). */
+  optionLabels?: string[];
   /** Column span on the 12-column grid (1-12, default 12). */
   width?: number;
 };

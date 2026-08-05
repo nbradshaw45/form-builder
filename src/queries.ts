@@ -5,6 +5,7 @@ import type {
   GetFormAccess,
   GetFormSubmissions,
   GetForms,
+  GetFormUsers,
   GetSubmission,
   GetUsers,
 } from "wasp/server/operations";
@@ -31,6 +32,12 @@ export type AdminUser = {
   role: string;
   email: string | null;
   createdAt: Date;
+};
+
+export type UserOption = {
+  id: string;
+  name: string | null;
+  email: string;
 };
 
 export type FormAccessEntry = {
@@ -212,6 +219,27 @@ export const getUsers: GetUsers<void, AdminUser[]> = async (_args, context) => {
       role: user.role,
       email: usernameIdentity?.providerUserId ?? null,
       createdAt: user.createdAt,
+    };
+  });
+};
+
+export const getFormUsers: GetFormUsers<void, UserOption[]> = async (
+  _args,
+  context,
+) => {
+  const users = await context.entities.User.findMany({
+    include: { auth: { include: { identities: true } } },
+    orderBy: { name: { sort: "asc", nulls: "last" } },
+  });
+
+  return users.map((user) => {
+    const usernameIdentity = user.auth?.identities.find(
+      (identity) => identity.providerName === "username",
+    );
+    return {
+      id: user.id,
+      name: user.name,
+      email: usernameIdentity?.providerUserId ?? "",
     };
   });
 };

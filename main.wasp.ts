@@ -17,6 +17,7 @@ import {
   getForm,
   getFormAccess,
   getFormSubmissions,
+  getFormUsers,
   getForms,
   getSubmission,
   getUsers,
@@ -77,6 +78,7 @@ export default app({
 
     query(getForms, { entities: ["Form", "FormAccess", "User"] }),
     query(getForm, { entities: ["Form"], auth: false }),
+    query(getFormUsers, { entities: ["User"], auth: false }),
     query(getFormSubmissions, { entities: ["Form", "FormAccess", "Submission"] }),
     query(getSubmission, { entities: ["Submission", "Form", "FormAccess", "User"] }),
     query(getUsers, { entities: ["User"] }),

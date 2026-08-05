@@ -147,7 +147,7 @@ export function FieldControl({
   }
 
   const renderControl = () => {
-    if (type === "select") {
+    if (type === "select" || type === "user") {
       return (
         <select
           id={field.key}
@@ -156,10 +156,12 @@ export function FieldControl({
           disabled={disabled}
           className={selectClasses}
         >
-          <option value="">Select...</option>
-          {(field.options ?? []).map((option) => (
+          <option value="">
+            {type === "user" ? "Select a user..." : "Select..."}
+          </option>
+          {(field.options ?? []).map((option, index) => (
             <option key={option} value={option}>
-              {option}
+              {field.optionLabels?.[index] ?? option}
             </option>
           ))}
         </select>

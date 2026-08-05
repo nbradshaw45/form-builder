@@ -2,12 +2,22 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { FieldControl } from "../FieldControl";
 import type { FormField } from "../../types";
-import { DuplicateIcon, GripIcon, TrashIcon } from "./icons";
+import { gridColumnClasses, columnStyle } from "../../shared/grid";
+import {
+  ChevronDownIcon,
+  ChevronUpIcon,
+  DuplicateIcon,
+  GripIcon,
+  TrashIcon,
+} from "./icons";
 
 interface CanvasElementProps {
   element: FormField;
   isSelected: boolean;
+  index: number;
+  total: number;
   onSelect: (id: string) => void;
+  onMove: (id: string, direction: -1 | 1) => void;
   onDuplicate: (id: string) => void;
   onDelete: (id: string) => void;
 }
@@ -15,7 +25,10 @@ interface CanvasElementProps {
 export function CanvasElement({
   element,
   isSelected,
+  index,
+  total,
   onSelect,
+  onMove,
   onDuplicate,
   onDelete,
 }: CanvasElementProps) {
@@ -29,15 +42,17 @@ export function CanvasElement({
   } = useSortable({ id: element.id });
 
   const style = {
+    ...columnStyle(element.width),
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.5 : 1,
+    opacity: isDragging ? 0.25 : 1,
   };
 
   return (
     <div
       ref={setNodeRef}
       style={style}
+      data-element-id={element.id}
       onClick={(event) => {
         event.stopPropagation();
         onSelect(element.id);
@@ -49,7 +64,7 @@ export function CanvasElement({
           onSelect(element.id);
         }
       }}
-      className={`group relative cursor-pointer rounded-lg border bg-white p-3 transition-shadow ${
+      className={`${gridColumnClasses()} group relative cursor-pointer rounded-lg border bg-white p-3 transition-shadow ${
         isSelected
           ? "border-primary-600 ring-2 ring-primary-100"
           : "border-neutral-200 hover:border-neutral-300 hover:shadow-sm"
@@ -78,6 +93,32 @@ export function CanvasElement({
         </div>
       </div>
       <div className="absolute right-2 top-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+        <button
+          type="button"
+          aria-label={`Move ${element.label} up`}
+          title="Move up"
+          onClick={(event) => {
+            event.stopPropagation();
+            onMove(element.id, -1);
+          }}
+          disabled={index === 0}
+          className="rounded bg-white p-1 text-neutral-500 shadow-sm ring-1 ring-neutral-200 hover:bg-neutral-50 hover:text-neutral-800 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <ChevronUpIcon />
+        </button>
+        <button
+          type="button"
+          aria-label={`Move ${element.label} down`}
+          title="Move down"
+          onClick={(event) => {
+            event.stopPropagation();
+            onMove(element.id, 1);
+          }}
+          disabled={index === total - 1}
+          className="rounded bg-white p-1 text-neutral-500 shadow-sm ring-1 ring-neutral-200 hover:bg-neutral-50 hover:text-neutral-800 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <ChevronDownIcon />
+        </button>
         <button
           type="button"
           aria-label={`Duplicate ${element.label}`}

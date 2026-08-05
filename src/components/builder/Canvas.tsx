@@ -1,18 +1,23 @@
 import { useDroppable } from "@dnd-kit/core";
 import {
   SortableContext,
+  arrayMove,
   rectSortingStrategy,
+  type SortingStrategy,
 } from "@dnd-kit/sortable";
+import { useMemo } from "react";
 import type { FormField } from "../../types";
-import { gridColumnClasses, gridRowClasses, columnStyle } from "../../shared/grid";
+import { gridRowClasses } from "../../shared/grid";
 import { CanvasElement } from "./CanvasElement";
 import { PlusIcon } from "./icons";
 
 interface CanvasProps {
   elements: FormField[];
   selectedId: string | null;
+  dragTarget: { index: number; fits: boolean } | null;
   onSelect: (id: string) => void;
   onDeselect: () => void;
+  onMove: (id: string, direction: -1 | 1) => void;
   onDuplicate: (id: string) => void;
   onDelete: (id: string) => void;
 }
@@ -20,12 +25,35 @@ interface CanvasProps {
 export function Canvas({
   elements,
   selectedId,
+  dragTarget,
   onSelect,
   onDeselect,
+  onMove,
   onDuplicate,
   onDelete,
 }: CanvasProps) {
   const { setNodeRef, isOver } = useDroppable({ id: "canvas" });
+
+  const strategy = useMemo<SortingStrategy>(() => {
+    if (!dragTarget) {
+      return rectSortingStrategy;
+    }
+    const targetIndex = dragTarget.index;
+    return ({ rects, activeIndex, index }) => {
+      const newRects = arrayMove(rects, targetIndex, activeIndex);
+      const oldRect = rects[index];
+      const newRect = newRects[index];
+      if (!newRect || !oldRect) {
+        return null;
+      }
+      return {
+        x: newRect.left - oldRect.left,
+        y: newRect.top - oldRect.top,
+        scaleX: newRect.width / oldRect.width,
+        scaleY: newRect.height / oldRect.height,
+      };
+    };
+  }, [dragTarget]);
 
   return (
     <div
@@ -37,7 +65,7 @@ export function Canvas({
     >
       <SortableContext
         items={elements.map((element) => element.id)}
-        strategy={rectSortingStrategy}
+        strategy={strategy}
       >
         {elements.length === 0 ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-2 py-16 text-center text-neutral-400">
@@ -49,20 +77,18 @@ export function Canvas({
           </div>
         ) : (
           <div className={gridRowClasses}>
-            {elements.map((element) => (
-              <div
+            {elements.map((element, index) => (
+              <CanvasElement
                 key={element.id}
-                className={gridColumnClasses()}
-                style={columnStyle(element.width)}
-              >
-                <CanvasElement
-                  element={element}
-                  isSelected={element.id === selectedId}
-                  onSelect={onSelect}
-                  onDuplicate={onDuplicate}
-                  onDelete={onDelete}
-                />
-              </div>
+                element={element}
+                isSelected={element.id === selectedId}
+                index={index}
+                total={elements.length}
+                onSelect={onSelect}
+                onMove={onMove}
+                onDuplicate={onDuplicate}
+                onDelete={onDelete}
+              />
             ))}
           </div>
         )}

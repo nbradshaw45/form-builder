@@ -49,6 +49,7 @@ const TYPE_NAMES: Record<FieldType, string> = {
   textarea: "Textarea",
   checkbox: "Checkbox",
   date: "Date",
+  user: "User",
   math: "Math / Calculated",
   section_header: "Section header",
   divider: "Divider",
@@ -163,7 +164,10 @@ export function FieldInspector({
         </span>
       </div>
 
-      {!isLayout && element.type !== "checkbox" && element.type !== "date" && (
+      {!isLayout &&
+        element.type !== "checkbox" &&
+        element.type !== "date" &&
+        element.type !== "user" && (
         <div className="flex flex-col gap-1">
           <label htmlFor="inspector-placeholder" className={labelClasses}>
             Placeholder
@@ -181,6 +185,13 @@ export function FieldInspector({
 
       {element.type === "select" && (
         <OptionsEditor element={element} onPatch={onPatch} />
+      )}
+
+      {element.type === "user" && (
+        <p className="rounded-lg border border-neutral-100 bg-muted px-3 py-2 text-xs leading-relaxed text-neutral-500">
+          Options are populated from the current users list. The selected
+          user&apos;s email is stored in submissions.
+        </p>
       )}
 
       {isMath && (
