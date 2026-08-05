@@ -479,6 +479,49 @@ export function DynamicFormRenderer({
   );
 
   if (multiStep) {
+    if (readOnly) {
+      // Viewing a record: show the full record across all steps at once.
+      return (
+        <form className="flex flex-col gap-6" noValidate>
+          {visibleSteps.map((step, stepIndex) => {
+            const header = step[0];
+            const hasHeader = header?.type === "section_header";
+            const title = hasHeader ? header.label : undefined;
+            const subtext = hasHeader ? header.description : undefined;
+            const visible = step.filter(
+              (field) =>
+                !field.hidden && isFieldVisible(field.visibleWhen, values),
+            );
+
+            return (
+              <section key={stepIndex} className="flex flex-col gap-4">
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary-50 px-2.5 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.1em] text-primary-700">
+                      Step {stepIndex + 1}
+                    </span>
+                    {title && (
+                      <h2 className="font-display text-lg font-bold tracking-[-0.02em] text-neutral-800">
+                        {title}
+                      </h2>
+                    )}
+                  </div>
+                  {subtext && (
+                    <p className="text-[13px] text-neutral-500">{subtext}</p>
+                  )}
+                </div>
+                <div className={gridRowClasses}>
+                  {visible.map((field) =>
+                    field.type === "section_header" ? null : renderField(field),
+                  )}
+                </div>
+              </section>
+            );
+          })}
+        </form>
+      );
+    }
+
     const stepHeader = activeStep[0];
     const stepTitle =
       stepHeader?.type === "section_header" ? stepHeader.label : undefined;

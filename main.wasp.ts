@@ -1,5 +1,6 @@
 import { action, app, page, query, route } from "@wasp.sh/spec";
 import { App } from "./src/App" with { type: "ref" };
+import { serverMiddlewareFn } from "./src/serverSetup" with { type: "ref" };
 import {
   addUser,
   createForm,
@@ -51,6 +52,9 @@ export default app({
   },
   client: {
     rootComponent: App,
+  },
+  server: {
+    middlewareConfigFn: serverMiddlewareFn,
   },
   spec: [
     route("DashboardRoute", "/", page(RedirectToForms, { authRequired: true })),
