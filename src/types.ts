@@ -5,6 +5,17 @@ export type FieldType =
   | "textarea"
   | "checkbox"
   | "date"
+  | "time"
+  | "email"
+  | "url"
+  | "phone"
+  | "radio"
+  | "multi_select"
+  | "rating"
+  | "slider"
+  | "currency"
+  | "signature"
+  | "file_upload"
   | "math"
   | "user"
   | "section_header"
@@ -46,9 +57,33 @@ export type FormField = {
   optionLabels?: string[];
   /** Column span on the 12-column grid (1-12, default 12). */
   width?: number;
+  /** Radio / multi-select layout. Defaults to "stacked". */
+  layout?: "inline" | "stacked";
+  /** Numeric bounds and formatting (slider, currency, number). */
+  min?: number;
+  max?: number;
+  step?: number;
+  decimals?: number;
+  prefix?: string;
+  suffix?: string;
+  /** Rating element: number of stars. */
+  starCount?: 3 | 5 | 7 | 10;
+  /** File upload: accepted MIME types / extensions. */
+  accept?: string;
+  /** File upload: max size in MB. */
+  maxFileSizeMb?: number;
+  /** File upload: allow more than one file. */
+  multiple?: boolean;
+  /** Signature: pen color (CSS color). */
+  penColor?: string;
+  /** Signature: pen width in px. */
+  penWidth?: number;
 };
 
-export type SubmissionData = Record<string, string | number | boolean | null>;
+export type SubmissionData = Record<
+  string,
+  string | number | boolean | string[] | null
+>;
 
 export type FormDisplayMode = "page" | "modal";
 

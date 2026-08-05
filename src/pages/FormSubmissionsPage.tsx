@@ -9,6 +9,7 @@ import {
 } from "@tanstack/react-table";
 import {
   deleteSubmission,
+  getFile,
   getForm,
   getFormSubmissions,
   useQuery,
@@ -33,6 +34,16 @@ function formatValue(value: unknown): string {
 }
 
 function formatCellValue(key: string, value: unknown): string {
+  if (Array.isArray(value)) {
+    return value.join(", ");
+  }
+  if (
+    typeof value === "string" &&
+    value.startsWith("data:image/") &&
+    value.length > 200
+  ) {
+    return "Signature";
+  }
   if (
     (key === "created_date" || key === "modified_date") &&
     typeof value === "string" &&
@@ -117,6 +128,7 @@ export function FormSubmissionsPage({ user }: { user: AuthUser }) {
     }
 
     const keyToLabel = new Map(fields.map((field) => [field.key, field.label]));
+    const keyToType = new Map(fields.map((field) => [field.key, field.type]));
 
     return [
       ...allKeys.map((key) =>
@@ -125,7 +137,14 @@ export function FormSubmissionsPage({ user }: { user: AuthUser }) {
           {
             id: key,
             header: keyToLabel.get(key) ?? key,
-            cell: (info) => formatCellValue(key, info.getValue()),
+            cell: (info) => {
+              const value = info.getValue();
+              if (keyToType.get(key) === "file_upload") {
+                const fileId = typeof value === "string" ? value : "";
+                return fileId ? <FileCell fileId={fileId} /> : "—";
+              }
+              return formatCellValue(key, value);
+            },
           },
         ),
       ),
@@ -387,5 +406,63 @@ function DeleteSubmissionDialog({
       onConfirm={confirmDelete}
       onCancel={onCancel}
     />
+  );
+}
+
+function FileCell({ fileId }: { fileId: string }) {
+  const [downloading, setDownloading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function download() {
+    setDownloading(true);
+    setError(null);
+    try {
+      const file = await getFile({ fileId });
+      const bytes = atob(file.dataBase64);
+      const array = new Uint8Array(bytes.length);
+      for (let i = 0; i < bytes.length; i++) {
+        array[i] = bytes.charCodeAt(i);
+      }
+      const blob = new Blob([array], { type: file.mimeType });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = file.originalName;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setDownloading(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col">
+      <button
+        type="button"
+        onClick={() => void download()}
+        disabled={downloading}
+        className="inline-flex w-fit items-center gap-1.5 rounded border border-neutral-200 bg-white px-2 py-1 text-[11px] font-medium text-primary-600 hover:border-primary-300 hover:bg-primary-50 disabled:opacity-60"
+      >
+        <DownloadIcon className="size-3.5" />
+        {downloading ? "Downloading..." : "Download"}
+      </button>
+      {error && <span className="mt-1 text-[11px] text-red-500">{error}</span>}
+    </div>
+  );
+}
+
+function DownloadIcon({ className = "size-4" }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 20 20"
+      fill="currentColor"
+      aria-hidden="true"
+    >
+      <path d="M10.75 2.75a.75.75 0 0 0-1.5 0v8.614L6.295 8.235a.75.75 0 1 0-1.09 1.03l4.25 4.5a.75.75 0 0 0 1.09 0l4.25-4.5a.75.75 0 0 0-1.09-1.03l-2.955 3.129V2.75Z" />
+      <path d="M3.5 12.75a.75.75 0 0 0-1.5 0v2.5A2.75 2.75 0 0 0 4.75 18h10.5A2.75 2.75 0 0 0 18 15.25v-2.5a.75.75 0 0 0-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H4.75c-.69 0-1.25-.56-1.25-1.25v-2.5Z" />
+    </svg>
   );
 }

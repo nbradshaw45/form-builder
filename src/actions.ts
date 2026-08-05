@@ -1,3 +1,6 @@
+import { randomUUID } from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
 import type { Form, Submission } from "wasp/entities";
 import { HttpError, prisma } from "wasp/server";
 import { Prisma } from "@prisma/client";
@@ -13,6 +16,7 @@ import type {
   UpdateForm,
   UpdateSubmission,
   UpdateUser,
+  UploadFile,
 } from "wasp/server/operations";
 import {
   createProviderId,
@@ -461,6 +465,76 @@ export const deleteUser: DeleteUser<DeleteUserArgs, void> = async (
   }
 
   await context.entities.User.delete({ where: { id: userId } });
+};
+
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+
+type UploadFileArgs = {
+  formId: string;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  dataBase64: string;
+};
+
+type UploadFileResult = {
+  id: string;
+  originalName: string;
+  mimeType: string;
+  sizeBytes: number;
+};
+
+export const uploadFile: UploadFile<UploadFileArgs, UploadFileResult> = async (
+  { formId, fileName, mimeType, sizeBytes, dataBase64 },
+  context,
+) => {
+  const form = await context.entities.Form.findUnique({
+    where: { id: formId },
+    select: { id: true },
+  });
+  if (!form) {
+    throw new HttpError(404, "Form not found");
+  }
+
+  const cleanName =
+    fileName.replace(/[^\w.\- ]+/g, "").trim().slice(0, 120) || "file";
+  if (sizeBytes <= 0 || sizeBytes > MAX_UPLOAD_BYTES) {
+    throw new HttpError(
+      400,
+      `File must be between 1 byte and ${MAX_UPLOAD_BYTES / 1024 / 1024}MB`,
+    );
+  }
+  if (!dataBase64) {
+    throw new HttpError(400, "File data is required");
+  }
+
+  const buffer = Buffer.from(dataBase64, "base64");
+  if (buffer.length === 0 || buffer.length > MAX_UPLOAD_BYTES) {
+    throw new HttpError(400, "File data is invalid or too large");
+  }
+
+  const uploadsDir =
+    process.env.UPLOADS_DIR ?? path.join(process.cwd(), "uploads");
+  fs.mkdirSync(uploadsDir, { recursive: true });
+  const storedName = `${randomUUID()}${path.extname(cleanName)}`;
+  fs.writeFileSync(path.join(uploadsDir, storedName), buffer);
+
+  const file = await context.entities.UploadedFile.create({
+    data: {
+      formId,
+      originalName: cleanName,
+      mimeType: mimeType || "application/octet-stream",
+      sizeBytes: buffer.length,
+      path: storedName,
+    },
+  });
+
+  return {
+    id: file.id,
+    originalName: file.originalName,
+    mimeType: file.mimeType,
+    sizeBytes: file.sizeBytes,
+  };
 };
 
 type SetFormAccessArgs = {

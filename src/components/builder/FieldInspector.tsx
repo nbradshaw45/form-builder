@@ -49,6 +49,17 @@ const TYPE_NAMES: Record<FieldType, string> = {
   textarea: "Textarea",
   checkbox: "Checkbox",
   date: "Date",
+  time: "Time",
+  email: "Email",
+  url: "URL",
+  phone: "Phone",
+  radio: "Radio group",
+  multi_select: "Multi-select",
+  rating: "Rating",
+  slider: "Slider",
+  currency: "Currency",
+  signature: "Signature",
+  file_upload: "File upload",
   user: "User",
   math: "Math / Calculated",
   section_header: "Section header",
@@ -165,9 +176,9 @@ export function FieldInspector({
       </div>
 
       {!isLayout &&
-        element.type !== "checkbox" &&
-        element.type !== "date" &&
-        element.type !== "user" && (
+        !["checkbox", "date", "time", "user", "radio", "multi_select", "rating", "slider", "signature", "file_upload"].includes(
+          element.type,
+        ) && (
         <div className="flex flex-col gap-1">
           <label htmlFor="inspector-placeholder" className={labelClasses}>
             Placeholder
@@ -183,8 +194,223 @@ export function FieldInspector({
         </div>
       )}
 
-      {element.type === "select" && (
+      {["select", "radio", "multi_select"].includes(element.type) && (
         <OptionsEditor element={element} onPatch={onPatch} />
+      )}
+
+      {["radio", "multi_select"].includes(element.type) && (
+        <div className="flex flex-col gap-1">
+          <span className={labelClasses}>Layout</span>
+          <select
+            value={element.layout ?? "stacked"}
+            onChange={(event) =>
+              onPatch(element.id, {
+                layout: event.target.value as "inline" | "stacked",
+              })
+            }
+            className={inputClasses}
+          >
+            <option value="stacked">Stacked</option>
+            <option value="inline">Inline</option>
+          </select>
+        </div>
+      )}
+
+      {element.type === "slider" && (
+        <div className="flex flex-col gap-2">
+          <span className={labelClasses}>Range</span>
+          <div className="grid grid-cols-3 gap-2">
+            <div className="flex flex-col gap-1">
+              <label htmlFor="inspector-min" className="text-xs text-neutral-500">
+                Min
+              </label>
+              <input
+                id="inspector-min"
+                type="number"
+                value={element.min ?? 0}
+                onChange={(event) =>
+                  onPatch(element.id, { min: Number(event.target.value) })
+                }
+                className={inputClasses}
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label htmlFor="inspector-max" className="text-xs text-neutral-500">
+                Max
+              </label>
+              <input
+                id="inspector-max"
+                type="number"
+                value={element.max ?? 100}
+                onChange={(event) =>
+                  onPatch(element.id, { max: Number(event.target.value) })
+                }
+                className={inputClasses}
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label htmlFor="inspector-step" className="text-xs text-neutral-500">
+                Step
+              </label>
+              <input
+                id="inspector-step"
+                type="number"
+                value={element.step ?? 1}
+                onChange={(event) =>
+                  onPatch(element.id, { step: Number(event.target.value) })
+                }
+                className={inputClasses}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {element.type === "currency" && (
+        <div className="flex flex-col gap-2">
+          <div className="grid grid-cols-2 gap-2">
+            <div className="flex flex-col gap-1">
+              <label htmlFor="inspector-prefix" className="text-xs text-neutral-500">
+                Prefix
+              </label>
+              <input
+                id="inspector-prefix"
+                value={element.prefix ?? ""}
+                onChange={(event) =>
+                  onPatch(element.id, { prefix: event.target.value })
+                }
+                placeholder="$"
+                className={inputClasses}
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label htmlFor="inspector-suffix" className="text-xs text-neutral-500">
+                Suffix
+              </label>
+              <input
+                id="inspector-suffix"
+                value={element.suffix ?? ""}
+                onChange={(event) =>
+                  onPatch(element.id, { suffix: event.target.value })
+                }
+                placeholder="USD"
+                className={inputClasses}
+              />
+            </div>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label htmlFor="inspector-decimals" className="text-xs text-neutral-500">
+              Decimals
+            </label>
+            <select
+              id="inspector-decimals"
+              value={element.decimals ?? 2}
+              onChange={(event) =>
+                onPatch(element.id, { decimals: Number(event.target.value) })
+              }
+              className={inputClasses}
+            >
+              <option value={0}>0</option>
+              <option value={2}>2</option>
+            </select>
+          </div>
+        </div>
+      )}
+
+      {element.type === "rating" && (
+        <div className="flex flex-col gap-1">
+          <span className={labelClasses}>Stars</span>
+          <select
+            value={element.starCount ?? 5}
+            onChange={(event) =>
+              onPatch(element.id, {
+                starCount: Number(event.target.value) as 3 | 5 | 7 | 10,
+              })
+            }
+            className={inputClasses}
+          >
+            <option value={3}>3</option>
+            <option value={5}>5</option>
+            <option value={7}>7</option>
+            <option value={10}>10</option>
+          </select>
+        </div>
+      )}
+
+      {element.type === "file_upload" && (
+        <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-1">
+            <label htmlFor="inspector-accept" className="text-xs text-neutral-500">
+              Allowed file types
+            </label>
+            <input
+              id="inspector-accept"
+              value={element.accept ?? ""}
+              onChange={(event) =>
+                onPatch(element.id, { accept: event.target.value })
+              }
+              placeholder=".pdf,.png,image/jpeg"
+              className={`${inputClasses} font-mono`}
+            />
+            <span className="text-xs text-neutral-400">
+              Comma-separated MIME types or extensions. Leave blank to allow
+              anything.
+            </span>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label htmlFor="inspector-maxsize" className="text-xs text-neutral-500">
+              Max size (MB)
+            </label>
+            <input
+              id="inspector-maxsize"
+              type="number"
+              min={1}
+              max={10}
+              value={element.maxFileSizeMb ?? 5}
+              onChange={(event) =>
+                onPatch(element.id, {
+                  maxFileSizeMb: Number(event.target.value),
+                })
+              }
+              className={inputClasses}
+            />
+          </div>
+        </div>
+      )}
+
+      {element.type === "signature" && (
+        <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-1">
+            <label htmlFor="inspector-pen-color" className="text-xs text-neutral-500">
+              Pen color
+            </label>
+            <input
+              id="inspector-pen-color"
+              type="color"
+              value={element.penColor ?? "#1e293b"}
+              onChange={(event) =>
+                onPatch(element.id, { penColor: event.target.value })
+              }
+              className="h-9 w-full cursor-pointer rounded-lg border border-neutral-300 bg-white"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label htmlFor="inspector-pen-width" className="text-xs text-neutral-500">
+              Pen width
+            </label>
+            <input
+              id="inspector-pen-width"
+              type="number"
+              min={1}
+              max={10}
+              value={element.penWidth ?? 2}
+              onChange={(event) =>
+                onPatch(element.id, { penWidth: Number(event.target.value) })
+              }
+              className={inputClasses}
+            />
+          </div>
+        </div>
       )}
 
       {element.type === "user" && (

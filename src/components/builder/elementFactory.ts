@@ -1,6 +1,6 @@
 import type { FieldType, FormField } from "../../types";
 
-export type PaletteCategory = "input" | "layout" | "system";
+export type PaletteCategory = "input" | "advanced" | "layout" | "system";
 
 export type FieldDefinition = {
   type: FieldType;
@@ -11,13 +11,24 @@ export type FieldDefinition = {
 
 export const FIELD_DEFINITIONS: FieldDefinition[] = [
   { type: "text", name: "Text", description: "Single line text input", category: "input" },
+  { type: "textarea", name: "Textarea", description: "Multi line text", category: "input" },
   { type: "number", name: "Number", description: "Numeric input", category: "input" },
   { type: "select", name: "Select", description: "Dropdown with options", category: "input" },
-  { type: "textarea", name: "Textarea", description: "Multi line text", category: "input" },
+  { type: "radio", name: "Radio group", description: "Single choice buttons", category: "input" },
+  { type: "multi_select", name: "Multi-select", description: "Pick several options", category: "input" },
   { type: "checkbox", name: "Checkbox", description: "Boolean toggle", category: "input" },
+  { type: "email", name: "Email", description: "Email with validation", category: "input" },
+  { type: "url", name: "URL", description: "Web link with validation", category: "input" },
+  { type: "phone", name: "Phone", description: "Phone number input", category: "input" },
   { type: "date", name: "Date", description: "Date picker", category: "input" },
+  { type: "time", name: "Time", description: "Time picker", category: "input" },
   { type: "user", name: "User", description: "Dropdown of users", category: "input" },
   { type: "math", name: "Math", description: "Calculated field", category: "input" },
+  { type: "rating", name: "Rating", description: "Star rating scale", category: "advanced" },
+  { type: "slider", name: "Slider", description: "Numeric range", category: "advanced" },
+  { type: "currency", name: "Currency", description: "Money amount", category: "advanced" },
+  { type: "signature", name: "Signature", description: "Draw a signature", category: "advanced" },
+  { type: "file_upload", name: "File upload", description: "Attach a file", category: "advanced" },
   { type: "section_header", name: "Section Header", description: "Title and subtext", category: "layout" },
   { type: "divider", name: "Divider", description: "Horizontal rule", category: "layout" },
   { type: "paragraph", name: "Paragraph", description: "Rich help text", category: "layout" },
@@ -39,6 +50,17 @@ const DEFAULT_LABELS: Record<FieldType, string> = {
   textarea: "Textarea",
   checkbox: "Checkbox",
   date: "Date",
+  time: "Time",
+  email: "Email",
+  url: "URL",
+  phone: "Phone",
+  radio: "Radio group",
+  multi_select: "Multi-select",
+  rating: "Rating",
+  slider: "Slider",
+  currency: "Currency",
+  signature: "Signature",
+  file_upload: "File upload",
   user: "User",
   math: "Calculated field",
   section_header: "Section header",
@@ -104,6 +126,20 @@ export function createElement(
   switch (type) {
     case "select":
       return { ...base, options: ["Option 1", "Option 2"] };
+    case "radio":
+      return { ...base, options: ["Option 1", "Option 2"], layout: "stacked" };
+    case "multi_select":
+      return { ...base, options: ["Option 1", "Option 2"], layout: "stacked" };
+    case "slider":
+      return { ...base, min: 0, max: 100, step: 1 };
+    case "currency":
+      return { ...base, prefix: "$", decimals: 2 };
+    case "rating":
+      return { ...base, starCount: 5 };
+    case "signature":
+      return { ...base, penColor: "#1e293b", penWidth: 2 };
+    case "file_upload":
+      return { ...base, maxFileSizeMb: 5, accept: "" };
     case "math":
       return { ...base, formula: "[text_field] * 1" };
     case "section_header":

@@ -1,6 +1,9 @@
+import fs from "node:fs";
+import path from "node:path";
 import type { Form, Submission } from "wasp/entities";
 import { HttpError, prisma } from "wasp/server";
 import type {
+  GetFile,
   GetForm,
   GetFormAccess,
   GetFormSubmissions,
@@ -196,6 +199,49 @@ export const getSubmission: GetSubmission<
           : "view";
 
   return { access: kind, submission };
+};
+
+export type GetFileResult = {
+  originalName: string;
+  mimeType: string;
+  sizeBytes: number;
+  dataBase64: string;
+};
+
+export const getFile: GetFile<{ fileId: string }, GetFileResult> = async (
+  { fileId },
+  context,
+) => {
+  if (!context.user) {
+    throw new HttpError(401);
+  }
+
+  const file = await context.entities.UploadedFile.findUnique({
+    where: { id: fileId },
+  });
+  if (!file) {
+    throw new HttpError(404, "File not found");
+  }
+
+  const access = await getFormAccessForUser(file.formId, context.user);
+  assertCanView(access);
+
+  const uploadsDir =
+    process.env.UPLOADS_DIR ?? path.join(process.cwd(), "uploads");
+  const storedPath = path.resolve(uploadsDir, file.path);
+  if (!storedPath.startsWith(path.resolve(uploadsDir))) {
+    throw new HttpError(400, "Invalid file path");
+  }
+  if (!fs.existsSync(storedPath)) {
+    throw new HttpError(404, "File not found on disk");
+  }
+
+  return {
+    originalName: file.originalName,
+    mimeType: file.mimeType,
+    sizeBytes: file.sizeBytes,
+    dataBase64: fs.readFileSync(storedPath).toString("base64"),
+  };
 };
 
 export const getUsers: GetUsers<void, AdminUser[]> = async (_args, context) => {

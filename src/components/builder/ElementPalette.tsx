@@ -58,6 +58,7 @@ function PaletteItem({
 
 export function ElementPalette({ onAdd }: ElementPaletteProps) {
   const inputs = FIELD_DEFINITIONS.filter((def) => def.category === "input");
+  const advanced = FIELD_DEFINITIONS.filter((def) => def.category === "advanced");
   const layouts = FIELD_DEFINITIONS.filter((def) => def.category === "layout");
   const systems = FIELD_DEFINITIONS.filter((def) => def.category === "system");
 
@@ -74,6 +75,22 @@ export function ElementPalette({ onAdd }: ElementPaletteProps) {
         </h3>
         <ul className="flex flex-col gap-2">
           {inputs.map((def) => (
+            <PaletteItem
+              key={def.type}
+              type={def.type}
+              name={def.name}
+              description={def.description}
+              onAdd={onAdd}
+            />
+          ))}
+        </ul>
+      </section>
+      <section className="flex flex-col gap-1.5">
+        <h3 className="px-1 font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-neutral-400">
+          Advanced
+        </h3>
+        <ul className="flex flex-col gap-2">
+          {advanced.map((def) => (
             <PaletteItem
               key={def.type}
               type={def.type}

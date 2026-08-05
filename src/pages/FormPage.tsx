@@ -120,7 +120,16 @@ export function FormPage() {
     }
     const params = new URLSearchParams();
     for (const [key, value] of Object.entries(data)) {
-      if (value !== null && value !== undefined && value !== "") {
+      if (value === null || value === undefined) {
+        continue;
+      }
+      if (Array.isArray(value)) {
+        if (value.length > 0) {
+          params.set(key, value.join(","));
+        }
+        continue;
+      }
+      if (value !== "") {
         params.set(key, String(value));
       }
     }
@@ -272,6 +281,7 @@ export function FormPage() {
       hideSubmit={isReadOnly}
       readOnly={isReadOnly}
       showReset={settings.showResetButton}
+      formId={formId}
       submitterName={user?.identities.username?.id ?? undefined}
       initialValues={recordData}
     />

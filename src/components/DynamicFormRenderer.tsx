@@ -22,6 +22,7 @@ interface DynamicFormRendererProps {
   initialValues?: SubmissionData;
   readOnly?: boolean;
   showReset?: boolean;
+  formId?: string;
 }
 
 const EDITTABLE_TYPES = new Set([
@@ -31,6 +32,17 @@ const EDITTABLE_TYPES = new Set([
   "textarea",
   "checkbox",
   "date",
+  "time",
+  "email",
+  "url",
+  "phone",
+  "radio",
+  "multi_select",
+  "rating",
+  "slider",
+  "currency",
+  "signature",
+  "file_upload",
   "user",
 ]);
 
@@ -72,6 +84,7 @@ export function DynamicFormRenderer({
   initialValues,
   readOnly = false,
   showReset = false,
+  formId,
 }: DynamicFormRendererProps) {
   const [values, setValues] = useState<SubmissionData>(
     () => initialValues ?? {},
@@ -97,9 +110,72 @@ export function DynamicFormRenderer({
     });
   }, [fields, userOptions]);
 
-  function setValue(fieldKey: string, value: string | boolean) {
+  function setValue(
+    fieldKey: string,
+    value: string | number | boolean | string[] | null,
+  ) {
     setValues((prev) => ({ ...prev, [fieldKey]: value }));
     setErrors((prev) => ({ ...prev, [fieldKey]: "" }));
+  }
+
+  function isEmptyValue(field: FormField, value: unknown): boolean {
+    if (value === undefined || value === null) {
+      return true;
+    }
+    if (Array.isArray(value)) {
+      return value.length === 0;
+    }
+    if (typeof value === "string") {
+      return value.trim() === "";
+    }
+    if (field.type === "rating" && typeof value === "number") {
+      return value < 1;
+    }
+    return false;
+  }
+
+  function validateFieldFormat(
+    field: FormField,
+    value: unknown,
+  ): string | null {
+    if (value === undefined || value === null || value === "") {
+      return null;
+    }
+    const str = String(value);
+    switch (field.type) {
+      case "email":
+        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(str)
+          ? null
+          : "Enter a valid email address";
+      case "url":
+        try {
+          new URL(str);
+          return null;
+        } catch {
+          return "Enter a valid URL";
+        }
+      case "phone":
+        return /^\+?[\d\s().-]{7,20}$/.test(str)
+          ? null
+          : "Enter a valid phone number";
+      case "multi_select":
+        return Array.isArray(value) && value.length > 0
+          ? null
+          : "Select at least one option";
+      case "rating": {
+        const num = Number(value);
+        const count = field.starCount ?? 5;
+        return num >= 1 && num <= count
+          ? null
+          : `Choose a rating between 1 and ${count}`;
+      }
+      case "signature":
+        return value ? null : "Please add your signature";
+      case "file_upload":
+        return value ? null : "Please upload a file";
+      default:
+        return null;
+    }
   }
 
   async function handleSubmit(event: FormEvent) {
@@ -114,17 +190,14 @@ export function DynamicFormRenderer({
       ) {
         continue;
       }
-      if (!field.required) {
+      const value = values[field.key];
+      if (field.required && isEmptyValue(field, value)) {
+        nextErrors[field.key] = "This field is required";
         continue;
       }
-      const value = values[field.key];
-      const isEmpty =
-        value === undefined ||
-        value === null ||
-        value === "" ||
-        (field.type === "checkbox" && value === false);
-      if (isEmpty) {
-        nextErrors[field.key] = "This field is required";
+      const formatError = validateFieldFormat(field, value);
+      if (formatError) {
+        nextErrors[field.key] = formatError;
       }
     }
     setErrors(nextErrors);
@@ -143,15 +216,29 @@ export function DynamicFormRenderer({
         continue;
       }
       const rawValue = values[field.key];
-      if (field.type === "number") {
-        data[field.key] =
-          rawValue === undefined || rawValue === "" || rawValue === null
-            ? null
-            : Number(rawValue);
-      } else if (field.type === "checkbox") {
-        data[field.key] = Boolean(rawValue);
-      } else {
-        data[field.key] = (rawValue as string) ?? "";
+      switch (field.type) {
+        case "number":
+        case "currency":
+          data[field.key] =
+            rawValue === undefined || rawValue === "" || rawValue === null
+              ? null
+              : Number(rawValue);
+          break;
+        case "rating":
+        case "slider":
+          data[field.key] =
+            rawValue === undefined || rawValue === null
+              ? null
+              : Number(rawValue);
+          break;
+        case "checkbox":
+          data[field.key] = Boolean(rawValue);
+          break;
+        case "multi_select":
+          data[field.key] = Array.isArray(rawValue) ? rawValue : [];
+          break;
+        default:
+          data[field.key] = (rawValue as string | undefined) ?? "";
       }
     }
 
@@ -194,6 +281,7 @@ export function DynamicFormRenderer({
               allValues={values}
               error={errors[field.key]}
               disabled={readOnly}
+              formId={formId}
             />
           </div>
         ))}

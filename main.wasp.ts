@@ -12,8 +12,10 @@ import {
   updateForm,
   updateSubmission,
   updateUser,
+  uploadFile,
 } from "./src/actions" with { type: "ref" };
 import {
+  getFile,
   getForm,
   getFormAccess,
   getFormSubmissions,
@@ -79,6 +81,7 @@ export default app({
     query(getForms, { entities: ["Form", "FormAccess", "User"] }),
     query(getForm, { entities: ["Form"], auth: false }),
     query(getFormUsers, { entities: ["User"], auth: false }),
+    query(getFile, { entities: ["UploadedFile", "Form", "FormAccess", "User"] }),
     query(getFormSubmissions, { entities: ["Form", "FormAccess", "Submission"] }),
     query(getSubmission, { entities: ["Submission", "Form", "FormAccess", "User"] }),
     query(getUsers, { entities: ["User"] }),
@@ -92,6 +95,7 @@ export default app({
     action(updateUser, { entities: ["User"] }),
     action(addUser, { entities: ["User"] }),
     action(deleteUser, { entities: ["User"] }),
+    action(uploadFile, { entities: ["UploadedFile", "Form"], auth: false }),
     action(setFormAccess, {
       entities: ["FormAccess", "Form", "User"],
     }),
