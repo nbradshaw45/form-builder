@@ -17,7 +17,7 @@ import { useParams } from "react-router";
 import { Button, ButtonLink } from "../shared/components/Button";
 import { Card, CardHead, DataFoot, DataToolbar } from "../shared/components/Card";
 import { ConfirmDialog } from "../components/Modal";
-import { EyeIcon, PencilIcon, ShareIcon, TrashIcon } from "../components/builder/icons";
+import { EyeIcon, PencilIcon, PlusIcon, ShareIcon, TrashIcon } from "../components/builder/icons";
 import type { FormField } from "../types";
 
 const columnHelper = createColumnHelper<Submission>();
@@ -198,6 +198,10 @@ export function FormSubmissionsPage({ user }: { user: AuthUser }) {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <ButtonLink to="/forms/:id" params={{ id }} size="sm">
+            <PlusIcon className="size-3.5" />
+            New Record
+          </ButtonLink>
           {canManage && (
             <ButtonLink to="/forms/:id/access" params={{ id }} variant="ghost">
               <ShareIcon className="size-3.5" />

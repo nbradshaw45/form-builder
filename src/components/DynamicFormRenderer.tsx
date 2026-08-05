@@ -20,6 +20,7 @@ interface DynamicFormRendererProps {
   submitterName?: string;
   initialValues?: SubmissionData;
   readOnly?: boolean;
+  showReset?: boolean;
 }
 
 const EDITTABLE_TYPES = new Set([
@@ -68,6 +69,7 @@ export function DynamicFormRenderer({
   submitterName,
   initialValues,
   readOnly = false,
+  showReset = false,
 }: DynamicFormRendererProps) {
   const [values, setValues] = useState<SubmissionData>(
     () => initialValues ?? {},
@@ -141,6 +143,11 @@ export function DynamicFormRenderer({
     }
   }
 
+  function handleReset() {
+    setValues(initialValues ?? {});
+    setErrors({});
+  }
+
   const visibleFields = fields.filter(
     (field) => !field.hidden && isFieldVisible(field.visibleWhen, values),
   );
@@ -173,7 +180,12 @@ export function DynamicFormRenderer({
       </div>
 
       {!hideSubmit && !readOnly && (
-        <div className="mt-2 flex justify-end">
+        <div className="mt-2 flex items-center justify-end gap-2">
+          {showReset && (
+            <Button type="button" variant="ghost" onClick={handleReset}>
+              Reset
+            </Button>
+          )}
           <Button type="submit" disabled={isSubmitting}>
             {isSubmitting ? "Saving..." : submitLabel}
           </Button>

@@ -521,6 +521,24 @@ function FormSettingsPanel({
           </div>
         )}
       </div>
+
+      <div className="flex flex-col gap-2.5 border-t border-neutral-100 pt-3">
+        <span className={labelClasses}>Buttons</span>
+        <ToggleRow
+          label="Back button"
+          checked={settings.showBackButton !== false}
+          onChange={(checked) => onChange({ showBackButton: checked })}
+        />
+        <ToggleRow
+          label="Reset button"
+          checked={settings.showResetButton === true}
+          onChange={(checked) => onChange({ showResetButton: checked })}
+        />
+        <p className="text-xs leading-snug text-neutral-400">
+          Back returns to the submissions page; Reset clears the form or
+          restores the record&apos;s saved values.
+        </p>
+      </div>
     </aside>
   );
 }

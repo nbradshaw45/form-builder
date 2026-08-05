@@ -68,6 +68,10 @@ export type FormSettings = {
   redirectUrl?: string;
   /** Append submission data to the redirect URL as query params. */
   appendData?: boolean;
+  /** Show a Back button in the form. Defaults to true. */
+  showBackButton?: boolean;
+  /** Show a Reset button that clears/restores the form. Defaults to false. */
+  showResetButton?: boolean;
 };
 
 export const DEFAULT_FORM_SETTINGS: FormSettings = {
@@ -79,4 +83,6 @@ export const DEFAULT_FORM_SETTINGS: FormSettings = {
   redirectTarget: "submissions",
   redirectUrl: "",
   appendData: false,
+  showBackButton: true,
+  showResetButton: false,
 };

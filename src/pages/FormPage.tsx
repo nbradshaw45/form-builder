@@ -8,9 +8,10 @@ import {
   useQuery,
 } from "wasp/client/operations";
 import { Link } from "wasp/client/router";
-import { useLocation, useParams } from "react-router";
+import { useLocation, useNavigate, useParams } from "react-router";
 import { DynamicFormRenderer } from "../components/DynamicFormRenderer";
 import { Button, ButtonLink } from "../shared/components/Button";
+import { ArrowLeftIcon } from "../components/builder/icons";
 import type { FormField, FormSettings, SubmissionData } from "../types";
 import { DEFAULT_FORM_SETTINGS } from "../types";
 
@@ -27,6 +28,7 @@ export function FormPage() {
     submissionId?: string;
   }>();
   const location = useLocation();
+  const navigate = useNavigate();
   const isEditPath = location.pathname.endsWith("/edit");
   const recordMode: RecordMode = submissionId
     ? isEditPath
@@ -133,6 +135,14 @@ export function FormPage() {
     window.location.assign(buildRedirectUrl(data));
   }
 
+  function goBack() {
+    if (recordMode === "new") {
+      navigate("/forms");
+    } else {
+      navigate(`/forms/${formId}/submissions`);
+    }
+  }
+
   async function handleSubmit(
     data: SubmissionData,
     submitterEmail?: string,
@@ -155,6 +165,15 @@ export function FormPage() {
 
   const wantsRedirect =
     settings.successMode === "redirect" || settings.successMode === "both";
+
+  const backButton = settings.showBackButton !== false ? (
+    <div className="flex w-full items-center justify-between">
+      <Button variant="ghost" size="sm" onClick={goBack}>
+        <ArrowLeftIcon className="size-3.5" />
+        Back
+      </Button>
+    </div>
+  ) : null;
 
   const heading = (
     <div className="flex w-full flex-wrap items-end justify-between gap-4">
@@ -252,6 +271,7 @@ export function FormPage() {
       submitLabel={recordMode === "edit" ? "Save changes" : "Submit"}
       hideSubmit={isReadOnly}
       readOnly={isReadOnly}
+      showReset={settings.showResetButton}
       submitterName={user?.identities.username?.id ?? undefined}
       initialValues={recordData}
     />
@@ -273,6 +293,7 @@ export function FormPage() {
           }}
         >
           {heading}
+          {backButton}
           {isReadOnly && recordMode === "edit" && (
             <p className="rounded-lg border border-neutral-100 bg-muted px-4 py-3 text-[13px] text-neutral-600">
               You only have view access to this record.
@@ -288,6 +309,7 @@ export function FormPage() {
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-8 py-12">
       {heading}
       <section className="card flex w-full flex-col gap-6 p-6 lg:p-8">
+        {backButton}
         {isReadOnly && recordMode === "edit" && (
           <p className="rounded-lg border border-neutral-100 bg-muted px-4 py-3 text-[13px] text-neutral-600">
             You only have view access to this record.

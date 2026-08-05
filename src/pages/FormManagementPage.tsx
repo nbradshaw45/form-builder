@@ -14,7 +14,7 @@ import type { FormWithAccess } from "../queries";
 import { Button, ButtonLink } from "../shared/components/Button";
 import { Card, CardHead, DataFoot, DataToolbar } from "../shared/components/Card";
 import { ConfirmDialog } from "../components/Modal";
-import { EyeIcon, PencilIcon, ShareIcon, TableIcon, TrashIcon } from "../components/builder/icons";
+import { EyeIcon, PencilIcon, PlusIcon, ShareIcon, TableIcon, TrashIcon } from "../components/builder/icons";
 
 const columnHelper = createColumnHelper<FormWithAccess>();
 
@@ -267,6 +267,10 @@ function RowActions({
   const canManage = access === "owner" || user.role === "ADMIN";
   return (
     <div className="flex flex-wrap gap-1.5">
+      <ButtonLink to="/forms/:id" params={{ id }} size="xs">
+        <PlusIcon className="size-3.5" />
+        New Record
+      </ButtonLink>
       <ButtonLink to="/forms/:id" params={{ id }} size="xs" variant="ghost">
         <EyeIcon className="size-3.5" />
         View
