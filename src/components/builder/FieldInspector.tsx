@@ -717,6 +717,18 @@ function FormSettingsPanel({
       )}
 
       <div className="flex flex-col gap-2.5 border-t border-neutral-100 pt-3">
+        <ToggleRow
+          label="Multi-step wizard"
+          checked={settings.multiStep === true}
+          onChange={(checked) => onChange({ multiStep: checked })}
+        />
+        <p className="text-xs leading-snug text-neutral-400">
+          Split the form into steps at each Section header. Add Section header
+          elements to create steps; the section title becomes the step name.
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-2.5 border-t border-neutral-100 pt-3">
         <div className="flex flex-col gap-1">
           <label htmlFor="settings-success" className={labelClasses}>
             After submit

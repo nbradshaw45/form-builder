@@ -16,6 +16,7 @@ interface CanvasElementProps {
   isSelected: boolean;
   index: number;
   total: number;
+  stepNumber?: number;
   onSelect: (id: string) => void;
   onMove: (id: string, direction: -1 | 1) => void;
   onDuplicate: (id: string) => void;
@@ -27,6 +28,7 @@ export function CanvasElement({
   isSelected,
   index,
   total,
+  stepNumber,
   onSelect,
   onMove,
   onDuplicate,
@@ -81,6 +83,11 @@ export function CanvasElement({
           <GripIcon />
         </button>
         <div className="pointer-events-none min-w-0 flex-1">
+          {stepNumber !== undefined && (
+            <div className="mb-2 inline-flex items-center gap-1 rounded-full bg-primary-50 px-2.5 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.1em] text-primary-700">
+              Step {stepNumber}
+            </div>
+          )}
           <FieldControl
             field={element}
             value={null}

@@ -393,6 +393,7 @@ export function FormBuilder({
               elements={elements}
               selectedId={selectedId}
               dragTarget={dragTarget}
+              multiStep={settings.multiStep === true}
               onSelect={handleSelect}
               onDeselect={() => setSelectedId(null)}
               onMove={handleMove}

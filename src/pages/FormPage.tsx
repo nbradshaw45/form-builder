@@ -281,6 +281,7 @@ export function FormPage() {
       hideSubmit={isReadOnly}
       readOnly={isReadOnly}
       showReset={settings.showResetButton}
+      multiStep={settings.multiStep === true}
       formId={formId}
       submitterName={user?.identities.username?.id ?? undefined}
       initialValues={recordData}

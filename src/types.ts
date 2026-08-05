@@ -139,6 +139,8 @@ export type FormSettings = {
   showBackButton?: boolean;
   /** Show a Reset button that clears/restores the form. Defaults to false. */
   showResetButton?: boolean;
+  /** Split the form into steps at each Section header. Defaults to false. */
+  multiStep?: boolean;
 };
 
 export const DEFAULT_FORM_SETTINGS: FormSettings = {
@@ -152,4 +154,5 @@ export const DEFAULT_FORM_SETTINGS: FormSettings = {
   appendData: false,
   showBackButton: true,
   showResetButton: false,
+  multiStep: false,
 };

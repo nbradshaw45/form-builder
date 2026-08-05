@@ -240,29 +240,31 @@ conditional navigation.
 Forms with many fields are intimidating. Wizards reduce friction and are a
 top-requested form feature.
 
-### Proposed scope
+### Delivered
 
-- **Sections become steps**: a form-level "Enable multi-step" toggle turns
-  every `section_header` into a step boundary (the section header becomes the
-  step title). Zero-config for existing forms.
-- **Progress indicator**: step counter ("Step 2 of 4") and/or a progress bar at
-  the top of the form.
-- **Client-side validation per step**: only validate fields on the current step
-  before allowing "Next"; validate everything on the final "Submit".
-- **Back/Next buttons** with keyboard support; the existing form-level
-  Back/Reset button settings still apply to the last step.
-- **Step visibility**: allow a step to be skipped via a visibility rule
-  (e.g., "Show step 3 only if field X equals Y") reusing the existing
-  `visibleWhen` engine.
-- **Wizard builder preview**: the canvas shows step boundaries so the builder
-  can see where each step begins/ends.
+- **Optional toggle**: "Multi-step wizard" in form settings (`multiStep`);
+  off by default, so existing forms are unaffected.
+- **Sections become steps**: every `section_header` becomes a step boundary;
+  the section title is the step name. Fields before the first section header
+  form step 1. The builder canvas shows a "Step N" badge on each section
+  header (matching the wizard's numbering).
+- **Progress indicator**: "Step X of Y" counter with the current step title and
+  an animated progress bar.
+- **Client-side validation per step**: "Next" validates only the current step's
+  visible fields; the final "Submit"/"Save changes" validates everything.
+- **Back/Next buttons**; the form-level Reset button appears on the last step.
+- **Step visibility**: steps can be skipped via a visibility rule on the
+  section header — hidden steps drop out of the step list dynamically (verified:
+  a form with 4 steps shows 3 until the triggering field matches).
+- View mode still allows navigating through steps (no submit).
 
 ### Implementation notes
 
-- The renderer (`DynamicFormRenderer.tsx`) already computes `visibleFields`;
-  grouping them by step is purely additive.
-- State: track `currentStep`; validate only the current step's fields on
-  Next (the validation loop already exists and can be scoped).
+- The renderer (`DynamicFormRenderer.tsx`) builds steps from `section_header`
+  boundaries via `buildSteps()`, filters visible steps via `isStepVisible()`,
+  and validates per step with the existing `validateFields()`.
+- State: `currentStep` is clamped to the visible-step range so hidden steps
+  are skipped safely.
 - Stored submissions remain flat — steps do not affect the data shape.
 
 ---

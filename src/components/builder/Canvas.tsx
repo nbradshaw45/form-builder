@@ -15,6 +15,7 @@ interface CanvasProps {
   elements: FormField[];
   selectedId: string | null;
   dragTarget: { index: number; fits: boolean } | null;
+  multiStep?: boolean;
   onSelect: (id: string) => void;
   onDeselect: () => void;
   onMove: (id: string, direction: -1 | 1) => void;
@@ -26,6 +27,7 @@ export function Canvas({
   elements,
   selectedId,
   dragTarget,
+  multiStep = false,
   onSelect,
   onDeselect,
   onMove,
@@ -33,6 +35,10 @@ export function Canvas({
   onDelete,
 }: CanvasProps) {
   const { setNodeRef, isOver } = useDroppable({ id: "canvas" });
+  const firstHeaderIndex = elements.findIndex(
+    (element) => element.type === "section_header",
+  );
+  let stepCounter = firstHeaderIndex > 0 ? 1 : 0;
 
   const strategy = useMemo<SortingStrategy>(() => {
     if (!dragTarget) {
@@ -77,19 +83,27 @@ export function Canvas({
           </div>
         ) : (
           <div className={gridRowClasses}>
-            {elements.map((element, index) => (
-              <CanvasElement
-                key={element.id}
-                element={element}
-                isSelected={element.id === selectedId}
-                index={index}
-                total={elements.length}
-                onSelect={onSelect}
-                onMove={onMove}
-                onDuplicate={onDuplicate}
-                onDelete={onDelete}
-              />
-            ))}
+            {elements.map((element, index) => {
+              let stepNumber: number | undefined;
+              if (multiStep && element.type === "section_header") {
+                stepCounter += 1;
+                stepNumber = stepCounter;
+              }
+              return (
+                <CanvasElement
+                  key={element.id}
+                  element={element}
+                  isSelected={element.id === selectedId}
+                  index={index}
+                  total={elements.length}
+                  stepNumber={stepNumber}
+                  onSelect={onSelect}
+                  onMove={onMove}
+                  onDuplicate={onDuplicate}
+                  onDelete={onDelete}
+                />
+              );
+            })}
           </div>
         )}
       </SortableContext>
