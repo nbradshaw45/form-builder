@@ -7,11 +7,15 @@ import { Prisma } from "@prisma/client";
 import type {
   AddUser,
   CreateForm,
+  CreateFormFromTemplate,
   DeleteForm,
   DeleteSubmission,
   DeleteSubmissions,
   DeleteUser,
+  DuplicateForm,
+  ImportForm,
   RemoveFormAccess,
+  SaveFormAsTemplate,
   SetFormAccess,
   SubmitForm,
   UpdateForm,
@@ -188,6 +192,160 @@ export const deleteForm: DeleteForm<DeleteFormArgs, void> = async (
 
   await context.entities.Form.delete({
     where: { id: formId },
+  });
+};
+
+type SaveFormAsTemplateArgs = {
+  formId: string;
+};
+
+export const saveFormAsTemplate: SaveFormAsTemplate<
+  SaveFormAsTemplateArgs,
+  Form
+> = async ({ formId }, context) => {
+  if (!context.user) {
+    throw new HttpError(401);
+  }
+
+  const access = await getFormAccessForUser(formId, context.user);
+  assertIsOwnerOrAdmin(access);
+
+  const form = await context.entities.Form.findUnique({
+    where: { id: formId },
+    select: { title: true, fields: true, settings: true },
+  });
+  if (!form) {
+    throw new HttpError(404, "Form not found");
+  }
+
+  return context.entities.Form.create({
+    data: {
+      title: form.title,
+      fields: serialize(form.fields),
+      settings: form.settings ? serialize(form.settings) : undefined,
+      isTemplate: true,
+      user: {
+        connect: {
+          id: context.user.id,
+        },
+      },
+    },
+  });
+};
+
+type DuplicateFormArgs = {
+  formId: string;
+};
+
+export const duplicateForm: DuplicateForm<DuplicateFormArgs, Form> = async (
+  { formId },
+  context,
+) => {
+  if (!context.user) {
+    throw new HttpError(401);
+  }
+
+  const access = await getFormAccessForUser(formId, context.user);
+  assertIsOwnerOrAdmin(access);
+
+  const form = await context.entities.Form.findUnique({
+    where: { id: formId },
+    select: { title: true, description: true, fields: true, settings: true },
+  });
+  if (!form) {
+    throw new HttpError(404, "Form not found");
+  }
+
+  return context.entities.Form.create({
+    data: {
+      title: `${form.title} (copy)`,
+      description: form.description,
+      fields: serialize(form.fields),
+      settings: form.settings ? serialize(form.settings) : undefined,
+      user: {
+        connect: {
+          id: context.user.id,
+        },
+      },
+    },
+  });
+};
+
+type CreateFormFromTemplateArgs = {
+  templateId: string;
+  title?: string;
+};
+
+export const createFormFromTemplate: CreateFormFromTemplate<
+  CreateFormFromTemplateArgs,
+  Form
+> = async ({ templateId, title }, context) => {
+  if (!context.user) {
+    throw new HttpError(401);
+  }
+  if (context.user.role === "VIEWER") {
+    throw new HttpError(403, "Viewers cannot create forms");
+  }
+
+  const template = await context.entities.Form.findUnique({
+    where: { id: templateId },
+    select: { title: true, fields: true, settings: true, isTemplate: true },
+  });
+  if (!template || !template.isTemplate) {
+    throw new HttpError(404, "Template not found");
+  }
+
+  const finalTitle = title?.trim() || template.title;
+
+  return context.entities.Form.create({
+    data: {
+      title: finalTitle,
+      fields: serialize(template.fields),
+      settings: template.settings ? serialize(template.settings) : undefined,
+      user: {
+        connect: {
+          id: context.user.id,
+        },
+      },
+    },
+  });
+};
+
+type ImportFormArgs = {
+  title: string;
+  fields: FormField[];
+  settings?: FormSettings;
+};
+
+export const importForm: ImportForm<ImportFormArgs, Form> = async (
+  { title, fields, settings },
+  context,
+) => {
+  if (!context.user) {
+    throw new HttpError(401);
+  }
+  if (context.user.role === "VIEWER") {
+    throw new HttpError(403, "Viewers cannot create forms");
+  }
+
+  if (!Array.isArray(fields)) {
+    throw new HttpError(400, "fields must be an array of field definitions");
+  }
+
+  return context.entities.Form.create({
+    data: {
+      title: title?.trim() || "Untitled (imported)",
+      fields: serialize(fields),
+      settings:
+        settings && typeof settings === "object"
+          ? serialize(settings)
+          : undefined,
+      user: {
+        connect: {
+          id: context.user.id,
+        },
+      },
+    },
   });
 };
 

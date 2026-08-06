@@ -34,6 +34,7 @@ model Form {
   description  String?
   fields       Json
   settings     Json?
+  isTemplate   Boolean        @default(false)
   userId       String
   user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   submissions  Submission[]

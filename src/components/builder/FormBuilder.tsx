@@ -34,9 +34,17 @@ import {
   uniqueKey,
 } from "./elementFactory";
 
+type TemplateSeed = {
+  id: string;
+  title: string;
+  fields: unknown;
+  settings: unknown;
+};
+
 interface FormBuilderProps {
   initialForm: Form | null;
   isInitialLoading?: boolean;
+  initialTemplate?: TemplateSeed | null;
 }
 
 type DragTarget = {
@@ -110,6 +118,7 @@ function computeDragTarget(
 export function FormBuilder({
   initialForm,
   isInitialLoading = false,
+  initialTemplate = null,
 }: FormBuilderProps) {
   const navigate = useNavigate();
   const [title, setTitle] = useState("");
@@ -148,6 +157,27 @@ export function FormBuilder({
       setSelectedId(null);
     }
   }, [initialForm]);
+
+  useEffect(() => {
+    if (
+      !initialForm &&
+      initialTemplate &&
+      lastLoadedId.current !== `template:${initialTemplate.id}`
+    ) {
+      lastLoadedId.current = `template:${initialTemplate.id}`;
+      setTitle(initialTemplate.title);
+      setSettings({
+        ...DEFAULT_FORM_SETTINGS,
+        ...((initialTemplate.settings as FormSettings | null) ?? {}),
+      });
+      setElements(
+        Array.isArray(initialTemplate.fields)
+          ? (initialTemplate.fields as FormField[])
+          : [],
+      );
+      setSelectedId(null);
+    }
+  }, [initialForm, initialTemplate]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),

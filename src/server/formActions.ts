@@ -1,5 +1,5 @@
 import type { Form, Submission } from "wasp/entities";
-import { prisma } from "wasp/server";
+import { prisma, config } from "wasp/server";
 import type {
   FormAction,
   FormSettings,
@@ -10,7 +10,17 @@ import type {
 import { DEFAULT_FORM_SETTINGS } from "../types";
 import { evaluateFormula } from "../components/builder/formula";
 import { evaluateCondition } from "../shared/logic";
-import { buildEmailSummary, sendEmail } from "./notifications";
+import {
+  renderSmartTags,
+  stripHtmlTags,
+  type SmartTagContext,
+} from "../shared/smartTags";
+import {
+  buildEmailSummary,
+  sendEmail,
+  type EmailAttachment,
+} from "./notifications";
+import { buildSubmissionPdf, collectFileUploadIds } from "./pdf";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -211,17 +221,64 @@ export async function runAfterSubmitActions(
       if (recipients.length === 0) {
         continue;
       }
-      const { subject, text, html } = buildEmailSummary(
-        form,
-        submission,
-        "submission.created",
-      );
-      await sendEmail(
-        recipients,
-        action.subject?.trim() || subject,
-        text,
-        html,
-      );
+      let attachments: EmailAttachment[] | undefined;
+      if (action.attachPdf === true) {
+        try {
+          const fileIds = collectFileUploadIds(fields, sourceData);
+          const fileNames: Record<string, string> = {};
+          if (fileIds.length > 0) {
+            const files = await prisma.uploadedFile.findMany({
+              where: { id: { in: fileIds } },
+            });
+            for (const file of files) {
+              fileNames[file.id] = file.originalName;
+            }
+          }
+          const pdf = await buildSubmissionPdf(form, submission, { fileNames });
+          attachments = [
+            {
+              filename: `${form.title}-${submission.id}.pdf`,
+              content: pdf,
+              contentType: "application/pdf",
+            },
+          ];
+        } catch (err) {
+          console.error(
+            `Failed to build PDF attachment for email action "${action.id}"; sending without it:`,
+            err,
+          );
+        }
+      }
+      const tagContext: SmartTagContext = {
+        form: { id: form.id, title: form.title },
+        fields,
+        data: sourceData,
+        submissionId: submission.id,
+        recordUrl: `${config.frontendUrl}/forms/${form.id}/records/${submission.id}`,
+      };
+      const customSubject = action.subject?.trim();
+      const bodyTemplate = action.bodyTemplate?.trim();
+      if (bodyTemplate) {
+        const html = renderSmartTags(bodyTemplate, tagContext);
+        const subject = renderSmartTags(
+          customSubject || `New response for "${form.title}"`,
+          tagContext,
+        );
+        await sendEmail(recipients, subject, stripHtmlTags(html), html, attachments);
+      } else {
+        const { subject, text, html } = buildEmailSummary(
+          form,
+          submission,
+          "submission.created",
+        );
+        await sendEmail(
+          recipients,
+          customSubject ? renderSmartTags(customSubject, tagContext) : subject,
+          text,
+          html,
+          attachments,
+        );
+      }
     }
   }
 }

@@ -291,8 +291,15 @@ export type FormAction =
       recipientField?: string;
       /** Also email the person who submitted. */
       includeSubmitter?: boolean;
-      /** Optional custom subject line. */
+      /** Optional custom subject line. Supports smart tags. */
       subject?: string;
+      /** Optional custom HTML body. Supports smart tags; empty uses the default summary. */
+      bodyTemplate?: string;
+      /**
+       * Attach a PDF of the submission to the email. Sent via a direct
+       * nodemailer transporter (Wasp's emailSender has no attachment support).
+       */
+      attachPdf?: boolean;
       /** Only run when this condition is satisfied. */
       when?: Condition;
     };

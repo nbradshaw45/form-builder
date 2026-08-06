@@ -15,6 +15,7 @@ import {
   getFormSubmissions,
   getSubmissionsCsv,
   getSubmissionsExcel,
+  getSubmissionPdf,
   useQuery,
 } from "wasp/client/operations";
 import { useParams } from "react-router";
@@ -730,6 +731,34 @@ function RowActions({
   canEdit: boolean;
   onDelete: () => void;
 }) {
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+
+  async function downloadPdf() {
+    setDownloadingPdf(true);
+    try {
+      const { filename, base64 } = await getSubmissionPdf({
+        formId,
+        submissionId,
+      });
+      const bytes = atob(base64);
+      const array = new Uint8Array(bytes.length);
+      for (let i = 0; i < bytes.length; i++) {
+        array[i] = bytes.charCodeAt(i);
+      }
+      const blob = new Blob([array], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      window.alert(`PDF download failed: ${String(err)}`);
+    } finally {
+      setDownloadingPdf(false);
+    }
+  }
+
   return (
     <div className="flex flex-wrap gap-1.5">
       <ButtonLink
@@ -752,6 +781,15 @@ function RowActions({
           Edit
         </ButtonLink>
       )}
+      <Button
+        size="xs"
+        variant="ghost"
+        onClick={() => void downloadPdf()}
+        disabled={downloadingPdf}
+      >
+        <DownloadIcon className="size-3.5" />
+        {downloadingPdf ? "PDF..." : "PDF"}
+      </Button>
       {canEdit && (
         <Button
           size="xs"

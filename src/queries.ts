@@ -2,17 +2,20 @@ import fs from "node:fs";
 import path from "node:path";
 import ExcelJS from "exceljs";
 import type { Form, Submission } from "wasp/entities";
-import type { FormField } from "./types";
+import type { FormField, FormSettings, SubmissionData } from "./types";
 import { HttpError, prisma } from "wasp/server";
 import type {
+  ExportForm,
   GetFile,
   GetForm,
   GetFormAccess,
   GetFormSubmissions,
   GetForms,
+  GetFormTemplates,
   GetFormUsers,
   GetSubmission,
   GetSubmissionByToken,
+  GetSubmissionPdf,
   GetSubmissionsCsv,
   GetSubmissionsExcel,
   GetUsers,
@@ -23,6 +26,7 @@ import {
   assertIsOwnerOrAdmin,
   getFormAccessForUser,
 } from "./server/access";
+import { buildSubmissionPdf, collectFileUploadIds } from "./server/pdf";
 
 export type FormWithSubmissionsCount = Form & {
   _count: { submissions: number };
@@ -82,7 +86,7 @@ export const getForms: GetForms<void, FormWithAccess[]> = async (
   const isAdmin = user.role === "ADMIN";
 
   const ownedForms = await context.entities.Form.findMany({
-    where: { userId: user.id },
+    where: { userId: user.id, isTemplate: false },
     orderBy: { createdAt: "desc" },
     include: {
       _count: { select: { submissions: true } },
@@ -92,7 +96,7 @@ export const getForms: GetForms<void, FormWithAccess[]> = async (
   const sharedAccess = isAdmin
     ? []
     : await context.entities.FormAccess.findMany({
-        where: { userId: user.id },
+        where: { userId: user.id, form: { isTemplate: false } },
         include: {
           form: {
             include: { _count: { select: { submissions: true } } },
@@ -111,6 +115,7 @@ export const getForms: GetForms<void, FormWithAccess[]> = async (
   let adminForms: FormWithAccess[] = [];
   if (isAdmin) {
     const allForms = await context.entities.Form.findMany({
+      where: { isTemplate: false },
       orderBy: { createdAt: "desc" },
       include: { _count: { select: { submissions: true } } },
     });
@@ -147,6 +152,66 @@ export const getForm: GetForm<{ id: string }, Form | null> = (
     where: { id },
   });
 };
+
+export type FormTemplateSummary = {
+  id: string;
+  title: string;
+  createdAt: Date;
+};
+
+export const getFormTemplates: GetFormTemplates<
+  void,
+  FormTemplateSummary[]
+> = async (_args, context) => {
+  if (!context.user) {
+    throw new HttpError(401);
+  }
+  if (context.user.role === "VIEWER") {
+    throw new HttpError(403, "Viewers cannot use form templates");
+  }
+
+  return context.entities.Form.findMany({
+    where: { isTemplate: true },
+    select: { id: true, title: true, createdAt: true },
+    orderBy: { createdAt: "desc" },
+  });
+};
+
+export type ExportFormResult = {
+  title: string;
+  fields: FormField[];
+  settings: FormSettings | null;
+  exportedAt: string;
+  version: 1;
+};
+
+export const exportForm: ExportForm<{ formId: string }, ExportFormResult> =
+  async ({ formId }, context) => {
+    if (!context.user) {
+      throw new HttpError(401);
+    }
+
+    const access = await getFormAccessForUser(formId, context.user);
+    assertCanView(access);
+
+    const form = await context.entities.Form.findUnique({
+      where: { id: formId },
+      select: { title: true, fields: true, settings: true },
+    });
+    if (!form) {
+      throw new HttpError(404, "Form not found");
+    }
+
+    return {
+      title: form.title,
+      fields: Array.isArray(form.fields)
+        ? (form.fields as unknown as FormField[])
+        : [],
+      settings: (form.settings as unknown as FormSettings | null) ?? null,
+      exportedAt: new Date().toISOString(),
+      version: 1,
+    };
+  };
 
 export const getFormSubmissions: GetFormSubmissions<
   { formId: string },
@@ -441,6 +506,61 @@ export const getSubmissionsExcel: GetSubmissionsExcel<
   return {
     fileName: `${form.title}.xlsx`,
     dataBase64: Buffer.from(buffer).toString("base64"),
+  };
+};
+
+export type SubmissionPdfResult = {
+  filename: string;
+  base64: string;
+};
+
+export const getSubmissionPdf: GetSubmissionPdf<
+  { formId: string; submissionId: string },
+  SubmissionPdfResult
+> = async ({ formId, submissionId }, context) => {
+  if (!context.user) {
+    throw new HttpError(401);
+  }
+
+  const submission = await context.entities.Submission.findUnique({
+    where: { id: submissionId },
+  });
+  if (!submission || submission.formId !== formId) {
+    throw new HttpError(404, "Submission not found");
+  }
+
+  const access = await getFormAccessForUser(formId, context.user);
+  assertCanView(access);
+
+  const form = await context.entities.Form.findUnique({
+    where: { id: formId },
+  });
+  if (!form) {
+    throw new HttpError(404, "Form not found");
+  }
+
+  const fields = Array.isArray(form.fields)
+    ? (form.fields as unknown as FormField[])
+    : [];
+  const data =
+    submission.data && typeof submission.data === "object"
+      ? (submission.data as SubmissionData)
+      : {};
+  const fileIds = collectFileUploadIds(fields, data);
+  const fileNames: Record<string, string> = {};
+  if (fileIds.length > 0) {
+    const files = await context.entities.UploadedFile.findMany({
+      where: { id: { in: fileIds } },
+    });
+    for (const file of files) {
+      fileNames[file.id] = file.originalName;
+    }
+  }
+
+  const buffer = await buildSubmissionPdf(form, submission, { fileNames });
+  return {
+    filename: `${form.title}-${submission.id}.pdf`,
+    base64: buffer.toString("base64"),
   };
 };
 

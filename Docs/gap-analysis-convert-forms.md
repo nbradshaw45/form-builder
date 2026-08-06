@@ -1,9 +1,14 @@
 # Feature Gap Analysis — Form Builder vs Tassos Convert Forms
 
 Comparison of our form builder against
-[Convert Forms](https://www.tassos.gr/joomla-extensions/convert-forms) (the
-leading Joomla form-builder extension, v5.2.x). The goal is to find
-high-impact gaps worth closing. Legend: ✅ = have, 🟡 = partial, ❌ = missing.
+[Convert Forms](https://www.tassos.gr/docs/convert-forms) (the leading Joomla
+form-builder extension, v5.2.4, docs verified August 2026 against ~20
+documentation articles + the full docs sitemap). Legend: ✅ = have, 🟡 =
+partial, ❌ = missing, ? = not documented/verified.
+
+This revision corrects several stale entries from the previous version
+(multi-page forms, payments, QR, rate limiting, AND/OR rule groups) and adds
+advanced & developer-feature coverage.
 
 ---
 
@@ -11,156 +16,206 @@ high-impact gaps worth closing. Legend: ✅ = have, 🟡 = partial, ❌ = missin
 
 | Capability | Convert Forms | Us | Notes |
 |---|---|---|---|
-| Drag-and-drop live builder | ✅ | ✅ | Our builder also has grid-width columns, move buttons, and drag preview with wrap warnings |
-| 12-column / responsive layouts | ✅ | ✅ | Column span per element + flex-wrap |
-| Pre-built **form templates** | ✅ | ❌ | No template gallery or "save as template" |
-| **Duplicate / copy a form** | ✅ | ❌ | Only manual rebuild |
-| Multi-step / wizard forms | ✅ | ✅ | Section-header steps + progress bar + step skipping |
-| Field-level styling (colors, size, padding) | ✅ | ❌ | No per-field visual customization |
-| Per-form **theming / branding** | ✅ | ❌ | No accent color, logo, custom CSS |
-| Undo / redo in the builder | ✅ | ❌ | No history stack |
-| Keyboard shortcuts | ✅ | ❌ | No shortcuts |
+| Drag-and-drop live builder | ✅ | ✅ | Our builder also has move buttons and drag preview with wrap warnings |
+| Multi-column / responsive layouts | ✅ | ✅ | They use CSS width classes (`cf:w-1/3`, responsive breakpoints); we use a 12-col span per element |
+| Pre-built **form templates** | ✅ | ✅ | **Shipped**: save-as-template, Templates section, picker on `/forms/new` |
+| **Duplicate / copy a form** | ✅ | ✅ | **Shipped**: one-click Duplicate on the forms list |
+| Multi-page / wizard forms | ❌ | ✅ | **We lead** — their FAQ says multi-page is unsupported (data-passing workaround only); we have section steps + progress bar + step skipping |
+| Field-level styling (colors, size, padding) | ✅ | ❌ | They have a Design panel per element/box/text/image |
+| Per-form **theming / branding** (fonts, custom CSS, Google Fonts) | ✅ | ❌ | No accent color, logo, custom CSS |
+| **Custom CSS / JS per form** | ✅ | 🟡 | We have custom JS (page load + condition actions) but no custom CSS |
+| Undo / redo in the builder | ? | ❌ | Not documented for them either |
+| AJAX submit + after-submit redirect/message | ✅ | ✅ | Both support success message, redirect, data passthrough |
+| **Form export/import** (file format) | ✅ | ✅ | **Shipped**: `.form.json` export/import |
 
 ## 2. Field types
 
 | Field | Convert Forms | Us | Notes |
 |---|---|---|---|
 | Text / textarea / number / select / checkbox / date / time | ✅ | ✅ | |
-| Email / URL / phone (formatting + **country detection**) | ✅ | 🟡 | We validate email/URL/phone but have no auto-formatting/input masks |
+| Email / URL / phone | ✅ | ✅ | Their phone field adds country detection/auto-formatting; we have input masks instead |
+| **Password** (with mask/unmask toggle) | ✅ | ❌ | |
 | Radio & checkbox **images** | ✅ | ❌ | Image-backed options |
-| **Confirmation fields** (email/password confirm) | ✅ | ✅ | New "Confirmation" element (must match another field) |
-| **Hidden fields** | ✅ | ✅ | New "Hidden field" element (value via default/URL, stored) |
-| **Input masks** (phone, currency, card, custom) | ✅ | 🟡 | Text & phone fields support presets (phone/card/date/zip/SSN) + custom masks; no currency mask |
-| File upload | ✅ | ✅ | We support single-file; no multi-file/S3 yet |
-| Rating (stars/hearts/thumbs, 1–10) | ✅ | 🟡 | Stars only (3/5/7/10) |
+| **Confirmation fields** | ✅ | ✅ | |
+| **Hidden fields** | ✅ | ✅ | |
+| **Input masks** (optional segments, alternators, repeats) | ✅ | 🟡 | Their mask syntax is richer (`[...]`, `(aaa|999)`, `{n,m}`); ours covers presets + simple custom patterns |
+| File upload | ✅ | ✅ | Both single-file; neither does S3 |
+| Rating | ✅ | 🟡 | Stars only for us (3/5/7/10) |
 | Signature | ✅ | ✅ | |
 | Range slider | ✅ | ✅ | |
-| Rich text editor | ✅ | ❌ | Not implemented |
+| **Country** dropdown, **Color picker**, **Terms of Service** checkbox | ✅ | ❌ | |
+| **Rich Text Editor** field | ✅ | ❌ | |
+| **HTML field** (rich content w/ inline calculations) | ✅ | 🟡 | We have paragraph/section/divider layout elements but no arbitrary HTML element |
+| **Captcha fields** (reCAPTCHA, hCaptcha, Turnstile, Math, Altcha) | ✅ | ❌ | See §6 |
 | User dropdown (current users) | ❌ | ✅ | Unique to us |
-| Math / calculated fields (with functions, comparisons) | ✅ | ✅ | We support `sum/avg/if/dateDiff`, etc. |
+| Math / calculated fields | ✅ | ✅ | Both have expression parsers; theirs adds trig/log, ours adds `dateDiff` and date arithmetic (**they explicitly lack date calculations**) |
+| Per-option **calculation values** (options carry numeric weights) | ✅ | ❌ | Enables pricing/quiz scoring |
 
 ## 3. Logic, prefill & smart behaviour
 
 | Capability | Convert Forms | Us | Notes |
 |---|---|---|---|
-| Conditional show/hide of fields | ✅ | ✅ | Visibility rules + per-option "show when" |
-| Conditional required | ✅ | ✅ | `requiredWhen` |
-| Field **calculations** | ✅ | ✅ | Math fields + live recompute |
-| **Auto-populate** fields (defaults, **query string**, pre-selected options, logged-in user) | ✅ | 🟡 | Field defaults + `?key=value` prefill done; no pre-selected options / logged-in-user fill yet |
-| **Input masking** | ✅ | ❌ | See above |
-| Per-action **conditions** (emails, webhooks) | ✅ | ✅ | Each action has "Only run when..." |
-| Rule groups (**AND/OR**) | ✅ | ❌ | Single-rule conditions only |
+| Conditional show/hide of fields | ✅ | ✅ | Both have central condition builders with show/hide, set/copy value, select/show/hide options |
+| Rule groups (**AND/OR**) + else-actions | ✅ | ✅ | **Corrected**: both support AND within groups, OR between groups, and "otherwise" actions |
+| Conditional required | 🟡 | ✅ | They auto-unrequire hidden fields; we have explicit `requiredWhen` |
+| Field **calculations** | ✅ | ✅ | They verify server-side on submit; we compute client-side |
+| Quiz scoring | ✅ | ❌ | Via their per-option calc values |
+| **Auto-populate** (defaults, query string, user data) | ✅ | 🟡 | Field defaults + `?key=value` prefill done; no logged-in-user prefill / smart-tag defaults |
+| Per-action **conditions** (emails, webhooks, tasks) | ✅ | ✅ | Both gate actions on submission data |
+| **Conditional content** in messages/emails (`{if}` blocks) | ✅ | ❌ | |
+| Run custom JS from conditions / on load | 🟡 | ✅ | We have `form.getValue/setValue` API in condition actions + on-load scripts; they have a JS events API instead (§8) |
 
 ## 4. Submissions & data
 
 | Capability | Convert Forms | Us | Notes |
 |---|---|---|---|
-| Submissions management (list/filter/search) | ✅ | ✅ | Table + search + smart filters (equals/contains/between/upload) + bulk actions |
-| CSV export | ✅ | ✅ | |
-| **Excel export** | ✅ | ✅ | `.xlsx` via exceljs (all or selected rows) |
-| **PDF generation** from submissions | ✅ | ❌ | No PDFs (agreements, invoices, consent) |
-| Submission **edit history / diffs** | ✅ | ❌ | No change log |
-| **Analytics dashboard / charts** | ✅ | 🟡 | Basic stats row only (totals, week, avg/day, fill rate) |
-| Bulk actions (bulk delete/export) | ✅ | ✅ | Row checkboxes + bulk delete/export CSV/Excel |
-| Conditional formatting / fields in results | ✅ | ❌ | Static columns only |
+| Submissions management (list/filter/search) | ✅ | ✅ | We have per-field smart filters + bulk actions; they add status selector, internal notes, customizable columns |
+| Submission **status / internal notes** | ✅ | ❌ | |
+| **Context tracking** (IP, geo-country, device, referrer, UTM, source page) | ✅ | ❌ | Auto-captured per submission, exposed via smart tags |
+| CSV export | ✅ | ✅ | They also export JSON |
+| **Excel export** | ❌ | ✅ | `.xlsx` via exceljs — **we lead** |
+| **PDF generation** from submissions | ✅ | ✅ | **Shipped**: server-side PDF (pdfkit), download from record page + submissions rows, email attachment. No smart-tag PDF templates yet |
+| Frontend record **view & edit** pages | 🟡 | ✅ | **We lead** — they display submissions on the frontend but editing is only "planned"; we have full view/edit record routes incl. token-based anonymous edit |
+| Submission **edit history / diffs** | ❌ | ❌ | Neither (they track dateModified only) |
+| **Analytics dashboard / charts** | ❌ | 🟡 | Neither has charts; we have a basic stats row, they rely on external GA/GTM tracking |
+| Bulk actions | ✅ | ✅ | |
+| Sequential submission numbering / unique IDs | ✅ | 🟡 | We have receipt numbers (`RES-XXXXXXXX`) |
+| **Storage controls** (disable storage, auto-delete old submissions) | ✅ | ❌ | |
+| Import submissions | 🟡 | ❌ | They support DB-level import only; no UI import on either side |
 
 ## 5. Notifications & integrations
 
 | Capability | Convert Forms | Us | Notes |
 |---|---|---|---|
-| **Email notifications** (admin + auto-responder) | ✅ | ✅ | SMTP, hard-coded/field/submitter recipients, per-action conditions, custom subject |
-| Email **templates (HTML/CSS)**, **file attachments**, **smart tags** | ✅ | ❌ | Plain generated summary only; no attachment/tag support |
-| Webhooks (GET/POST, field mapping, headers, conditional) | ✅ | 🟡 | POST/GET JSON + HMAC; no field mapping, headers, or payload templates |
-| **CRM / email integrations** (MailChimp, HubSpot, Salesforce, AWeber, Zoho…) | ✅ | ❌ | Generic webhook only; no presets |
-| **Google Analytics** tracking | ✅ | ❌ | |
-| **PDF attached to email** | ✅ | ❌ | |
-| Payment forms (Stripe/PayPal) | ✅ | ❌ | |
+| **Email notifications** (admin + auto-responder) | ✅ | ✅ | We have SMTP email actions with field/submitter recipients and per-action conditions |
+| Multiple independent **email tasks** (CC/BCC, Reply-To, resend, tracking) | ✅ | 🟡 | We support multiple email actions; no CC/BCC/Reply-To/resend |
+| **Email routing by field value** | ✅ | 🟡 | Our field-based recipient covers the common case |
+| Email **templates (HTML/CSS)**, **attachments**, **smart tags** | ✅ | 🟡 | **Shipped**: custom HTML body + smart tags (`{field.x}`, `{all_fields}`, …) + PDF attachment. Still missing: CC/BCC/Reply-To, conditional content (`{if}`), uploaded-file attachments, resend/tracking |
+| Webhooks | ✅ | 🟡 | Ours: POST/GET JSON + HMAC signing. Theirs: GET/POST/PUT/PATCH/DELETE, custom headers, JSON or form payloads |
+| **Tasks engine** (multi-step app automations, data passing between tasks) | ✅ | 🟡 | Our ordered action engine is conceptually similar (set field / call API / cross-form write / email) but has no task-to-task data passing or reusable named connections |
+| **CRM / email integrations** (MailChimp, HubSpot, Salesforce, Brevo, ActiveCampaign, GetResponse, MailerLite, Zoho…) | ✅ | ❌ | ~20 preset integrations; we have generic webhook/API-call only |
+| **Zapier** | ✅ | ❌ | Reachable via our webhook in practice |
+| **Analytics tracking** (GA, GTM, Meta Pixel, Google Ads) | ✅ | ❌ | |
 
-## 6. Automation & workflow
-
-| Capability | Convert Forms | Us | Notes |
-|---|---|---|---|
-| Custom server-side actions (set field, call API, write to DB) | ❌ | ✅ | Unique — our action engine |
-| Create submission in another form | ❌ | ✅ | "Write to DB" hook |
-| Register a user from a submission | ✅ | ❌ | We create users via admin only |
-| Publish content / create articles | ✅ | ❌ | Joomla-specific; N/A for our platform |
-
-## 7. Distribution, security & platform
+## 6. Spam, security & restrictions
 
 | Capability | Convert Forms | Us | Notes |
 |---|---|---|---|
-| **Embed anywhere** (iframe/shortcode in pages, modules, popups, footer) | ✅ | ❌ | We only have a standalone URL (+ popup display mode) |
-| **QR code** for the form link | ✅ | ❌ | |
-| **Spam protection** (reCAPTCHA, hCaptcha, honeypot) | ✅ | 🟡 | Honeypot done; no CAPTCHA yet |
-| **Rate limiting** on submissions | ✅ | ✅ | Per-form limit per rolling hour |
-| **Availability window** (open/close dates) | ✅ | ✅ | Open/close dates with client notice + server rejection |
-| Form **access control / sharing** (view vs edit) | ❌ | ✅ | Unique — per-user form sharing |
-| User roles & admin user management | ❌ | ✅ | |
+| Honeypot | ✅ | ✅ | Theirs is on by default (v2) |
+| **reCAPTCHA v2/v3, hCaptcha, Turnstile, Math captcha, Altcha** | ✅ | ❌ | Their captcha fields are first-class elements |
+| **Minimum time to submit** | ✅ | ❌ | Rejects sub-2-second submissions |
+| **Rate limiting** | ❌ | ✅ | **We lead** — per-form rolling-hour limit; they only have min-time + IP restriction |
+| **Availability window** (open/close dates) | ✅ | ✅ | |
+| **Block emails/domains**, **profanity filter**, **IP restriction**, **unique-value enforcement**, **double opt-in** | ✅ | ❌ | Restriction rule set we don't have |
+| Submission limits (max N submissions) | 🟡 | ❌ | Only via their PHP script recipes |
+| GDPR/consent tooling (cookie consent, iubenda) | ✅ | ❌ | |
+
+## 7. Payments
+
+| Capability | Convert Forms | Us | Notes |
+|---|---|---|---|
+| Native payment gateway (Stripe/PayPal) | ❌ | ❌ | **Corrected**: roadmap only for them — Stripe/PayPal achievable via custom PHP/JS recipes, same as our Call API action |
+
+## 8. Distribution, platform & access
+
+| Capability | Convert Forms | Us | Notes |
+|---|---|---|---|
+| **Embed** (iframe / shortcode / module) | ✅ | ❌ | They document iframe embedding on external sites; we only have a standalone URL |
+| **Popup** display | 🟡 | ✅ | **We lead** — native popup/modal display mode; they need a separate extension (EngageBox) |
+| **QR code** for the form link | ❌ | ❌ | **Corrected**: not documented for them either |
+| Form **access control / sharing** (view vs edit) | ❌ | ✅ | **We lead** — per-user sharing, roles, admin user management; they have no form-level ACL |
 | **Self-edit link** (token) for submitters | ❌ | ✅ | |
 | Response **receipts** | ❌ | ✅ | |
-| Multi-tenant orgs / folders | ✅ | ❌ | Single-workspace only |
-| Localization (10+ languages) | ✅ | ❌ | English only |
+| Localization | ✅ | ❌ | 10+ UI translations, multilingual forms |
+| Multi-tenant orgs / folders | ❌ | ❌ | Neither (Joomla is single-site; we're single-workspace) |
+
+## 9. Advanced & developer features
+
+| Capability | Convert Forms | Us | Notes |
+|---|---|---|---|
+| **Server-side code hooks** | ✅ PHP scripts (4 hooks: form prepare, form display, form process/validate, after submission) | 🟡 | Our action engine covers "after submission" no-code style (set field, call API, cross-form write, email) but there is no escape hatch for arbitrary server logic or custom server-side validation |
+| **Client-side JS API** | ✅ Events: `impression`, `beforeSubmit` (can veto), `success`, `error`, `afterTask`, programmatic `submit()` | 🟡 | We have `form.getValue/setValue/values/fields` in on-load + condition scripts, but no submit lifecycle events or veto |
+| **Plugin/extension events** (12 documented Joomla events, incl. cron endpoint) | ✅ | ❌ | N/A architecturally, but shows their extensibility surface |
+| **JSON API** (read forms/leads w/ API key) | ✅ | ❌ | No public/token-authenticated API on our side (read or submit) |
+| **Form export/import** | ✅ | ✅ | **Shipped**: `.form.json` (their format is `.CNVF`) |
+| **Template/layout overrides** | ✅ | ❌ | Joomla template overrides; N/A for us |
+| **PHP API class** (`Api::getFormSubmissionsTotal()` etc.) | ✅ | ❌ | |
+| **Custom field type SDK** | ❌ | ❌ | Neither documents registering new field types |
+| Custom validation scripts | ✅ (PHP form-process hook, throw Exception) | 🟡 | We have per-field regex/expression validation but no server-side custom validator beyond that |
 
 ---
 
+## Where we lead (verified)
+
+- **Multi-step wizard forms** — they don't support multi-page at all.
+- **Frontend record editing** (incl. anonymous token edit) — theirs is "planned".
+- **Per-form sharing / roles / admin** — no form-level ACL on their side.
+- **Rate limiting**, **response receipts**, **Excel export**, **native popup mode**,
+  **date arithmetic in calculations**, explicit **conditional required**.
+
 ## Summary of gaps by weight
 
+**Shipped since the last revision:**
+- **Smart tags + HTML email templates** (`{field.x}` interpolation in subjects,
+  bodies, success messages, redirect URLs; PDF attachment on the email action)
+- **PDF generation** from submissions (record page, submissions rows, email)
+- **Form templates & duplication** (+ `.form.json` export/import)
+
 **High impact, missing entirely:**
-1. Pre-built **form templates** + save-as-template/duplicate
-2. **PDF generation** from submissions (+ email attachment / download link)
-3. **Embed & QR** — iframe embed code + QR code for the form link
+1. **Spam controls beyond honeypot** — Turnstile/reCAPTCHA element, minimum
+   time-to-submit, email/domain blocklist, unique-value enforcement.
+2. **Context tracking** — IP/geo/referrer/UTM captured per submission.
+3. **Integration presets** — Slack/Discord/Teams + a few CRM presets on top of
+   the existing webhook/API action.
 
 **High impact, partial:**
-4. **Email templates** (HTML, attachments, smart tags)
-5. **Input masks** (done for text/phone) and confirmation/hidden fields
-6. Submission **edit history**, deeper **analytics**
+4. **Email polish** — CC/BCC/Reply-To, conditional content (`{if}` blocks),
+   resend/tracking, uploaded-file attachments.
+5. **Submission status & notes**, **storage controls** (auto-delete, disable storage).
+6. **Embed code** (iframe snippet), **theming/branding**.
 
-**Done since this was written:**
-- **Spam protection & availability** — honeypot, per-form rate limiting, and
-  open/close date windows are implemented.
-- **Auto-populate** — field default values and query-string prefill
-  (`?key=value`) are implemented.
-- **Input masking** — presets (phone, credit card, date, zip, SSN) and custom
-  patterns for text/phone fields.
-- **Submissions UX** — per-field filtering, bulk select with bulk delete and
-  CSV/Excel export, and **Excel (.xlsx) export** are implemented.
-- **Confirmation & hidden fields** — new field elements implemented.
+**Developer-surface gaps:**
+7. Public/token **API** (read submissions, submit responses).
+8. Submit-lifecycle **JS events** (beforeSubmit veto, success/error).
+9. Server-side **custom validation/logic hook** beyond the action engine.
 
 **Nice-to-have:**
-7. CRM/email provider integrations, Google Analytics, multi-file uploads, image radios, rich text, rule groups (AND/OR), theming, undo/redo.
+10. Image radios, password/country/color/ToS fields, rich-text element, HTML
+    element, per-option calculation values (quiz/pricing), localization,
+    deeper analytics charts, undo/redo.
 
 ---
 
 ## Recommended: 3 features to implement next
 
-### 1. Form templates & duplication
-**Why:** "Form templates" is Convert Forms' headline time-saver, and duplication
-is a trivial extension. High perceived value, low risk.
-- "Save as template" action on a form (snapshot of `fields` + `settings`).
-- Template gallery on `/forms/new`; create a form from a template.
-- One-click **Duplicate** on the forms list.
-- Effort: small (one new action/query + a picker UI). No schema change.
+The previous top-3 (smart tags/email templates, PDF generation, form
+templates & duplication + export/import) are **shipped**. The next three:
 
-### 2. PDF generation from submissions
-**Why:** Unique differentiator in our stack (Convert Forms pushes it heavily for
-agreements, consent, invoices); pairs with our email actions (attach PDF) and
-webhooks.
-- Server-side PDF from a submission (label/value list + form title).
-- Add a "Generate PDF" action type and/or a download link in the submissions
-  table and the record view page.
-- Optionally attach to the email action.
-- Effort: medium (a PDF library such as `pdfkit`/`pdfmake` + a small template).
+### 1. Spam controls (Turnstile + min-time-to-submit)
+**Why:** Every public form is exposed; Convert Forms ships five captcha
+options plus min-time and restriction rules. We only have a honeypot.
+- New "Captcha" element (Cloudflare Turnstile — free, no puzzle UI) verified
+  server-side on submit.
+- Per-form "minimum time to submit" (reject sub-N-second submissions).
+- Optional: email/domain blocklist, unique-value enforcement.
+- Effort: small–medium.
 
-### 3. Embed & QR
-**Why:** Convert Forms markets "easy to embed"; we only have a standalone URL
-(+ popup display mode).
-- **Embed code**: a copy-paste iframe snippet (`<iframe src="/forms/:id">`) from
-  the form settings or submissions page.
-- **QR code**: a rendered QR image for the form link (a tiny library or an
-  external image endpoint).
-- Effort: low.
+### 2. Context tracking
+**Why:** They auto-capture IP, country, device, referrer, source page, and UTM
+params per submission and expose them as smart tags; it's cheap analytics gold.
+- Nullable `Submission.context` JSON column captured in `submitForm`
+  (IP, user-agent, referrer, UTM from the request/URL).
+- Show in the record view; expose as `{submission.context.*}` smart tags and
+  filterable columns later.
+- Effort: small.
 
-### Runner-up
-- **Email templates** (HTML body, smart tags, file attachments) — extends the
-  existing email action.
-- **Submission edit history** — change log with diffs per submission.
+### 3. Email polish (CC/BCC/Reply-To + conditional content)
+**Why:** Completes the email story against their email tasks.
+- CC/BCC/Reply-To fields on the email action.
+- `{if field.x == y}...{/if}` conditional blocks in `renderSmartTags` —
+  works in bodies, success messages, and future PDF templates.
+- Effort: small–medium.
+
+### Runner-ups
+- **Submission status & internal notes** — review workflow on submissions.
+- **Integration presets** — Slack/Discord/Teams webhook templates.

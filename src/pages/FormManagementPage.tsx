@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import type { AuthUser } from "wasp/auth";
+import { useNavigate } from "react-router";
 import {
   createColumnHelper,
   flexRender,
@@ -7,19 +8,32 @@ import {
   useReactTable,
   type Row,
 } from "@tanstack/react-table";
-import { deleteForm } from "wasp/client/operations";
-import { getForms, useQuery } from "wasp/client/operations";
+import {
+  createFormFromTemplate,
+  deleteForm,
+  duplicateForm,
+  exportForm,
+  importForm,
+  saveFormAsTemplate,
+} from "wasp/client/operations";
+import { getForms, getFormTemplates, useQuery } from "wasp/client/operations";
 import { Link } from "wasp/client/router";
-import type { FormWithAccess } from "../queries";
+import type { FormTemplateSummary, FormWithAccess } from "../queries";
+import type { FormField, FormSettings } from "../types";
 import { Button, ButtonLink } from "../shared/components/Button";
 import { Card, CardHead, DataFoot, DataToolbar } from "../shared/components/Card";
 import { ConfirmDialog } from "../components/Modal";
-import { EyeIcon, PencilIcon, PlusIcon, ShareIcon, TableIcon, TrashIcon } from "../components/builder/icons";
+import { BookmarkIcon, DownloadIcon, DuplicateIcon, EyeIcon, PencilIcon, PlusIcon, ShareIcon, TableIcon, TrashIcon, UploadIcon } from "../components/builder/icons";
 
 const columnHelper = createColumnHelper<FormWithAccess>();
 
 interface DeleteState {
   form: FormWithAccess;
+  isDeleting: boolean;
+}
+
+interface TemplateDeleteState {
+  template: FormTemplateSummary;
   isDeleting: boolean;
 }
 
@@ -36,9 +50,19 @@ const accessLabel: Record<FormWithAccess["access"], string> = {
 };
 
 export function FormManagementPage({ user }: { user: AuthUser }) {
+  const navigate = useNavigate();
   const { data: forms, isLoading, isSuccess } = useQuery(getForms);
+  const canCreate = user.role !== "VIEWER";
+  const { data: templates } = useQuery(getFormTemplates, undefined, {
+    enabled: canCreate,
+  });
   const [search, setSearch] = useState("");
   const [deleteState, setDeleteState] = useState<DeleteState | null>(null);
+  const [templateDeleteState, setTemplateDeleteState] =
+    useState<TemplateDeleteState | null>(null);
+  const [usingTemplateId, setUsingTemplateId] = useState<string | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const filteredForms = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -127,6 +151,83 @@ export function FormManagementPage({ user }: { user: AuthUser }) {
     }
   }
 
+  async function confirmTemplateDelete() {
+    if (!templateDeleteState) {
+      return;
+    }
+    setTemplateDeleteState({ ...templateDeleteState, isDeleting: true });
+    try {
+      await deleteForm({ formId: templateDeleteState.template.id });
+      setTemplateDeleteState(null);
+    } catch (err) {
+      window.alert(`Error while deleting template: ${String(err)}`);
+      setTemplateDeleteState(null);
+    }
+  }
+
+  async function handleUseTemplate(template: FormTemplateSummary) {
+    setUsingTemplateId(template.id);
+    try {
+      const form = await createFormFromTemplate({
+        templateId: template.id,
+        title: template.title,
+      });
+      navigate(`/forms/${form.id}/edit`);
+    } catch (err) {
+      window.alert(`Error while creating form from template: ${String(err)}`);
+      setUsingTemplateId(null);
+    }
+  }
+
+  async function handleImportFile(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) {
+      return;
+    }
+    setIsImporting(true);
+    try {
+      const text = await file.text();
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        throw new Error("The selected file is not valid JSON.");
+      }
+      const candidate = parsed as {
+        title?: unknown;
+        fields?: unknown;
+        settings?: unknown;
+      };
+      if (
+        typeof candidate !== "object" ||
+        candidate === null ||
+        Array.isArray(candidate) ||
+        typeof candidate.title !== "string" ||
+        !Array.isArray(candidate.fields) ||
+        (candidate.settings !== null &&
+          candidate.settings !== undefined &&
+          (typeof candidate.settings !== "object" ||
+            Array.isArray(candidate.settings)))
+      ) {
+        throw new Error(
+          "Not a valid form export: expected an object with a title (string), fields (array), and settings (object).",
+        );
+      }
+      await importForm({
+        title: candidate.title,
+        fields: candidate.fields as FormField[],
+        settings: (candidate.settings as FormSettings | null) ?? undefined,
+      });
+    } catch (err) {
+      window.alert(
+        `Import failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    } finally {
+      setIsImporting(false);
+    }
+  }
+
   return (
     <div className="mx-auto flex w-full max-w-(--breakpoint-2xl) flex-col gap-6 px-8 py-8">
       <div className="flex flex-wrap items-end justify-between gap-4">
@@ -145,7 +246,28 @@ export function FormManagementPage({ user }: { user: AuthUser }) {
             .
           </p>
         </div>
-        <ButtonLink to="/forms/new">New form</ButtonLink>
+        <div className="flex flex-wrap gap-2">
+          {canCreate && (
+            <>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".json,application/json"
+                className="hidden"
+                onChange={(event) => void handleImportFile(event)}
+              />
+              <Button
+                variant="ghost"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isImporting}
+              >
+                <UploadIcon className="size-3.5" />
+                {isImporting ? "Importing..." : "Import form"}
+              </Button>
+            </>
+          )}
+          <ButtonLink to="/forms/new">New form</ButtonLink>
+        </div>
       </div>
 
       <Card className="w-full">
@@ -241,6 +363,78 @@ export function FormManagementPage({ user }: { user: AuthUser }) {
         )}
       </Card>
 
+      {canCreate && templates && templates.length > 0 && (
+        <Card className="w-full">
+          <div className="p-6 pb-0">
+            <CardHead
+              eyebrow="Reusable"
+              title="Templates"
+              action={
+                <span className="text-xs text-neutral-500">
+                  {templates.length} template{templates.length === 1 ? "" : "s"}
+                </span>
+              }
+            />
+          </div>
+          <div className="overflow-x-auto px-2 pb-2">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr>
+                  <th className="table-head">Title</th>
+                  <th className="table-head">Created</th>
+                  <th className="table-head">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {templates.map((template) => (
+                  <tr
+                    key={template.id}
+                    className="transition-colors duration-150 hover:bg-neutral-50"
+                  >
+                    <td className="table-cell font-semibold text-neutral-800">
+                      {template.title}
+                    </td>
+                    <td className="table-cell">
+                      <span className="cell-date">
+                        {new Date(template.createdAt).toLocaleDateString()}
+                      </span>
+                    </td>
+                    <td className="table-cell">
+                      <div className="flex flex-wrap gap-1.5">
+                        <Button
+                          size="xs"
+                          onClick={() => void handleUseTemplate(template)}
+                          disabled={usingTemplateId === template.id}
+                        >
+                          <PlusIcon className="size-3.5" />
+                          {usingTemplateId === template.id
+                            ? "Creating..."
+                            : "Use template"}
+                        </Button>
+                        <Button
+                          size="xs"
+                          variant="ghost"
+                          className="text-danger hover:border-danger hover:bg-danger-soft hover:text-danger"
+                          onClick={() =>
+                            setTemplateDeleteState({
+                              template,
+                              isDeleting: false,
+                            })
+                          }
+                        >
+                          <TrashIcon className="size-3.5" />
+                          Delete
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
       {deleteState && (
         <ConfirmDialog
           title="Delete form"
@@ -248,6 +442,16 @@ export function FormManagementPage({ user }: { user: AuthUser }) {
           isLoading={deleteState.isDeleting}
           onConfirm={confirmDelete}
           onCancel={() => setDeleteState(null)}
+        />
+      )}
+
+      {templateDeleteState && (
+        <ConfirmDialog
+          title="Delete template"
+          message={`Are you sure you want to delete the template "${templateDeleteState.template.title}"?`}
+          isLoading={templateDeleteState.isDeleting}
+          onConfirm={confirmTemplateDelete}
+          onCancel={() => setTemplateDeleteState(null)}
         />
       )}
     </div>
@@ -265,6 +469,47 @@ function RowActions({
 }) {
   const { id, access } = row.original;
   const canManage = access === "owner" || user.role === "ADMIN";
+  const [busyAction, setBusyAction] = useState<string | null>(null);
+
+  async function runAction(name: string, fn: () => Promise<void>) {
+    setBusyAction(name);
+    try {
+      await fn();
+    } catch (err) {
+      window.alert(`Error: ${String(err)}`);
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  function handleDuplicate() {
+    return runAction("duplicate", async () => {
+      await duplicateForm({ formId: id });
+    });
+  }
+
+  function handleSaveAsTemplate() {
+    return runAction("template", async () => {
+      await saveFormAsTemplate({ formId: id });
+      window.alert(`Saved "${row.original.title}" as a template.`);
+    });
+  }
+
+  function handleExport() {
+    return runAction("export", async () => {
+      const payload = await exportForm({ formId: id });
+      const blob = new Blob([JSON.stringify(payload, null, 2)], {
+        type: "application/json",
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${row.original.title}.form.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+    });
+  }
+
   return (
     <div className="flex flex-wrap gap-1.5">
       <ButtonLink to="/forms/:id" params={{ id }} size="xs">
@@ -284,6 +529,37 @@ function RowActions({
         <TableIcon className="size-3.5" />
         Submissions
       </ButtonLink>
+      <Button
+        size="xs"
+        variant="ghost"
+        onClick={() => void handleExport()}
+        disabled={busyAction !== null}
+      >
+        <DownloadIcon className="size-3.5" />
+        {busyAction === "export" ? "Exporting..." : "Export"}
+      </Button>
+      {canManage && (
+        <Button
+          size="xs"
+          variant="ghost"
+          onClick={() => void handleDuplicate()}
+          disabled={busyAction !== null}
+        >
+          <DuplicateIcon className="size-3.5" />
+          {busyAction === "duplicate" ? "Duplicating..." : "Duplicate"}
+        </Button>
+      )}
+      {canManage && (
+        <Button
+          size="xs"
+          variant="ghost"
+          onClick={() => void handleSaveAsTemplate()}
+          disabled={busyAction !== null}
+        >
+          <BookmarkIcon className="size-3.5" />
+          {busyAction === "template" ? "Saving..." : "Save as template"}
+        </Button>
+      )}
       {canManage && (
         <ButtonLink
           to="/forms/:id/access"

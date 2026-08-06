@@ -4,6 +4,7 @@ import {
   getForm,
   getSubmission,
   getSubmissionByToken,
+  getSubmissionPdf,
   submitForm,
   updateSubmission,
   updateSubmissionByToken,
@@ -18,9 +19,13 @@ import {
 } from "react-router";
 import { DynamicFormRenderer } from "../components/DynamicFormRenderer";
 import { Button, ButtonLink } from "../shared/components/Button";
-import { ArrowLeftIcon } from "../components/builder/icons";
+import { ArrowLeftIcon, DownloadIcon } from "../components/builder/icons";
 import type { FormField, FormSettings, SubmissionData } from "../types";
 import { DEFAULT_FORM_SETTINGS } from "../types";
+import {
+  renderSmartTags,
+  type SmartTagContext,
+} from "../shared/smartTags";
 
 const DEFAULT_SUCCESS_MESSAGE = "Thank you! Your response has been submitted.";
 const RECORD_SAVED_MESSAGE = "Record saved successfully.";
@@ -66,6 +71,7 @@ export function FormPage() {
     id: string;
     editToken: string | null;
   } | null>(null);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
 
   if (isLoading || (recordMode !== "new" && recordLoading)) {
     return <p className="px-8 py-12">Loading form...</p>;
@@ -110,6 +116,7 @@ export function FormPage() {
     ...((form.settings as unknown as FormSettings | null) ?? {}),
   };
   const formId = form.id;
+  const formTitle = form.title;
   const successMessage =
     settings.successMessage?.trim() ||
     (recordMode === "new" ? DEFAULT_SUCCESS_MESSAGE : RECORD_SAVED_MESSAGE);
@@ -151,11 +158,34 @@ export function FormPage() {
     (openTime !== null && now < openTime) ||
     (closeTime !== null && now > closeTime);
 
-  function buildRedirectUrl(data: SubmissionData): string {
-    const base =
+  function buildReceipt(submissionId: string): string {
+    return `RES-${submissionId.replace(/-/g, "").slice(0, 8).toUpperCase()}`;
+  }
+
+  function smartTagContext(
+    data: SubmissionData,
+    submissionId?: string,
+  ): SmartTagContext {
+    return {
+      form: { id: formId, title: formTitle },
+      fields,
+      data,
+      submissionId,
+      recordUrl: submissionId
+        ? `${window.location.origin}/forms/${formId}/records/${submissionId}`
+        : undefined,
+      receipt: submissionId ? buildReceipt(submissionId) : undefined,
+    };
+  }
+
+  function buildRedirectUrl(data: SubmissionData, submissionId?: string): string {
+    const customBase =
       settings.redirectTarget === "custom"
         ? settings.redirectUrl?.trim()
-        : `/forms/${formId}/submissions`;
+        : undefined;
+    const base = customBase
+      ? renderSmartTags(customBase, smartTagContext(data, submissionId))
+      : `/forms/${formId}/submissions`;
     if (!base) {
       return `/forms/${formId}/submissions`;
     }
@@ -184,8 +214,8 @@ export function FormPage() {
     return `${base}${base.includes("?") ? "&" : "?"}${query}`;
   }
 
-  function redirectNow(data: SubmissionData) {
-    window.location.assign(buildRedirectUrl(data));
+  function redirectNow(data: SubmissionData, submissionId?: string) {
+    window.location.assign(buildRedirectUrl(data, submissionId));
   }
 
   function goBack() {
@@ -196,10 +226,40 @@ export function FormPage() {
     }
   }
 
+  async function downloadPdf() {
+    if (!submissionId) {
+      return;
+    }
+    setDownloadingPdf(true);
+    try {
+      const { filename, base64 } = await getSubmissionPdf({
+        formId,
+        submissionId,
+      });
+      const bytes = atob(base64);
+      const array = new Uint8Array(bytes.length);
+      for (let i = 0; i < bytes.length; i++) {
+        array[i] = bytes.charCodeAt(i);
+      }
+      const blob = new Blob([array], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      window.alert(`PDF download failed: ${String(err)}`);
+    } finally {
+      setDownloadingPdf(false);
+    }
+  }
+
   async function handleSubmit(
     data: SubmissionData,
     submitterEmail?: string,
   ) {
+    let savedSubmissionId: string | undefined = submissionId;
     if (recordMode === "edit" && submissionId) {
       if (token) {
         await updateSubmissionByToken({ submissionId, data, token });
@@ -208,19 +268,20 @@ export function FormPage() {
       }
     } else {
       const result = await submitForm({ formId, data, submitterEmail });
+      savedSubmissionId = result.id;
       setLastSubmission({
         id: result.id,
         editToken: result.editToken ?? null,
       });
     }
     if (settings.successMode === "redirect") {
-      redirectNow(data);
+      redirectNow(data, savedSubmissionId);
       return;
     }
     setLastData(data);
     setSubmitted(true);
     if (settings.successMode === "both") {
-      window.setTimeout(() => redirectNow(data), 4000);
+      window.setTimeout(() => redirectNow(data, savedSubmissionId), 4000);
     }
   }
 
@@ -273,6 +334,17 @@ export function FormPage() {
             View submissions
           </Link>
         )}
+        {recordMode === "view" && !token && (
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => void downloadPdf()}
+            disabled={downloadingPdf}
+          >
+            <DownloadIcon className="size-3.5" />
+            {downloadingPdf ? "Preparing PDF..." : "Download PDF"}
+          </Button>
+        )}
         {recordMode === "view" && canEdit && (
           <ButtonLink
             to="/forms/:id/records/:submissionId/edit"
@@ -308,13 +380,13 @@ export function FormPage() {
 
   const formBody = submitted ? (
     <SuccessPanel
-      message={successMessage}
+      message={renderSmartTags(
+        successMessage,
+        smartTagContext(lastData ?? {}, lastSubmission?.id),
+      )}
       receipt={
         settings.enableReceipt === true && lastSubmission
-          ? `RES-${lastSubmission.id
-              .replace(/-/g, "")
-              .slice(0, 8)
-              .toUpperCase()}`
+          ? buildReceipt(lastSubmission.id)
           : null
       }
       selfEditHref={
@@ -339,7 +411,9 @@ export function FormPage() {
             </ButtonLink>
           )}
           {wantsRedirect && lastData && (
-            <Button onClick={() => redirectNow(lastData)}>Continue</Button>
+            <Button onClick={() => redirectNow(lastData, lastSubmission?.id)}>
+              Continue
+            </Button>
           )}
         </>
       }

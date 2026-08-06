@@ -116,8 +116,9 @@ into sections — in the sidebar they are **collapsible accordions**; the pop-ou
 **After submit**
 - Show a success message (custom or default) and/or redirect:
   - **Show a success message** (custom text, default "Thank you! Your response
-    has been submitted.")
-  - **Redirect** to the form's submissions page or a custom URL
+    has been submitted."). Supports **smart tags** (see below).
+  - **Redirect** to the form's submissions page or a custom URL (smart tags
+    supported in the URL)
   - **Show message, then redirect** (Continue button + auto-redirect)
   - Optionally **append the response data to the URL** as query params.
 
@@ -170,9 +171,24 @@ into sections — in the sidebar they are **collapsible accordions**; the pop-ou
   - **Send email** (after submit) — emails the response summary + record link
     via SMTP (requires `SMTP_*` env vars). Recipients combine a hard-coded
     comma-separated list, a chosen field's value (e.g. a User or Email field)
-    if it looks like an email, and optionally the submitter's email. A custom
-    subject can be set.
+    if it looks like an email, and optionally the submitter's email. The
+    subject supports smart tags, an optional custom **HTML body template**
+    (smart tags; falls back to the default summary when blank), and an
+    optional **PDF attachment** of the submission.
   - API calls are restricted to `http(s)` URLs and time out after 10s.
+
+**Smart tags**
+
+One interpolation engine (`src/shared/smartTags.ts`) reused in email
+subjects/bodies, the success message, and redirect URLs:
+
+- `{field.KEY}` (formatted value), `{field.KEY.label}` (field label)
+- `{form.title}`, `{form.id}`, `{submission.id}`, `{record_url}`, `{receipt}`,
+  `{date}`
+- `{all_fields}` (plain-text "Label: value" lines) and `{all_fields_html}`
+  (HTML list)
+
+Unknown tags render as empty; empty values are skipped in `{all_fields}`.
 
 **Conditional logic**
 - Add any number of **conditions**; each one has:
@@ -226,6 +242,35 @@ edit requires owner/admin/edit access (or a valid self-edit token).
 All three modes honor the form's **display mode** (page vs popup with configured
 window size) and the after-submit settings.
 
+The record view page also has a **Download PDF** button (authenticated viewers
+with form access) that generates a PDF of the submission server-side.
+
+### PDF generation
+
+- `getSubmissionPdf` (`src/queries.ts`) builds an A4 PDF server-side
+  (`src/server/pdf.ts`, pdfkit): form title header, submission id + timestamps,
+  label/value rows in field order (section headers become section titles,
+  signatures embedded as images, file uploads listed by filename).
+- Available from the record view page and per-row on the submissions table.
+- The email action can **attach the PDF** to notification emails.
+
+---
+
+## 2a. Templates, duplication & import/export
+
+- **Save as template** — snapshot any form (title + fields + settings) into a
+  template (`Form.isTemplate`). Templates are hidden from the main forms list.
+- **Templates section** on the forms list — "Use template" creates a form and
+  opens it in the builder; templates can be deleted.
+- **Template picker** on `/forms/new` — start from a template or a blank form;
+  the form row is only created on Save.
+- **Duplicate** — one-click copy of a form (`"<title> (copy)"`); fields and
+  settings only, no submissions or sharing rows.
+- **Export** — downloads `<title>.form.json` (`{ title, fields, settings,
+  exportedAt, version }`).
+- **Import form** — uploads a `.form.json`, validates it, and creates the form
+  (ids/ownership/template flags in the file are ignored).
+
 ---
 
 ## 3. Submissions
@@ -250,7 +295,8 @@ The submissions table (`/forms/:id/submissions`):
     the top filter grid are form settings.
 - **Bulk actions** — checkboxes on each row (plus select-all); a bulk bar
   offers **Export CSV / Export Excel** and **Delete** for the selected rows.
-- **Row actions**: View (record page), Edit (record page), Delete (confirm).
+- **Row actions**: View (record page), Edit (record page), **PDF** (download a
+  PDF of the submission), Delete (confirm).
 - Arrays render comma-joined; signatures show a label; file uploads show a
   **Download** button (fetches the stored file, auth-gated).
 - **Export CSV** and **Export Excel (.xlsx)** — download all rows (or the
@@ -277,5 +323,9 @@ The submissions table (`/forms/:id/submissions`):
   (`src/serverSetup.ts`) to accommodate base64 payloads.
 - **Webhooks/email**: dispatched fire-and-forget from `submitForm` and
   `updateSubmission` via `src/server/notifications.ts`.
+- **PDF email attachments**: Wasp's `emailSender` has no attachment support,
+  so emails with attachments are sent through a direct nodemailer transporter
+  built from the same `SMTP_*` env vars (`sendEmail` in
+  `src/server/notifications.ts`).
 - **Self-edit tokens**: `Submission.editToken` column; validated by
   `getSubmissionByToken` / `updateSubmissionByToken` (public operations).

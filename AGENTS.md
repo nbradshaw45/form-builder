@@ -52,8 +52,10 @@ This project uses the Wasp framework (v0.25, see `main.wasp.ts`).
   - Shared access helpers in `src/server/access.ts` (`getFormAccessForUser`, `assertCanView/Edit/IsOwnerOrAdmin/IsAdmin`). Use them in queries/actions.
 - Key auth gotcha: operations declared `auth: false` do NOT run Wasp's auth middleware, so `context.user` is always `null` for them even when the requester is logged in. This is why `submitForm` (public, `auth: false`) accepts a `submitterEmail` arg that the client sends from `useAuth()` and the server validates against `AuthIdentity`. Do not read `context.user` in `auth: false` operations and expect an identity.
 - System fields (`created_date`, `modified_date`, `updated_by_user`) are stored in the form's `fields` JSON with `readonly: true`. `updated_by_user` has a `valueSource` field (`"email"` default, or `"name"`), resolved server-side in `buildSystemValues` (src/actions.ts). `created_date` is preserved on update; `modified_date`/`updated_by_user` are recomputed.
-- `getForms` returns forms with an `access` field (`"owner" | "edit" | "view"`); `getFormSubmissions` returns `{ access, submissions }` so the UI can gate edit/delete buttons.
+- `getForms` returns forms with an `access` field (`"owner" | "edit" | "view"`); it EXCLUDES template rows (`Form.isTemplate`). `getFormSubmissions` returns `{ access, submissions }` so the UI can gate edit/delete buttons.
+- Templates & import/export: `Form.isTemplate` marks reusable templates. Ops: `getFormTemplates`, `exportForm` (queries), `saveFormAsTemplate`, `duplicateForm`, `createFormFromTemplate`, `importForm` (actions). Templates/duplicates/imports copy only title/fields/settings — never submissions or FormAccess rows. The `/forms/new` builder page has a template picker that seeds the builder client-side (the form row is still created on save).
 - Admin GUI: `/admin/users` (`AdminUsersPage`, admin-only; `updateUser` blocks self-demotion). Sharing GUI: `/forms/:id/access` (`FormAccessPage`).
+- Smart tags (`{field.KEY}`, `{all_fields}`, `{record_url}`, `{receipt}`, …) are rendered by `renderSmartTags` in `src/shared/smartTags.ts` (client + server safe). Used in email action subject/body templates (server, `formActions.ts`) and in the success message / custom redirect URL (client, `src/pages/FormPage.tsx`).
 
 ## Generated code
 

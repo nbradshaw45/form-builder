@@ -1036,7 +1036,8 @@ function FormSettingsPanel({
                 className={inputClasses}
               />
               <span className="text-xs text-neutral-400">
-                Leave blank to use the default message.
+                Leave blank to use the default message. Supports smart tags
+                like {"{field.email}"}, {"{record_url}"} and {"{receipt}"}.
               </span>
             </div>
           )}
@@ -1081,6 +1082,10 @@ function FormSettingsPanel({
                     placeholder="https://example.com/thanks"
                     className={`${inputClasses} font-mono`}
                   />
+                  <span className="text-xs text-neutral-400">
+                    Supports smart tags like {"{field.email}"} and{" "}
+                    {"{receipt}"}.
+                  </span>
                 </div>
               )}
               <ToggleRow
@@ -1795,6 +1800,19 @@ function FormActionsEditor({
                   />
                   Also email the submitter
                 </label>
+                <label className="flex items-center gap-2 text-xs font-medium text-neutral-600">
+                  <input
+                    type="checkbox"
+                    checked={action.attachPdf === true}
+                    onChange={(event) =>
+                      updateAction(action.id, {
+                        attachPdf: event.target.checked,
+                      })
+                    }
+                    className="size-3.5 rounded border-neutral-300 text-primary-500 focus:ring-primary-500"
+                  />
+                  Attach a PDF of the submission
+                </label>
                 <input
                   value={action.subject ?? ""}
                   onChange={(event) =>
@@ -1803,8 +1821,25 @@ function FormActionsEditor({
                   placeholder="Subject (optional)"
                   className={`${inputClasses} text-xs`}
                 />
+                <textarea
+                  value={action.bodyTemplate ?? ""}
+                  onChange={(event) =>
+                    updateAction(action.id, {
+                      bodyTemplate: event.target.value || undefined,
+                    })
+                  }
+                  placeholder="Body template (optional, HTML + smart tags)"
+                  rows={4}
+                  aria-label="Body template"
+                  className={`${inputClasses} font-mono text-xs`}
+                />
                 <span className="text-[11px] text-neutral-400">
-                  Requires SMTP to be configured on the server.
+                  Smart tags work in the subject and body: {"{field.email}"},{" "}
+                  {"{field.email.label}"}, {"{form.title}"}, {"{all_fields}"},{" "}
+                  {"{all_fields_html}"}, {"{record_url}"}, {"{receipt}"},{" "}
+                  {"{submission.id}"}, {"{date}"}. Leave the body blank to use
+                  the default summary. Requires SMTP to be configured on the
+                  server.
                 </span>
               </div>
             )}

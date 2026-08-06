@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import nodemailer from "nodemailer";
 import type { Form, Submission } from "wasp/entities";
 import { config } from "wasp/server";
 import { emailSender } from "wasp/server/email";
@@ -95,18 +96,59 @@ function escapeHtml(value: string): string {
     .replace(/"/g, "&quot;");
 }
 
+export type EmailAttachment = {
+  filename: string;
+  content: Buffer;
+  contentType?: string;
+};
+
+/**
+ * Wasp's `emailSender` supports only { to, subject, text, html } — no
+ * attachments. When attachments are needed we send through a direct
+ * nodemailer transporter built from the same SMTP_* env vars Wasp uses.
+ */
+async function sendWithAttachments(
+  to: string,
+  subject: string,
+  text: string,
+  html: string,
+  attachments: EmailAttachment[],
+): Promise<void> {
+  const transporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port: Number(process.env.SMTP_PORT ?? 587),
+    auth: {
+      user: process.env.SMTP_USERNAME,
+      pass: process.env.SMTP_PASSWORD,
+    },
+  });
+  await transporter.sendMail({
+    from: '"Form Builder" <noreply@formbuilder.local>',
+    to,
+    subject,
+    text,
+    html,
+    attachments,
+  });
+}
+
 export async function sendEmail(
   recipients: string[],
   subject: string,
   text: string,
   html: string,
+  attachments?: EmailAttachment[],
 ): Promise<void> {
   if (!process.env.SMTP_HOST || !process.env.SMTP_USERNAME) {
     return;
   }
   for (const to of recipients) {
     try {
-      await emailSender.send({ to, subject, text, html });
+      if (attachments && attachments.length > 0) {
+        await sendWithAttachments(to, subject, text, html, attachments);
+      } else {
+        await emailSender.send({ to, subject, text, html });
+      }
     } catch (err) {
       console.error(`Email notification failed for ${to}:`, err);
     }
