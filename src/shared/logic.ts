@@ -17,6 +17,25 @@ export type ConditionOperatorDef = {
   needsValue: boolean;
 };
 
+/**
+ * Pseudo-field available in condition rules so a form can behave differently
+ * for a brand-new record vs. updating one that has already been saved.
+ */
+export const RECORD_MODE_KEY = "_record_mode";
+export const RECORD_MODE_NEW = "new";
+export const RECORD_MODE_UPDATE = "update";
+
+export function recordModeField(): FormField {
+  return {
+    id: RECORD_MODE_KEY,
+    key: RECORD_MODE_KEY,
+    type: "text",
+    label: "Record state",
+    options: [RECORD_MODE_NEW, RECORD_MODE_UPDATE],
+    optionLabels: ["New record", "Update (already saved)"],
+  };
+}
+
 export const CONDITION_OPERATORS: ConditionOperatorDef[] = [
   { value: "equals", label: "equals", needsValue: true },
   { value: "not_equals", label: "not equals", needsValue: true },

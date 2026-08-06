@@ -23,7 +23,11 @@ import {
   JsOnLoadEditor,
   defaultCondition,
 } from "./LogicEditors";
-import { getForms, useQuery } from "wasp/client/operations";
+import {
+  RECORD_MODE_KEY,
+  recordModeField,
+} from "../../shared/logic";
+import { getForms, getFormUsers, useQuery } from "wasp/client/operations";
 import {
   ArrowLeftIcon,
   ChevronDownIcon,
@@ -157,6 +161,8 @@ export function FieldInspector({
         candidate.type,
       ),
   );
+
+  const conditionTargets = [recordModeField(), ...ruleTargets];
 
   function insertFormulaKey(key: string) {
     if (!element) {
@@ -378,7 +384,7 @@ export function FieldInspector({
         <SettingsAccordion key={`${element.id}-options`} label="Options">
           <OptionsEditor
             element={element}
-            ruleTargets={ruleTargets}
+            ruleTargets={conditionTargets}
             onPatch={onPatch}
           />
           {["radio", "multi_select"].includes(element.type) && (
@@ -695,7 +701,7 @@ export function FieldInspector({
           />
           <RequiredWhenEditor
             element={element}
-            ruleTargets={ruleTargets}
+            ruleTargets={conditionTargets}
             onPatch={onPatch}
           />
         </SettingsAccordion>
@@ -822,7 +828,7 @@ export function FieldInspector({
       <SettingsAccordion key={`${element.id}-visibility`} label="Visibility">
         <RulesEditor
           element={element}
-          ruleTargets={ruleTargets}
+          ruleTargets={conditionTargets}
           onPatch={onPatch}
         />
       </SettingsAccordion>
@@ -866,9 +872,28 @@ function FormSettingsPanel({
     settings.successMode === "message" || settings.successMode === "both";
   const [activeTab, setActiveTab] = useState("display");
 
-  const logicTargets = fields.filter(
-    (field) => !["section_header", "divider", "paragraph", "math"].includes(field.type),
-  );
+  const { data: logicUsers } = useQuery(getFormUsers);
+
+  const logicTargets = [
+    recordModeField(),
+    ...fields
+      .filter(
+        (field) =>
+          !["section_header", "divider", "paragraph", "math"].includes(
+            field.type,
+          ),
+      )
+      .map((field) => {
+        if (field.type !== "user" || !logicUsers || logicUsers.length === 0) {
+          return field;
+        }
+        return {
+          ...field,
+          options: logicUsers.map((user) => user.email),
+          optionLabels: logicUsers.map((user) => user.name ?? user.email),
+        };
+      }),
+  ];
 
   const sections: { id: string; label: string; node: ReactNode }[] = [
     {

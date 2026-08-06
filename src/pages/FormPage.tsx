@@ -361,6 +361,7 @@ export function FormPage() {
       submitterName={user?.identities.username?.id ?? undefined}
       initialValues={initialValues}
       settings={settings}
+      recordMode={recordMode === "new" ? "new" : "update"}
     />
   );
 

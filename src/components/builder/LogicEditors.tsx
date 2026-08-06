@@ -12,6 +12,7 @@ import { inputClasses } from "../../shared/styles";
 import {
   conditionOperatorsForType,
   normalizeCondition,
+  RECORD_MODE_KEY,
 } from "../../shared/logic";
 import { generateId } from "./elementFactory";
 import { ChevronDownIcon, ChevronUpIcon, PlusIcon, TrashIcon } from "./icons";
@@ -45,10 +46,12 @@ export function defaultCondition(fieldKey?: string): Condition {
 
 function RuleValueInput({
   target,
+  operator,
   value,
   onChange,
 }: {
   target: FormField | undefined;
+  operator: ConditionOperator;
   value: string;
   onChange: (value: string) => void;
 }) {
@@ -58,6 +61,26 @@ function RuleValueInput({
   const isNumeric = ["number", "currency", "rating", "slider", "math"].includes(
     target?.type ?? "",
   );
+  const options = target?.options ?? [];
+  if (
+    options.length > 0 &&
+    (operator === "equals" || operator === "not_equals")
+  ) {
+    return (
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className={`${inputClasses} text-xs`}
+      >
+        <option value="">Select a value</option>
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
+    );
+  }
   if (isDate) {
     return (
       <input
@@ -151,6 +174,7 @@ export function RuleEditor({
       {needsValue && (
         <RuleValueInput
           target={target}
+          operator={rule.operator}
           value={rule.value ?? ""}
           onChange={(value) => onChange({ ...rule, value })}
         />
@@ -580,6 +604,9 @@ export function LogicConditionCard({
   onRemove: () => void;
 }) {
   const [open, setOpen] = useState(true);
+  const actionTargets = targets.filter(
+    (target) => target.key !== RECORD_MODE_KEY,
+  );
 
   return (
     <div className="overflow-hidden rounded-lg border border-neutral-200">
@@ -623,7 +650,7 @@ export function LogicConditionCard({
             <span className={labelClasses}>Then do</span>
             <LogicActionsEditor
               actions={condition.then}
-              targets={targets}
+              targets={actionTargets}
               emptyHint="No actions when the rules match."
               onChange={(then) => onChange({ ...condition, then })}
             />
@@ -632,7 +659,7 @@ export function LogicConditionCard({
             <span className={labelClasses}>Otherwise (not met)</span>
             <LogicActionsEditor
               actions={condition.else ?? []}
-              targets={targets}
+              targets={actionTargets}
               emptyHint="Optional: no actions when the rules don't match."
               onChange={(actions) =>
                 onChange({ ...condition, else: actions })

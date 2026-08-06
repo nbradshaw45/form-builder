@@ -178,12 +178,17 @@ into sections — in the sidebar they are **collapsible accordions**; the pop-ou
 - Add any number of **conditions**; each one has:
   - **When** — a set of rules (rules within a group are AND, groups are OR)
     with type-aware operators (equals, not equals, contains, starts/ends with,
-    is set, is not set, greater/less than).
+    is set, is not set, greater/less than). The field list includes a special
+    **Record state** field (`_record_mode`) that is `new` for a fresh
+    submission and `update` when editing a record that has already been saved.
   - **Then do** — actions run when the rules match.
   - **Otherwise (not met)** — optional actions run when they don't (great for
     a default state on page load).
 - Conditions are evaluated **in order** on page load and whenever a value
   changes; later conditions see values produced by earlier ones.
+- Rule value inputs are type-aware: date fields get date pickers, numbers get
+  number fields, and fields with options (dropdowns, radios, user lists)
+  show a dropdown of their existing values.
 - **Show field / Hide field** actions combine with a field's own
   **Visibility rule** (its "show conditionally" setting): the field is visible
   only when **both** its own rule is satisfied **and** no condition action

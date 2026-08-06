@@ -8,6 +8,9 @@ import { evaluateFormula } from "./builder/formula";
 import {
   applyLogic,
   evaluateCondition,
+  RECORD_MODE_KEY,
+  RECORD_MODE_NEW,
+  RECORD_MODE_UPDATE,
 } from "../shared/logic";
 import type {
   Condition,
@@ -32,6 +35,8 @@ interface DynamicFormRendererProps {
   multiStep?: boolean;
   honeypot?: boolean;
   settings?: FormSettings;
+  /** Whether the form is being filled for a brand-new record or an existing one. */
+  recordMode?: "new" | "update";
 }
 
 const EDITTABLE_TYPES = new Set([
@@ -148,6 +153,7 @@ export function DynamicFormRenderer({
   multiStep = false,
   honeypot = false,
   settings,
+  recordMode = "new",
 }: DynamicFormRendererProps) {
   const [values, setValues] = useState<SubmissionData>(
     () => initialValues ?? {},
@@ -176,9 +182,17 @@ export function DynamicFormRenderer({
     });
   }, [fields, userOptions]);
 
+  const isUpdate = recordMode === "update";
+  const logicValues = useMemo(
+    () => ({
+      ...values,
+      [RECORD_MODE_KEY]: isUpdate ? RECORD_MODE_UPDATE : RECORD_MODE_NEW,
+    }),
+    [values, isUpdate],
+  );
   const logic = useMemo(
-    () => applyLogic(settings?.conditions ?? [], values, effectiveFields),
-    [settings?.conditions, values, effectiveFields],
+    () => applyLogic(settings?.conditions ?? [], logicValues, effectiveFields),
+    [settings?.conditions, logicValues, effectiveFields],
   );
   const effectiveValues = logic.values;
 
