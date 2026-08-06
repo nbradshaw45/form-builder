@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import type { Form, Submission } from "wasp/entities";
@@ -15,6 +15,7 @@ import type {
   SubmitForm,
   UpdateForm,
   UpdateSubmission,
+  UpdateSubmissionByToken,
   UpdateUser,
   UploadFile,
 } from "wasp/server/operations";
@@ -27,12 +28,18 @@ import {
   sanitizeAndSerializeProviderData,
 } from "wasp/server/auth";
 import type { FormField, FormSettings, SubmissionData } from "./types";
+import { DEFAULT_FORM_SETTINGS } from "./types";
 import {
   assertCanEdit,
   assertIsAdmin,
   assertIsOwnerOrAdmin,
   getFormAccessForUser,
 } from "./server/access";
+import { sendWebhook } from "./server/notifications";
+import {
+  applyBeforeSubmitActions,
+  runAfterSubmitActions,
+} from "./server/formActions";
 
 function serialize(value: unknown) {
   return JSON.parse(JSON.stringify(value));
@@ -195,7 +202,7 @@ export const submitForm: SubmitForm<SubmitFormArgs, Submission> = async (
 ) => {
   const form = await context.entities.Form.findUnique({
     where: { id: formId },
-    select: { id: true, fields: true },
+    select: { id: true, title: true, fields: true, settings: true },
   });
 
   if (!form) {
@@ -205,6 +212,14 @@ export const submitForm: SubmitForm<SubmitFormArgs, Submission> = async (
   if (typeof data !== "object" || data === null || Array.isArray(data)) {
     throw new HttpError(400, "data must be an object");
   }
+
+  const settings: FormSettings = {
+    ...DEFAULT_FORM_SETTINGS,
+    ...((form.settings as unknown as FormSettings | null) ?? {}),
+  };
+  const editToken = settings.allowSelfEdit
+    ? randomBytes(24).toString("hex")
+    : null;
 
   const contextUser = (context as unknown as { user?: UserContext }).user;
 
@@ -231,16 +246,24 @@ export const submitForm: SubmitForm<SubmitFormArgs, Submission> = async (
 
   const systemValues = buildSystemValues(form.fields, actorUser);
 
-  return context.entities.Submission.create({
+  const adjustedData = await applyBeforeSubmitActions(form, data);
+
+  const submission = await context.entities.Submission.create({
     data: {
       form: {
         connect: {
           id: formId,
         },
       },
-      data: serialize({ ...data, ...systemValues }),
+      data: serialize({ ...adjustedData, ...systemValues }),
+      editToken,
     },
   });
+
+  void sendWebhook(form, submission, "submission.created");
+  void runAfterSubmitActions(form, submission, submitterEmail);
+
+  return submission;
 };
 
 type UpdateSubmissionArgs = {
@@ -263,7 +286,7 @@ export const updateSubmission: UpdateSubmission<
   const submission = await context.entities.Submission.findUnique({
     where: { id: submissionId },
     select: {
-      form: { select: { id: true, fields: true } },
+      form: { select: { id: true, title: true, fields: true, settings: true } },
       data: true,
     },
   });
@@ -283,11 +306,11 @@ export const updateSubmission: UpdateSubmission<
       : {};
   const systemValues = buildSystemValues(
     submission.form.fields,
-    context.user,
+    undefined,
     previousData,
   );
 
-  return context.entities.Submission.update({
+  const updated = await context.entities.Submission.update({
     where: { id: submissionId },
     data: {
       data: serialize({
@@ -297,6 +320,70 @@ export const updateSubmission: UpdateSubmission<
       }),
     },
   });
+
+  void sendWebhook(
+    submission.form,
+    updated,
+    "submission.updated",
+  );
+
+  return updated;
+};
+
+type UpdateSubmissionByTokenArgs = {
+  submissionId: string;
+  data: SubmissionData;
+  token: string;
+};
+
+export const updateSubmissionByToken: UpdateSubmissionByToken<
+  UpdateSubmissionByTokenArgs,
+  Submission
+> = async ({ submissionId, data, token }, context) => {
+  if (typeof data !== "object" || data === null || Array.isArray(data)) {
+    throw new HttpError(400, "data must be an object");
+  }
+
+  const submission = await context.entities.Submission.findUnique({
+    where: { id: submissionId },
+    select: {
+      id: true,
+      editToken: true,
+      data: true,
+      form: { select: { id: true, title: true, fields: true, settings: true } },
+    },
+  });
+  if (!submission) {
+    throw new HttpError(404, "Submission not found");
+  }
+  if (!submission.editToken || submission.editToken !== token) {
+    throw new HttpError(403, "Invalid edit link");
+  }
+
+  const previousData =
+    submission.data && typeof submission.data === "object"
+      ? (submission.data as SubmissionData)
+      : {};
+  const systemValues = buildSystemValues(
+    submission.form.fields,
+    undefined,
+    previousData,
+  );
+
+  const updated = await context.entities.Submission.update({
+    where: { id: submissionId },
+    data: {
+      data: serialize({
+        ...previousData,
+        ...data,
+        ...systemValues,
+      }),
+    },
+  });
+
+  void sendWebhook(submission.form, updated, "submission.updated");
+
+  return updated;
 };
 
 type DeleteSubmissionArgs = {

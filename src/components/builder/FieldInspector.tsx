@@ -1,5 +1,7 @@
+import { useState } from "react";
 import type {
   FieldValidation,
+  FormAction,
   FormField,
   FormSettings,
   VisibilityOperator,
@@ -8,6 +10,8 @@ import type {
 import type { FieldType } from "../../types";
 import { inputClasses } from "../../shared/styles";
 import { isSystemField } from "./elementFactory";
+import { getForms, useQuery } from "wasp/client/operations";
+import { MaximizeIcon, MinimizeIcon } from "./icons";
 
 interface FieldInspectorProps {
   element: FormField | null;
@@ -81,8 +85,44 @@ export function FieldInspector({
   onPatch,
   onSettingsChange,
 }: FieldInspectorProps) {
+  const [settingsExpanded, setSettingsExpanded] = useState(false);
+
   if (!element) {
-    return <FormSettingsPanel settings={settings} onChange={onSettingsChange} />;
+    const fieldOptions = allElements
+      .filter((field) => !isSystemField(field.type))
+      .map((field) => ({ key: field.key, label: field.label }));
+    return (
+      <>
+        <FormSettingsPanel
+          settings={settings}
+          fieldOptions={fieldOptions}
+          onChange={onSettingsChange}
+          onExpand={() => setSettingsExpanded(true)}
+        />
+        {settingsExpanded && (
+          <div
+            className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 md:p-8"
+            onClick={() => setSettingsExpanded(false)}
+          >
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label="Form settings"
+              className="w-full max-w-6xl rounded-2xl border border-neutral-200 bg-white p-6 shadow-xl"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <FormSettingsPanel
+                settings={settings}
+                fieldOptions={fieldOptions}
+                onChange={onSettingsChange}
+                expanded
+                onExpand={() => setSettingsExpanded(false)}
+              />
+            </div>
+          </div>
+        )}
+      </>
+    );
   }
 
   const isLayout =
@@ -621,10 +661,16 @@ export function FieldInspector({
 
 function FormSettingsPanel({
   settings,
+  fieldOptions,
   onChange,
+  expanded = false,
+  onExpand,
 }: {
   settings: FormSettings;
+  fieldOptions: { key: string; label: string }[];
   onChange: (patch: Partial<FormSettings>) => void;
+  expanded?: boolean;
+  onExpand?: () => void;
 }) {
   const isModal = settings.displayMode === "modal";
   const wantsRedirect =
@@ -633,15 +679,44 @@ function FormSettingsPanel({
     settings.successMode === "message" || settings.successMode === "both";
 
   return (
-    <aside className="card flex flex-col gap-5 p-4">
-      <div className="flex flex-col gap-0.5 border-b border-neutral-100 pb-3">
-        <h2 className="font-display text-sm font-bold tracking-[-0.02em] text-neutral-800">
-          Form settings
-        </h2>
-        <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-neutral-400">
-          Display &amp; after submit
-        </span>
+    <div
+      className={
+        expanded ? "flex flex-col gap-5" : "card flex flex-col gap-5 p-4"
+      }
+    >
+      <div className="flex items-start justify-between gap-2 border-b border-neutral-100 pb-3">
+        <div className="flex flex-col gap-0.5">
+          <h2 className="font-display text-sm font-bold tracking-[-0.02em] text-neutral-800">
+            Form settings
+          </h2>
+          <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-neutral-400">
+            Display &amp; after submit
+          </span>
+        </div>
+        {onExpand && (
+          <button
+            type="button"
+            onClick={onExpand}
+            aria-label={expanded ? "Close pop out" : "Pop out settings"}
+            title={expanded ? "Close" : "Pop out"}
+            className="rounded-md border border-neutral-200 bg-white p-1.5 text-neutral-400 transition-colors hover:border-neutral-300 hover:text-neutral-700"
+          >
+            {expanded ? (
+              <MinimizeIcon className="size-4" />
+            ) : (
+              <MaximizeIcon className="size-4" />
+            )}
+          </button>
+        )}
       </div>
+
+      <div
+        className={
+          expanded
+            ? "grid grid-cols-1 items-start gap-x-8 gap-y-6 xl:grid-cols-2"
+            : "flex flex-col gap-5"
+        }
+      >
 
       <div className="flex flex-col gap-1">
         <label htmlFor="settings-display" className={labelClasses}>
@@ -838,7 +913,538 @@ function FormSettingsPanel({
           restores the record&apos;s saved values.
         </p>
       </div>
-    </aside>
+
+      <div className="flex flex-col gap-2.5 border-t border-neutral-100 pt-3">
+        <span className={labelClasses}>Automation</span>
+        <div className="flex flex-col gap-1">
+          <label htmlFor="settings-webhook-url" className="label">
+            Webhook URL
+          </label>
+          <input
+            id="settings-webhook-url"
+            value={settings.webhookUrl ?? ""}
+            onChange={(event) =>
+              onChange({ webhookUrl: event.target.value })
+            }
+            placeholder="https://example.com/hooks/form-builder"
+            className={`${inputClasses} font-mono`}
+          />
+          <span className="text-xs text-neutral-400">
+            Called on every submission create/update with the response data and
+            an HMAC signature.
+          </span>
+        </div>
+        <div className="flex flex-col gap-1">
+          <label htmlFor="settings-webhook-secret" className="label">
+            Webhook secret
+          </label>
+          <div className="flex gap-1.5">
+            <input
+              id="settings-webhook-secret"
+              value={settings.webhookSecret ?? ""}
+              readOnly
+              placeholder="Not set"
+              className={`${inputClasses} flex-1 font-mono`}
+            />
+            <button
+              type="button"
+              onClick={() =>
+                onChange({
+                  webhookSecret:
+                    Math.random().toString(36).slice(2) +
+                    Math.random().toString(36).slice(2),
+                })
+              }
+              className="shrink-0 rounded-lg border border-neutral-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-neutral-600 hover:border-primary-400 hover:text-primary-700"
+            >
+              Generate
+            </button>
+          </div>
+          <span className="text-xs text-neutral-400">
+            Sent as{" "}
+            <code className="font-mono">X-Form-Signature: sha256=&lt;hmac&gt;</code>.
+          </span>
+        </div>
+        <ToggleRow
+          label="Show a receipt number"
+          checked={settings.enableReceipt === true}
+          onChange={(checked) => onChange({ enableReceipt: checked })}
+        />
+        <ToggleRow
+          label="Let submitters edit their response"
+          checked={settings.allowSelfEdit === true}
+          onChange={(checked) => onChange({ allowSelfEdit: checked })}
+        />
+      </div>
+
+      <div className="flex flex-col gap-2.5 border-t border-neutral-100 pt-3">
+        <span className={labelClasses}>Actions</span>
+        <p className="text-xs leading-snug text-neutral-400">
+          Custom steps that run before or after a submission is stored. Set a
+          field value, call an API, update the submission, or copy it into
+          another form.
+        </p>
+        <FormActionsEditor
+          settings={settings}
+          fieldOptions={fieldOptions}
+          onChange={onChange}
+        />
+      </div>
+      </div>
+    </div>
+  );
+}
+
+function FormActionsEditor({
+  settings,
+  fieldOptions,
+  onChange,
+}: {
+  settings: FormSettings;
+  fieldOptions: { key: string; label: string }[];
+  onChange: (patch: Partial<FormSettings>) => void;
+}) {
+  const { data: forms } = useQuery(getForms);
+  const actions = settings.actions ?? [];
+
+  function updateAction(id: string, patch: Partial<FormAction>) {
+    const next = actions.map((action) =>
+      action.id === id ? ({ ...action, ...patch } as FormAction) : action,
+    );
+    onChange({ actions: next });
+  }
+
+  function removeAction(id: string) {
+    onChange({ actions: actions.filter((action) => action.id !== id) });
+  }
+
+  function addAction() {
+    const id = `a_${Date.now().toString(36)}_${Math.random()
+      .toString(36)
+      .slice(2, 8)}`;
+    onChange({
+      actions: [
+        ...actions,
+        {
+          id,
+          trigger: "before_submit",
+          type: "set_field",
+          field: fieldOptions[0]?.key ?? "",
+          valueSource: "static",
+          staticValue: "",
+        },
+      ],
+    });
+  }
+
+  const selectCls = `${inputClasses} text-xs`;
+  const valueSelectCls = `${inputClasses} text-xs`;
+
+  return (
+    <div className="flex flex-col gap-2">
+      {actions.length === 0 && (
+        <p className="rounded-lg border border-dashed border-neutral-300 px-3 py-2 text-xs text-neutral-400">
+          No actions configured.
+        </p>
+      )}
+      <ul className="flex flex-col gap-2">
+        {actions.map((action) => (
+          <li
+            key={action.id}
+            className="flex flex-col gap-2 rounded-lg border border-neutral-100 bg-muted/60 p-2.5"
+          >
+            <div className="flex flex-wrap items-center gap-1.5">
+              <select
+                value={action.trigger}
+                onChange={(event) =>
+                  updateAction(action.id, {
+                    trigger: event.target.value as
+                      | "before_submit"
+                      | "after_submit",
+                  })
+                }
+                disabled={action.type === "email"}
+                className={selectCls}
+              >
+                <option value="before_submit">Before submit</option>
+                <option value="after_submit">After submit</option>
+              </select>
+              <select
+                value={action.type}
+                onChange={(event) => {
+                  const type = event.target.value as FormAction["type"];
+                  if (type === "http_call") {
+                    updateAction(action.id, {
+                      type,
+                      method: "POST",
+                      url: "",
+                      responseField: "",
+                    });
+                  } else if (type === "create_submission") {
+                    updateAction(action.id, {
+                      type,
+                      formId: "",
+                    });
+                  } else if (type === "email") {
+                    updateAction(action.id, {
+                      type,
+                      trigger: "after_submit",
+                      recipients: "",
+                      recipientField: "",
+                      includeSubmitter: false,
+                      subject: "",
+                    });
+                  } else {
+                    updateAction(action.id, {
+                      type,
+                      field: fieldOptions[0]?.key ?? "",
+                      valueSource: "static",
+                      staticValue: "",
+                    });
+                  }
+                }}
+                className={selectCls}
+              >
+                <option value="set_field">Set field value</option>
+                <option value="http_call">Call API</option>
+                <option value="update_submission">Update this submission</option>
+                <option value="create_submission">
+                  Create submission in another form
+                </option>
+                <option value="email">Send email</option>
+              </select>
+              <button
+                type="button"
+                onClick={() => removeAction(action.id)}
+                className="ml-auto rounded px-1.5 py-1 text-xs font-semibold text-red-500 hover:bg-red-50"
+              >
+                Remove
+              </button>
+            </div>
+
+            {(action.type === "set_field" ||
+              action.type === "update_submission") && (
+              <div className="flex flex-col gap-1.5">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <select
+                    value={action.field}
+                    onChange={(event) =>
+                      updateAction(action.id, { field: event.target.value })
+                    }
+                    className={selectCls}
+                    aria-label="Target field"
+                  >
+                    {fieldOptions.map((option) => (
+                      <option key={option.key} value={option.key}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={action.valueSource}
+                    onChange={(event) =>
+                      updateAction(action.id, {
+                        valueSource: event.target.value as
+                          | "static"
+                          | "field"
+                          | "formula",
+                      })
+                    }
+                    className={valueSelectCls}
+                  >
+                    <option value="static">Set to value</option>
+                    <option value="field">Copy from field</option>
+                    <option value="formula">Formula</option>
+                  </select>
+                </div>
+                {action.valueSource === "static" && (
+                  <input
+                    value={action.staticValue ?? ""}
+                    onChange={(event) =>
+                      updateAction(action.id, {
+                        staticValue: event.target.value,
+                      })
+                    }
+                    placeholder="Value"
+                    className={`${inputClasses} text-xs`}
+                  />
+                )}
+                {action.valueSource === "field" && (
+                  <select
+                    value={action.sourceField ?? ""}
+                    onChange={(event) =>
+                      updateAction(action.id, {
+                        sourceField: event.target.value,
+                      })
+                    }
+                    className={selectCls}
+                    aria-label="Source field"
+                  >
+                    {fieldOptions.map((option) => (
+                      <option key={option.key} value={option.key}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {action.valueSource === "formula" && (
+                  <input
+                    value={action.formula ?? ""}
+                    onChange={(event) =>
+                      updateAction(action.id, {
+                        formula: event.target.value,
+                      })
+                    }
+                    placeholder="[quantity] * [price]"
+                    className={`${inputClasses} font-mono text-xs`}
+                  />
+                )}
+              </div>
+            )}
+
+            {action.type === "http_call" && (
+              <div className="flex flex-col gap-1.5">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <select
+                    value={action.method}
+                    onChange={(event) =>
+                      updateAction(action.id, {
+                        method: event.target.value as "GET" | "POST",
+                      })
+                    }
+                    className={selectCls}
+                  >
+                    <option value="POST">POST</option>
+                    <option value="GET">GET</option>
+                  </select>
+                  <input
+                    value={action.url}
+                    onChange={(event) =>
+                      updateAction(action.id, { url: event.target.value })
+                    }
+                    placeholder="https://api.example.com/hook"
+                    className={`${inputClasses} min-w-0 flex-1 font-mono text-xs`}
+                  />
+                </div>
+                {action.trigger === "before_submit" && (
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-neutral-500">
+                      Write API response into field
+                    </label>
+                    <select
+                      value={action.responseField ?? ""}
+                      onChange={(event) =>
+                        updateAction(action.id, {
+                          responseField: event.target.value,
+                        })
+                      }
+                      className={selectCls}
+                    >
+                      <option value="">None</option>
+                      {fieldOptions.map((option) => (
+                        <option key={option.key} value={option.key}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="text-[11px] text-neutral-400">
+                      The API should return JSON with a{" "}
+                      <code className="font-mono">value</code> field.
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {action.type === "create_submission" && (
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-neutral-500">
+                  Target form
+                </label>
+                <select
+                  value={action.formId}
+                  onChange={(event) =>
+                    updateAction(action.id, { formId: event.target.value })
+                  }
+                  className={selectCls}
+                >
+                  <option value="">Select a form</option>
+                  {(forms ?? []).map((form) => (
+                    <option key={form.id} value={form.id}>
+                      {form.title}
+                    </option>
+                  ))}
+                </select>
+                <span className="text-[11px] text-neutral-400">
+                  Fields with matching keys are copied into a new submission of
+                  the target form.
+                </span>
+              </div>
+            )}
+
+            {action.type === "email" && (
+              <div className="flex flex-col gap-1.5">
+                <input
+                  value={action.recipients ?? ""}
+                  onChange={(event) =>
+                    updateAction(action.id, {
+                      recipients: event.target.value,
+                    })
+                  }
+                  placeholder="owner@example.com, team@example.com"
+                  aria-label="Recipients"
+                  className={`${inputClasses} font-mono text-xs`}
+                />
+                <select
+                  value={action.recipientField ?? ""}
+                  onChange={(event) =>
+                    updateAction(action.id, {
+                      recipientField: event.target.value || undefined,
+                    })
+                  }
+                  className={selectCls}
+                  aria-label="Email from field"
+                >
+                  <option value="">No field recipient</option>
+                  {fieldOptions.map((option) => (
+                    <option key={option.key} value={option.key}>
+                      {option.label} ({option.key})
+                    </option>
+                  ))}
+                </select>
+                <label className="flex items-center gap-2 text-xs font-medium text-neutral-600">
+                  <input
+                    type="checkbox"
+                    checked={action.includeSubmitter === true}
+                    onChange={(event) =>
+                      updateAction(action.id, {
+                        includeSubmitter: event.target.checked,
+                      })
+                    }
+                    className="size-3.5 rounded border-neutral-300 text-primary-500 focus:ring-primary-500"
+                  />
+                  Also email the submitter
+                </label>
+                <input
+                  value={action.subject ?? ""}
+                  onChange={(event) =>
+                    updateAction(action.id, { subject: event.target.value })
+                  }
+                  placeholder="Subject (optional)"
+                  className={`${inputClasses} text-xs`}
+                />
+                <span className="text-[11px] text-neutral-400">
+                  Requires SMTP to be configured on the server.
+                </span>
+              </div>
+            )}
+
+            <ActionWhenEditor
+              action={action}
+              fieldOptions={fieldOptions}
+              onWhenChange={(when) => updateAction(action.id, { when })}
+            />
+          </li>
+        ))}
+      </ul>
+      <button
+        type="button"
+        onClick={addAction}
+        className="self-start rounded-lg border border-neutral-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-neutral-600 hover:border-primary-400 hover:text-primary-700"
+      >
+        + Add action
+      </button>
+    </div>
+  );
+}
+
+function ActionWhenEditor({
+  action,
+  fieldOptions,
+  onWhenChange,
+}: {
+  action: FormAction;
+  fieldOptions: { key: string; label: string }[];
+  onWhenChange: (when: VisibilityRule | undefined) => void;
+}) {
+  const rule = action.when;
+  const enabled = Boolean(rule);
+
+  return (
+    <div className="flex flex-col gap-1.5 border-t border-neutral-100 pt-2">
+      <label className="flex items-center gap-2 text-xs font-medium text-neutral-600">
+        <input
+          type="checkbox"
+          checked={enabled}
+          onChange={(event) =>
+            onWhenChange(
+              event.target.checked
+                ? {
+                    field: fieldOptions[0]?.key ?? "",
+                    operator: "equals",
+                    value: "",
+                  }
+                : undefined,
+            )
+          }
+          disabled={fieldOptions.length === 0}
+          className="size-3.5 rounded border-neutral-300 text-primary-500 focus:ring-primary-500 disabled:cursor-not-allowed"
+        />
+        Only run when...
+      </label>
+
+      {enabled && rule && (
+        <div className="flex flex-col gap-1.5">
+          <div className="flex gap-1.5">
+            <select
+              value={rule.field}
+              onChange={(event) =>
+                onWhenChange({ ...rule, field: event.target.value })
+              }
+              className={`${inputClasses} min-w-0 flex-1 text-xs`}
+            >
+              {fieldOptions.map((option) => (
+                <option key={option.key} value={option.key}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <select
+              value={rule.operator}
+              onChange={(event) =>
+                onWhenChange({
+                  ...rule,
+                  operator: event.target.value as VisibilityOperator,
+                })
+              }
+              className={`${inputClasses} w-28 text-xs`}
+            >
+              {OPERATORS.map((op) => (
+                <option key={op.value} value={op.value}>
+                  {op.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          {(rule.operator === "equals" || rule.operator === "not_equals") && (
+            <input
+              value={rule.value ?? ""}
+              onChange={(event) =>
+                onWhenChange({ ...rule, value: event.target.value })
+              }
+              placeholder="Value"
+              className={`${inputClasses} text-xs`}
+            />
+          )}
+        </div>
+      )}
+
+      {fieldOptions.length === 0 && (
+        <p className="text-[11px] text-neutral-400">
+          Add input fields to add a condition.
+        </p>
+      )}
+    </div>
   );
 }
 

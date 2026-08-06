@@ -12,6 +12,7 @@ import {
   submitForm,
   updateForm,
   updateSubmission,
+  updateSubmissionByToken,
   updateUser,
   uploadFile,
 } from "./src/actions" with { type: "ref" };
@@ -23,6 +24,8 @@ import {
   getFormUsers,
   getForms,
   getSubmission,
+  getSubmissionByToken,
+  getSubmissionsCsv,
   getUsers,
 } from "./src/queries" with { type: "ref" };
 import { LoginPage } from "./src/auth/LoginPage" with { type: "ref" };
@@ -50,6 +53,13 @@ export default app({
     onAuthSucceededRedirectTo: "/",
     onAuthFailedRedirectTo: "/login",
   },
+  emailSender: {
+    provider: "SMTP",
+    defaultFrom: {
+      name: "Form Builder",
+      email: "noreply@formbuilder.local",
+    },
+  },
   client: {
     rootComponent: App,
   },
@@ -65,12 +75,12 @@ export default app({
     route(
       "FormRecordViewRoute",
       "/forms/:id/records/:submissionId",
-      page(FormRecordPage, { authRequired: true }),
+      page(FormRecordPage),
     ),
     route(
       "FormRecordEditRoute",
       "/forms/:id/records/:submissionId/edit",
-      page(FormEditPage, { authRequired: true }),
+      page(FormEditPage),
     ),
     route(
       "FormSubmissionsRoute",
@@ -88,6 +98,11 @@ export default app({
     query(getFile, { entities: ["UploadedFile", "Form", "FormAccess", "User"] }),
     query(getFormSubmissions, { entities: ["Form", "FormAccess", "Submission"] }),
     query(getSubmission, { entities: ["Submission", "Form", "FormAccess", "User"] }),
+    query(getSubmissionByToken, {
+      entities: ["Submission"],
+      auth: false,
+    }),
+    query(getSubmissionsCsv, { entities: ["Form", "FormAccess", "Submission"] }),
     query(getUsers, { entities: ["User"] }),
     query(getFormAccess, { entities: ["Form", "FormAccess", "User"] }),
     action(createForm, { entities: ["Form"] }),
@@ -100,6 +115,10 @@ export default app({
     action(addUser, { entities: ["User"] }),
     action(deleteUser, { entities: ["User"] }),
     action(uploadFile, { entities: ["UploadedFile", "Form"], auth: false }),
+    action(updateSubmissionByToken, {
+      entities: ["Submission", "Form"],
+      auth: false,
+    }),
     action(setFormAccess, {
       entities: ["FormAccess", "Form", "User"],
     }),

@@ -3,12 +3,19 @@ import { useAuth } from "wasp/client/auth";
 import {
   getForm,
   getSubmission,
+  getSubmissionByToken,
   submitForm,
   updateSubmission,
+  updateSubmissionByToken,
   useQuery,
 } from "wasp/client/operations";
 import { Link } from "wasp/client/router";
-import { useLocation, useNavigate, useParams } from "react-router";
+import {
+  useLocation,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from "react-router";
 import { DynamicFormRenderer } from "../components/DynamicFormRenderer";
 import { Button, ButtonLink } from "../shared/components/Button";
 import { ArrowLeftIcon } from "../components/builder/icons";
@@ -29,6 +36,8 @@ export function FormPage() {
   }>();
   const location = useLocation();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const token = searchParams.get("token") ?? undefined;
   const isEditPath = location.pathname.endsWith("/edit");
   const recordMode: RecordMode = submissionId
     ? isEditPath
@@ -38,18 +47,25 @@ export function FormPage() {
 
   const { data: form, isLoading } = useQuery(getForm, { id });
   const { data: user } = useAuth();
+  const submissionArgs = token
+    ? { submissionId: submissionId ?? "", token }
+    : { submissionId: submissionId ?? "" };
   const {
     data: record,
     isLoading: recordLoading,
     error: recordError,
   } = useQuery(
-    getSubmission,
-    { submissionId: submissionId ?? "" },
+    token ? getSubmissionByToken : getSubmission,
+    submissionArgs as never,
     { enabled: Boolean(submissionId) },
   );
 
   const [submitted, setSubmitted] = useState(false);
   const [lastData, setLastData] = useState<SubmissionData | null>(null);
+  const [lastSubmission, setLastSubmission] = useState<{
+    id: string;
+    editToken: string | null;
+  } | null>(null);
 
   if (isLoading || (recordMode !== "new" && recordLoading)) {
     return <p className="px-8 py-12">Loading form...</p>;
@@ -157,9 +173,17 @@ export function FormPage() {
     submitterEmail?: string,
   ) {
     if (recordMode === "edit" && submissionId) {
-      await updateSubmission({ submissionId, data });
+      if (token) {
+        await updateSubmissionByToken({ submissionId, data, token });
+      } else {
+        await updateSubmission({ submissionId, data });
+      }
     } else {
-      await submitForm({ formId, data, submitterEmail });
+      const result = await submitForm({ formId, data, submitterEmail });
+      setLastSubmission({
+        id: result.id,
+        editToken: result.editToken ?? null,
+      });
     }
     if (settings.successMode === "redirect") {
       redirectNow(data);
@@ -250,6 +274,19 @@ export function FormPage() {
   const formBody = submitted ? (
     <SuccessPanel
       message={successMessage}
+      receipt={
+        settings.enableReceipt === true && lastSubmission
+          ? `RES-${lastSubmission.id
+              .replace(/-/g, "")
+              .slice(0, 8)
+              .toUpperCase()}`
+          : null
+      }
+      selfEditHref={
+        settings.allowSelfEdit === true && lastSubmission?.editToken
+          ? `/forms/${formId}/records/${lastSubmission.id}/edit?token=${lastSubmission.editToken}`
+          : null
+      }
       actions={
         <>
           {recordMode === "new" && settings.successMode === "message" && (
@@ -334,9 +371,13 @@ export function FormPage() {
 
 function SuccessPanel({
   message,
+  receipt,
+  selfEditHref,
   actions,
 }: {
   message: string;
+  receipt?: string | null;
+  selfEditHref?: string | null;
   actions?: ReactNode;
 }) {
   return (
@@ -358,8 +399,24 @@ function SuccessPanel({
       <p className="max-w-[45ch] text-[15px] font-medium text-neutral-800">
         {message}
       </p>
+      {receipt && (
+        <p className="text-xs text-neutral-500">
+          Your receipt number is{" "}
+          <span className="rounded bg-muted px-2 py-0.5 font-mono font-semibold text-neutral-700">
+            {receipt}
+          </span>
+        </p>
+      )}
       {actions && (
         <div className="flex flex-wrap justify-center gap-2">{actions}</div>
+      )}
+      {selfEditHref && (
+        <a
+          href={selfEditHref}
+          className="text-sm font-semibold text-primary-600 hover:text-primary-700 hover:underline"
+        >
+          Edit this response
+        </a>
       )}
     </div>
   );

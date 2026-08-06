@@ -141,7 +141,80 @@ export type FormSettings = {
   showResetButton?: boolean;
   /** Split the form into steps at each Section header. Defaults to false. */
   multiStep?: boolean;
+  /** Webhook URL called on submission create/update. */
+  webhookUrl?: string;
+  /** HMAC secret used to sign webhook payloads. */
+  webhookSecret?: string;
+  /** Show a receipt number on the success panel. Defaults to false. */
+  enableReceipt?: boolean;
+  /** Let submitters edit their own response via a tokenized link. Defaults to false. */
+  allowSelfEdit?: boolean;
+  /** Custom actions that run before/after a submission is stored. */
+  actions?: FormAction[];
 };
+
+export type FormActionValueSource = "static" | "field" | "formula";
+
+export type FormAction =
+  | {
+      id: string;
+      trigger: "before_submit" | "after_submit";
+      type: "set_field";
+      field: string;
+      valueSource: FormActionValueSource;
+      staticValue?: string;
+      sourceField?: string;
+      formula?: string;
+      /** Only run when this rule is satisfied. */
+      when?: VisibilityRule;
+    }
+  | {
+      id: string;
+      trigger: "before_submit" | "after_submit";
+      type: "http_call";
+      method: "GET" | "POST";
+      url: string;
+      /** For before_submit: form field key written from the response's `value`. */
+      responseField?: string;
+      /** Only run when this rule is satisfied. */
+      when?: VisibilityRule;
+    }
+  | {
+      id: string;
+      trigger: "after_submit";
+      type: "update_submission";
+      field: string;
+      valueSource: FormActionValueSource;
+      staticValue?: string;
+      sourceField?: string;
+      formula?: string;
+      /** Only run when this rule is satisfied. */
+      when?: VisibilityRule;
+    }
+  | {
+      id: string;
+      trigger: "after_submit";
+      type: "create_submission";
+      /** Target form id; matching field keys are copied across. */
+      formId: string;
+      /** Only run when this rule is satisfied. */
+      when?: VisibilityRule;
+    }
+  | {
+      id: string;
+      trigger: "after_submit";
+      type: "email";
+      /** Comma-separated hard-coded recipients. */
+      recipients?: string;
+      /** Field key whose value is a recipient email. */
+      recipientField?: string;
+      /** Also email the person who submitted. */
+      includeSubmitter?: boolean;
+      /** Optional custom subject line. */
+      subject?: string;
+      /** Only run when this rule is satisfied. */
+      when?: VisibilityRule;
+    };
 
 export const DEFAULT_FORM_SETTINGS: FormSettings = {
   displayMode: "page",

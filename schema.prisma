@@ -71,5 +71,9 @@ model Submission {
   formId    String
   form      Form     @relation(fields: [formId], references: [id], onDelete: Cascade)
   data      Json
+  editToken String?
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([formId])
 }

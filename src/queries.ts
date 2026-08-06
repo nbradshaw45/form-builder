@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { Form, Submission } from "wasp/entities";
+import type { FormField } from "./types";
 import { HttpError, prisma } from "wasp/server";
 import type {
   GetFile,
@@ -10,6 +11,8 @@ import type {
   GetForms,
   GetFormUsers,
   GetSubmission,
+  GetSubmissionByToken,
+  GetSubmissionsCsv,
   GetUsers,
 } from "wasp/server/operations";
 import {
@@ -242,6 +245,111 @@ export const getFile: GetFile<{ fileId: string }, GetFileResult> = async (
     sizeBytes: file.sizeBytes,
     dataBase64: fs.readFileSync(storedPath).toString("base64"),
   };
+};
+
+export type GetSubmissionByTokenResult = {
+  access: "owner" | "admin" | "edit" | "view";
+  submission: Submission;
+};
+
+export const getSubmissionByToken: GetSubmissionByToken<
+  { submissionId: string; token: string },
+  GetSubmissionByTokenResult
+> = async ({ submissionId, token }, context) => {
+  const submission = await context.entities.Submission.findUnique({
+    where: { id: submissionId },
+  });
+  if (!submission) {
+    throw new HttpError(404, "Submission not found");
+  }
+  if (!submission.editToken || submission.editToken !== token) {
+    throw new HttpError(403, "Invalid edit link");
+  }
+  return { access: "edit", submission };
+};
+
+export type SubmissionsCsvResult = {
+  fileName: string;
+  content: string;
+};
+
+function csvEscape(value: unknown): string {
+  if (value === null || value === undefined) {
+    return "";
+  }
+  const str = Array.isArray(value) ? value.join(", ") : String(value);
+  if (/[",\n]/.test(str)) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+}
+
+export const getSubmissionsCsv: GetSubmissionsCsv<
+  { formId: string },
+  SubmissionsCsvResult
+> = async ({ formId }, context) => {
+  if (!context.user) {
+    throw new HttpError(401);
+  }
+  const access = await getFormAccessForUser(formId, context.user);
+  assertCanView(access);
+
+  const form = await context.entities.Form.findUnique({
+    where: { id: formId },
+    include: { submissions: true },
+  });
+  if (!form) {
+    throw new HttpError(404, "Form not found");
+  }
+
+  const fields = Array.isArray(form.fields)
+    ? (form.fields as unknown as FormField[])
+    : [];
+  const keys: string[] = [];
+  const keyToLabel = new Map(fields.map((field) => [field.key, field.label]));
+  for (const field of fields) {
+    if (
+      field.type === "section_header" ||
+      field.type === "divider" ||
+      field.type === "paragraph"
+    ) {
+      continue;
+    }
+    if (field.showInTable === false) {
+      continue;
+    }
+    if (!keys.includes(field.key)) {
+      keys.push(field.key);
+    }
+  }
+  for (const submission of form.submissions) {
+    const data = submission.data as Record<string, unknown>;
+    for (const key of Object.keys(data)) {
+      if (!keys.includes(key)) {
+        keys.push(key);
+      }
+    }
+  }
+
+  const header = [
+    ...keys.map((key) => keyToLabel.get(key) ?? key),
+    "Submitted at",
+    "Updated at",
+  ];
+  const rows = form.submissions.map((submission) => {
+    const data = submission.data as Record<string, unknown>;
+    return [
+      ...keys.map((key) => csvEscape(data[key])),
+      csvEscape(submission.createdAt.toISOString()),
+      csvEscape(submission.updatedAt.toISOString()),
+    ];
+  });
+  const content = [
+    header.map(csvEscape).join(","),
+    ...rows.map((row) => row.join(",")),
+  ].join("\n");
+
+  return { fileName: `${form.title}.csv`, content };
 };
 
 export const getUsers: GetUsers<void, AdminUser[]> = async (_args, context) => {

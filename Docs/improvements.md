@@ -352,48 +352,161 @@ and data entry.
 
 ## 5. Submission insights, export, and automation
 
+> **Status: implemented.** CSV export, webhooks, email notifications, response
+> receipts, tokenized self-edit links, and analytics are all live.
+
 **Goal:** Make collected data actionable — get it out of the app and into the
 teams that need it.
 
 Submissions are currently viewable in a table only. Export and notifications
 turn the form builder into a pipeline.
 
-### Proposed scope
+### Delivered
 
-- **CSV / Excel export** of submissions (all fields + created/modified/updated
-  by), triggered from the submissions page toolbar. Server-side CSV generation
-  keeps it fast for large datasets; Excel (xlsx) can be added later.
-- **Email notifications**: per-form "notify these emails on submit" setting;
-  the email includes the response summary (formatted from the submission data)
-  and a link to the record.
-- **Webhook on submit**: optional per-form endpoint that receives a POST with
-  the submission JSON (HMAC-signed with a per-form secret) — the standard
-  integration hook for CRMs, Slack, databases, etc.
-- **Response receipts**: optionally show a receipt number (e.g., `RES-000123`)
-  on the success panel; add a system field `response_id` to the form.
-- **Edit link for anonymous submitters**: after submitting, hand the user a
-  tokenized link to edit their own response (respects form-level "allow
-  editing own response" setting and a configurable window).
-- **Basic analytics**: submission volume over time, per-field completion rates,
-  and average time-to-submit, shown as a small stats row on the submissions page.
+- **CSV export** (`getSubmissionsCsv` query): an "Export CSV" button on the
+  submissions page downloads a CSV of all rows (field columns + Submitted
+  at/Updated at), generated server-side with proper escaping.
+- **Webhook on submit** (`src/server/notifications.ts`): an optional per-form
+  `webhookUrl` receives a POST with `{ event, form, submission }` on every
+  create/update, signed with an HMAC-SHA256 `X-Form-Signature` header using a
+  per-form secret (generated in the settings panel). Fire-and-forget so a slow
+  endpoint never blocks the submit.
+- **Email notifications**: on create/update an email with the response summary
+  and a record link is sent via Wasp's SMTP sender. Recipients are combined
+  from a hard-coded **notify emails** list, an **email-from-a-field** recipient
+  (e.g. a User or Email field), and the **submitter's email**; a
+  **conditional** rule ("Only send when...") can gate all notification emails.
+  Requires `SMTP_*` env vars; without a reachable server sends are skipped.
+- **Response receipts**: the success panel can show a receipt number
+  (`RES-XXXXXXXX`, derived from the submission id) when "Show a receipt
+  number" is enabled.
+- **Edit link for submitters**: "Let submitters edit their response" generates
+  a one-time `editToken` on submit and shows an "Edit this response" link on
+  the success panel. The record routes are now public and accept `?token=...`;
+  `getSubmissionByToken` / `updateSubmissionByToken` validate the token, so
+  anonymous submitters can edit their own response.
+- **Basic analytics**: a stats row on the submissions page shows total
+  responses, this week, avg/day, and the top field fill rate (computed
+  client-side).
 
 ### Implementation notes
 
-- Export and webhooks belong in `src/actions.ts` / `src/queries.ts` as new
-  operations; webhook calls should be fire-and-forget or queued so a slow
-  endpoint never blocks the submit response.
-- Notifications/automation settings extend `FormSettings` and get their own
-  panel in the builder.
-- The edit-link feature can reuse the existing record-edit route
-  (`/forms/:id/records/:submissionId/edit`) plus a one-time token column on
-  the `Submission` model.
+- Automation settings extend `FormSettings` (`webhookUrl`, `webhookSecret`,
+  `notifyEmails`, `notifyField`, `notifySubmitter`, `notifyCondition`,
+  `enableReceipt`, `allowSelfEdit`) and live in an "Automation" section of the
+  builder's form-settings panel.
+- Webhook + email dispatch lives in `src/server/notifications.ts`
+  (`fireNotifications` / `sendSubmissionEmails`) and is called fire-and-forget
+  from `submitForm` and `updateSubmission` (passing the submitter email).
+- The self-edit token is a new nullable `Submission.editToken` column
+  (migration `add_submission_edit_token`), returned to the client from
+  `submitForm`.
 
 ---
 
 ### Suggested sequencing
 
-1. **Element library** (highest-impact, unlocks surveys/applications).
-2. **Validation + calculations** (makes new elements trustworthy).
-3. **Theming** (quick win for perception, independent of #1/#2).
-4. **Submissions export + notifications** (data becomes actionable).
-5. **Multi-step wizard** (best saved until element set is stable).
+The original five improvements are all implemented (element library, advanced
+validation/calculations, multi-step wizard, submission export/automation).
+One item from the original plan — **form theming** — is still open and is the
+first item in the next round below.
+
+---
+
+## 6. Next round: proposed enhancements
+
+### A. Theming & branding (carried over from the original plan)
+
+1. **Per-form theming** — accent/primary color, background treatment (solid /
+   subtle color / image), card style (border/shadow/radius), typography scale,
+   logo/header image, and optional scoped custom CSS. The app already uses
+   Adminator CSS custom properties, so themes can be applied by overriding
+   variables on the form page root. *(quick visual win)*
+
+### B. Builder & element experience
+
+2. **Form templates & duplication** — save any form as a template and create
+   new forms from it; one-click "Duplicate form". Zero new UI patterns beyond a
+   "Save as template" action + a template picker on `/forms/new`.
+3. **Undo / redo + keyboard shortcuts** in the builder — history stack for
+   element add/move/delete/settings changes; shortcuts (⌘Z, Delete, arrow
+   reorder).
+4. **Repeating sections** — add/remove rows of grouped fields (e.g. line items,
+   family members). Store rows as arrays in submission data; needs the
+   submissions table to render nested rows.
+5. **File upload v2** — multiple files, drag-and-drop zone, image previews,
+   and S3-compatible storage (the current implementation is single-file on
+   local disk).
+6. **Rich text / autocomplete elements** — markdown toolbar with sanitized HTML
+   output, and a combobox that can source options from a data list or the user
+   element.
+
+### C. Logic & data
+
+7. **Richer visibility rules** — rule groups (AND/OR), and more operators
+   (contains, `>`, `<`, between). The `visibleWhen`/`requiredWhen` engine is
+   already in place; this extends the rule editor.
+8. **Submission filtering & bulk actions** — filter the table by field values
+   (chips), bulk select rows for bulk delete/export.
+9. **Excel (xlsx) export** alongside CSV.
+10. **Submission edit history** — a change log per submission (who/when/what
+    changed, with diffs), shown in a record view.
+11. **Data import & duplicate detection** — CSV import to seed submissions, and
+    configurable duplicate checks (e.g. same email in the last N hours).
+
+### D. Sharing & integrations
+
+12. **Embed & QR** — iframe embed code for a form and a QR code image for the
+    form link (reachable from the submissions page / form settings).
+13. **Channel presets** — Slack / Discord / Teams webhook templates on top of
+    the generic webhook.
+14. **Availability & abuse controls** — open/close dates for a form,
+    honeypot/CAPTCHA for public submissions, and per-form rate limiting on
+    `submitForm`.
+15. **Public form API** — token-authenticated endpoint for submitting responses
+    from other systems (external tools, scripts).
+16. **Payments** — Stripe checkout on submit for paid forms (gate submission
+    creation on payment success).
+
+### F. Form JS actions (implemented)
+
+Configurable, server-side action steps that run before or after a submission is
+stored — no arbitrary client-side code. **Delivered**:
+
+- **Set field value** (before submit) — static / field copy / formula.
+- **Call API** (before or after submit) — `GET`/`POST` JSON; before-submit
+  calls can write the response's `value` into a form field (http/https only,
+  10s timeout).
+- **Update this submission** (after submit) — set a field on the saved record.
+- **Create submission in another form** (after submit) — copy matching field
+  keys into a new submission (the app's "write to DB" hook).
+- **Send email** (after submit) — emails the response summary + record link
+  via SMTP. Recipients combine a hard-coded list, a chosen field's value
+  (User/Email field), and optionally the submitter's email; a custom subject
+  is supported.
+- **Conditions**: every action has an optional "Only run when..." rule, so
+  actions (including emails) fire only when the submission satisfies the
+  condition. Multiple actions are supported and run in order.
+
+Implemented in `src/server/formActions.ts` (engine + per-action condition
+evaluation, email action reusing the SMTP helper in `src/server/notifications.ts`),
+invoked from `submitForm`, with an editor in the form-settings "Actions"
+section. Run order is sequential by trigger; `create_submission` intentionally
+does not cascade the target form's own actions (avoids loops).
+
+### E. Workspace & analytics
+
+17. **Organizations / folders** — workspaces with multiple members and folders
+    for organizing forms (extends the current user/role + sharing model).
+18. **Deeper analytics** — submission volume over time (chart), per-option
+    breakdowns, and average time-to-complete.
+19. **Scheduled email reports** — deliver a CSV summary on a cadence (daily /
+    weekly) to configured emails.
+
+### Recommended next (shortlist)
+
+1. **Per-form theming** (A1) — quick, high-visibility win.
+2. **Form templates & duplication** (B2) — high utility, low risk.
+3. **Richer visibility rules** (C7) — extends existing logic engine.
+4. **Submission filtering + bulk actions** (C8) — makes data manageable.
+5. **Embed + QR** (D12) — makes sharing/embedding trivial.

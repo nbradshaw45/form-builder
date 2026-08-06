@@ -12,6 +12,7 @@ import {
   getFile,
   getForm,
   getFormSubmissions,
+  getSubmissionsCsv,
   useQuery,
 } from "wasp/client/operations";
 import { useParams } from "react-router";
@@ -70,6 +71,7 @@ export function FormSubmissionsPage({ user }: { user: AuthUser }) {
 
   const [deleteTarget, setDeleteTarget] = useState<Submission | null>(null);
   const [search, setSearch] = useState("");
+  const [exporting, setExporting] = useState(false);
 
   const canEdit = access === "owner" || access === "admin" || access === "edit";
   const canManage = access === "owner" || access === "admin";
@@ -91,6 +93,67 @@ export function FormSubmissionsPage({ user }: { user: AuthUser }) {
         : [],
     [form],
   );
+
+  const stats = useMemo(() => {
+    if (!submissions || submissions.length === 0) {
+      return null;
+    }
+    const total = submissions.length;
+    const now = new Date();
+    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const thisWeek = submissions.filter(
+      (submission) => new Date(submission.createdAt) >= weekAgo,
+    ).length;
+    const firstTime = Math.min(
+      ...submissions.map((submission) =>
+        new Date(submission.createdAt).getTime(),
+      ),
+    );
+    const days = Math.max(1, Math.round((now.getTime() - firstTime) / 86400000) + 1);
+    const avgPerDay = total / days;
+    const dataKeys = fields
+      .filter((field) => field.showInTable !== false)
+      .map((field) => field.key);
+    const completion = dataKeys.map((key) => {
+      const label = fields.find((field) => field.key === key)?.label ?? key;
+      const filled = submissions.filter((submission) => {
+        const value = (submission.data as Record<string, unknown>)[key];
+        return (
+          value !== null &&
+          value !== undefined &&
+          value !== "" &&
+          !(Array.isArray(value) && value.length === 0)
+        );
+      }).length;
+      return { label, rate: Math.round((filled / total) * 100) };
+    });
+    return {
+      total,
+      thisWeek,
+      avgPerDay: avgPerDay.toFixed(1),
+      completion,
+    };
+  }, [submissions, fields]);
+
+  async function exportCsv() {
+    setExporting(true);
+    try {
+      const { fileName, content } = await getSubmissionsCsv({ formId: id });
+      const blob = new Blob([content], {
+        type: "text/csv;charset=utf-8",
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = fileName;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      window.alert(`Export failed: ${String(err)}`);
+    } finally {
+      setExporting(false);
+    }
+  }
 
   const columns = useMemo(() => {
     const INPUT_TYPES = new Set([
@@ -221,6 +284,14 @@ export function FormSubmissionsPage({ user }: { user: AuthUser }) {
             <PlusIcon className="size-3.5" />
             New Record
           </ButtonLink>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => void exportCsv()}
+            disabled={exporting || count === 0}
+          >
+            {exporting ? "Exporting..." : "Export CSV"}
+          </Button>
           {canManage && (
             <ButtonLink to="/forms/:id/access" params={{ id }} variant="ghost">
               <ShareIcon className="size-3.5" />
@@ -232,6 +303,22 @@ export function FormSubmissionsPage({ user }: { user: AuthUser }) {
           </ButtonLink>
         </div>
       </div>
+
+      {stats && (
+        <div className="grid w-full grid-cols-2 gap-3 lg:grid-cols-4">
+          <StatCard label="Total responses" value={String(stats.total)} />
+          <StatCard label="This week" value={String(stats.thisWeek)} />
+          <StatCard label="Avg / day" value={stats.avgPerDay} />
+          <StatCard
+            label="Top field fill rate"
+            value={
+              stats.completion.length > 0
+                ? `${Math.max(...stats.completion.map((item) => item.rate))}%`
+                : "—"
+            }
+          />
+        </div>
+      )}
 
       <Card className="w-full">
         <div className="p-6 pb-0">
@@ -464,5 +551,18 @@ function DownloadIcon({ className = "size-4" }: { className?: string }) {
       <path d="M10.75 2.75a.75.75 0 0 0-1.5 0v8.614L6.295 8.235a.75.75 0 1 0-1.09 1.03l4.25 4.5a.75.75 0 0 0 1.09 0l4.25-4.5a.75.75 0 0 0-1.09-1.03l-2.955 3.129V2.75Z" />
       <path d="M3.5 12.75a.75.75 0 0 0-1.5 0v2.5A2.75 2.75 0 0 0 4.75 18h10.5A2.75 2.75 0 0 0 18 15.25v-2.5a.75.75 0 0 0-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H4.75c-.69 0-1.25-.56-1.25-1.25v-2.5Z" />
     </svg>
+  );
+}
+
+function StatCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="card flex flex-col gap-1 p-4">
+      <span className="font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-neutral-400">
+        {label}
+      </span>
+      <span className="font-display text-2xl font-bold tracking-[-0.02em] text-neutral-900">
+        {value}
+      </span>
+    </div>
   );
 }

@@ -1,0 +1,201 @@
+# Form Builder — Feature Reference
+
+A summary of every feature available in the form builder app. The app is built
+with Wasp (v0.25) + React + Prisma (PostgreSQL).
+
+---
+
+## 1. Form builder
+
+### Element library
+
+The palette (with a search box) is grouped into **Input fields**, **Advanced**,
+**Layout elements**, and **System fields**. Click an element to append it to the
+canvas, or drag it onto the canvas at a specific position.
+
+**Input fields**
+
+| Element | Stores | Notes |
+|---|---|---|
+| Text | `string` | Single-line text |
+| Textarea | `string` | Multi-line text |
+| Number | `number \| null` | Numeric input |
+| Select | `string` | Dropdown with editable options |
+| Radio group | `string` | Single-choice buttons, stacked or inline |
+| Multi-select | `string[]` | Checkbox list, stores an array |
+| Checkbox | `boolean` | Toggle |
+| Email | `string` | `type=email`, format-validated |
+| URL | `string` | `type=url`, format-validated |
+| Phone | `string` | `type=tel`, lenient phone validation |
+| Date | `string` | Date picker |
+| Time | `string` | Time picker |
+| User | `string` (email) | Dropdown of the current users (name label, email stored) |
+| Math | computed | Formula-driven calculated field |
+
+**Advanced elements**
+
+| Element | Stores | Notes |
+|---|---|---|
+| Rating | `number` | Star scale (3/5/7/10), hover preview |
+| Slider | `number` | Range input with min/max/step |
+| Currency | `number \| null` | Number input with prefix/suffix and decimals |
+| Signature | PNG data URL | Canvas draw pad with pen color/width |
+| File upload | file id | Uploads to server storage (max size/type configurable) |
+
+**Layout elements**: Section header, Divider, Paragraph.
+
+**System fields**: Created date, Modified date, Updated by user — auto-filled
+server-side (`updated_by_user` records the acting user's email or name).
+
+### Field settings (inspector)
+
+Each element has settings in the right-hand inspector:
+
+- **Label**, **Field key** (stored JSON key), **Column width**
+- **Placeholder**, **Help text**, **Required**, **Show in data table**
+- **Visibility rule** — show the field only when another field equals / does
+  not equal / is set / is not set a value
+- **Validation** (per-field):
+  - Min/max length (text-ish types) and min/max value (number/slider/currency/rating)
+  - Regex pattern with a custom error message
+  - Must-match-another-field (confirm-password style)
+  - Custom expression rule (e.g. `[quantity] <= [max_quantity]`) with a custom message
+- **Conditional required** — required only when a rule is satisfied
+- **Per-option "show when" rules** — options on select/radio/multi-select can
+  appear conditionally based on another field's value (dependent dropdowns)
+
+### Math / calculations
+
+- Reference fields by `[field_key]`; results recompute live as inputs change.
+- Operators: `+ - * / % ^`, unary `-`, parentheses.
+- Comparisons: `< > <= >= == !=` (return 1/0).
+- Functions: `sum(...)`, `avg(...)`, `min(...)`, `max(...)`, `round(x, d)`,
+  `abs(x)`, `count(...)`, `if(cond, a, b)`, `dateDiff(a, b)`.
+- Date fields evaluate as day numbers, so `dateDiff` works on them.
+- Math fields have a rounding (decimals) setting.
+
+### Canvas / reordering
+
+- **Move up / Move down** buttons on every element (precise reordering).
+- **Drag & drop** with a floating overlay; the drop target is previewed by
+  shifting the grid, and insertion is before/after based on where you release
+  (top/left half = before, bottom/right half = after).
+- If a drop would make the element wrap to the next row instead of sitting next
+  to the target, the overlay shows a red warning: *"Won't sit next to this
+  field — it will wrap to the next row."*
+- Elements span a **12-column grid**; set each element's column width
+  (e.g. 12 = 100%, 6 = 50%, 4 = 33%, 3 = 25%). Elements wrap automatically
+  when a row fills up.
+- Duplicate / delete actions per element.
+- Clicking empty canvas deselects and returns to form settings.
+
+### Form settings
+
+Configured in the inspector when no element is selected:
+
+**Display**
+- How the form opens: **New page** or **Popup / modal** (with width and height
+  presets).
+
+**After submit**
+- Show a success message (custom or default) and/or redirect:
+  - **Show a success message** (custom text, default "Thank you! Your response
+    has been submitted.")
+  - **Redirect** to the form's submissions page or a custom URL
+  - **Show message, then redirect** (Continue button + auto-redirect)
+  - Optionally **append the response data to the URL** as query params.
+
+**Buttons**
+- **Back button** (default on) — returns to the submissions page on view/edit,
+  or the forms list on a new record.
+- **Reset button** (optional) — clears the form / restores saved values.
+
+**Multi-step wizard** (optional)
+- Split the form into steps at every Section header; step title = section title.
+- Progress bar + "Step X of Y" counter, per-step validation on "Next", Back/Next
+  navigation, Reset on the last step.
+- Steps can be skipped with a visibility rule on the section header.
+- The canvas shows "Step N" badges on section headers.
+- Viewing a record shows the **full record across all steps** at once.
+
+**Automation**
+- **Webhook URL** — POSTed on every submission create/update with
+  `{ event, form, submission }`, signed with an HMAC-SHA256
+  `X-Form-Signature` header (per-form secret with a Generate button).
+- **Show a receipt number** — the success panel shows `RES-XXXXXXXX`.
+- **Let submitters edit their response** — the success panel shows an
+  "Edit this response" link backed by a one-time token.
+- **Actions** — ordered steps that run before or after a submission is stored.
+  Actions run in order; each action can have its own **"Only run when..."**
+  condition (a rule against the submission data). Multiple actions are
+  supported:
+  - **Set field value** (before submit) — overwrite a field with a static
+    value, another field's value, or a formula result before storing.
+  - **Call API** (before or after submit) — `GET`/`POST` JSON to a URL.
+    Before submit: the response's `value` can be written into a form field.
+    After submit: fire-and-forget with `{ event, form, submission }`.
+  - **Update this submission** (after submit) — set a field on the just-saved
+    submission (static / field / formula).
+  - **Create submission in another form** (after submit) — copy fields with
+    matching keys into a new submission of a chosen target form.
+  - **Send email** (after submit) — emails the response summary + record link
+    via SMTP (requires `SMTP_*` env vars). Recipients combine a hard-coded
+    comma-separated list, a chosen field's value (e.g. a User or Email field)
+    if it looks like an email, and optionally the submitter's email. A custom
+    subject can be set.
+  - API calls are restricted to `http(s)` URLs and time out after 10s.
+
+---
+
+## 2. Form pages
+
+Public form routes:
+
+- `/forms/:id` — **new record** (public, anonymous-friendly)
+- `/forms/:id/records/:submissionId` — **view a record**
+- `/forms/:id/records/:submissionId/edit` — **edit a record**
+  (also works for anonymous submitters when the URL carries `?token=...`)
+
+Record access follows the form's sharing model: view requires view access,
+edit requires owner/admin/edit access (or a valid self-edit token).
+
+All three modes honor the form's **display mode** (page vs popup with configured
+window size) and the after-submit settings.
+
+---
+
+## 3. Submissions
+
+The submissions table (`/forms/:id/submissions`):
+
+- **Analytics row** — total responses, this week, avg/day, top field fill rate.
+- **Searchable, sortable table** with one column per visible field plus
+  Submitted at.
+- **Row actions**: View (record page), Edit (record page), Delete (confirm).
+- Arrays render comma-joined; signatures show a label; file uploads show a
+  **Download** button (fetches the stored file, auth-gated).
+- **Export CSV** — downloads all rows as a CSV (server-generated).
+
+---
+
+## 4. Admin
+
+- **User management** (`/admin/users`, admin-only):
+  - Add users (email, password, name, role), delete users (cascades their
+    forms/submissions/access), edit name/role.
+  - Self-demotion / self-deletion are blocked.
+- **Form sharing** (`/forms/:id/access`): share a form with users at
+  **View** (see submissions) or **Edit** (also edit/delete submissions) level.
+  Form structure edits require the owner or an admin.
+
+---
+
+## 5. Server & operations notes
+
+- **File uploads**: stored on local disk under `uploads/` (override with
+  `UPLOADS_DIR`); the request body limit was raised to 20MB
+  (`src/serverSetup.ts`) to accommodate base64 payloads.
+- **Webhooks/email**: dispatched fire-and-forget from `submitForm` and
+  `updateSubmission` via `src/server/notifications.ts`.
+- **Self-edit tokens**: `Submission.editToken` column; validated by
+  `getSubmissionByToken` / `updateSubmissionByToken` (public operations).
