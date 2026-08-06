@@ -658,12 +658,19 @@ export function FieldInspector({
       )}
 
       <div className="flex flex-col gap-2.5 border-t border-neutral-100 pt-3">
-        <span className={labelClasses}>Data table</span>
+        <span className={labelClasses}>Data table &amp; filters</span>
         <ToggleRow
           label="Show in data table"
           checked={element.showInTable !== false}
           onChange={(checked) =>
             onPatch(element.id, { showInTable: checked })
+          }
+        />
+        <ToggleRow
+          label="Show in filters"
+          checked={element.filterable !== false}
+          onChange={(checked) =>
+            onPatch(element.id, { filterable: checked })
           }
         />
       </div>
@@ -1067,6 +1074,50 @@ function FormSettingsPanel({
           Submissions outside the window are rejected (the form page shows a
           &ldquo;closed&rdquo; notice).
         </p>
+      </div>
+
+      <div className="flex flex-col gap-2.5 border-t border-neutral-100 pt-3">
+        <span className={labelClasses}>Submissions filters</span>
+        <div className="flex flex-col gap-1">
+          <label htmlFor="settings-filter-placement" className="label">
+            Placement
+          </label>
+          <select
+            id="settings-filter-placement"
+            value={settings.filterPlacement ?? "top"}
+            onChange={(event) =>
+              onChange({
+                filterPlacement: event.target.value as "top" | "header",
+              })
+            }
+            className={inputClasses}
+          >
+            <option value="top">On top of the table</option>
+            <option value="header">Under column headers</option>
+          </select>
+        </div>
+        <div className="flex flex-col gap-1">
+          <label htmlFor="settings-filter-columns" className="label">
+            Columns (top placement)
+          </label>
+          <select
+            id="settings-filter-columns"
+            value={settings.filterColumns ?? 3}
+            onChange={(event) =>
+              onChange({ filterColumns: Number(event.target.value) })
+            }
+            className={inputClasses}
+          >
+            {[1, 2, 3, 4, 6].map((count) => (
+              <option key={count} value={count}>
+                {count} {count === 1 ? "column" : "columns"}
+              </option>
+            ))}
+          </select>
+          <span className="text-xs text-neutral-400">
+            Fewer filters per row means the table stays higher on the page.
+          </span>
+        </div>
       </div>
 
       <div className="flex flex-col gap-2.5 border-t border-neutral-100 pt-3">

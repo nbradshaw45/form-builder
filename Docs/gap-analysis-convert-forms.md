@@ -55,7 +55,7 @@ high-impact gaps worth closing. Legend: ✅ = have, 🟡 = partial, ❌ = missin
 
 | Capability | Convert Forms | Us | Notes |
 |---|---|---|---|
-| Submissions management (list/filter/search) | ✅ | ✅ | Table + search + record view/edit/delete |
+| Submissions management (list/filter/search) | ✅ | ✅ | Table + search + smart filters (equals/contains/between/upload) + bulk actions |
 | CSV export | ✅ | ✅ | |
 | **Excel export** | ✅ | ✅ | `.xlsx` via exceljs (all or selected rows) |
 | **PDF generation** from submissions | ✅ | ❌ | No PDFs (agreements, invoices, consent) |

@@ -192,8 +192,14 @@ The submissions table (`/forms/:id/submissions`):
 - **Analytics row** — total responses, this week, avg/day, top field fill rate.
 - **Searchable, sortable table** with one column per visible field plus
   Submitted at.
-- **Field filters** — a "Filters" row lets you narrow rows by each field's
-  distinct values (combined with the text search).
+- **Smart field filters** — type-aware filter controls:
+  - Text/select/radio/user: **Equals / Not equals / Contains** (wildcard).
+  - Number/currency/rating/slider: **Equals / Greater / Less / Between**.
+  - Date fields: **On date / Before / After / Between dates** (date-only, no time).
+  - File upload: **Has upload / No upload**.
+  - Each field can be toggled out of the filter UI per element ("Show in
+    filters" in the builder); placement (on top vs under column headers) and
+    the number of columns for the top grid are form settings.
 - **Bulk actions** — checkboxes on each row (plus select-all); a bulk bar
   offers **Export CSV / Export Excel** and **Delete** for the selected rows.
 - **Row actions**: View (record page), Edit (record page), Delete (confirm).

@@ -115,6 +115,8 @@ export type FormField = {
   mask?: string;
   /** For confirm fields: key of the field this value must match. */
   confirmField?: string;
+  /** Whether this field appears in the submissions filter UI. Defaults to true. */
+  filterable?: boolean;
 };
 
 export type SubmissionData = Record<
@@ -165,6 +167,10 @@ export type FormSettings = {
   openDate?: string;
   /** ISO datetime after which submissions are rejected. */
   closeDate?: string;
+  /** Where the submissions filters are shown: on top or under column headers. */
+  filterPlacement?: "top" | "header";
+  /** Number of columns for the "top" filter grid (1-6). Defaults to 3. */
+  filterColumns?: number;
   /** Custom actions that run before/after a submission is stored. */
   actions?: FormAction[];
 };

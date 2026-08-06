@@ -21,9 +21,15 @@ import { useParams } from "react-router";
 import { Button, ButtonLink } from "../shared/components/Button";
 import { Card, CardHead, DataFoot, DataToolbar } from "../shared/components/Card";
 import { ConfirmDialog } from "../components/Modal";
-import { selectClasses } from "../shared/styles";
+import { selectClasses, inputClasses } from "../shared/styles";
 import { EyeIcon, PencilIcon, PlusIcon, ShareIcon, TrashIcon } from "../components/builder/icons";
-import type { FormField } from "../types";
+import {
+  filterOperatorsForType,
+  matchesFilter,
+  type SubmissionFilter,
+} from "../shared/filters";
+import type { FormField, FormSettings } from "../types";
+import { DEFAULT_FORM_SETTINGS } from "../types";
 
 const columnHelper = createColumnHelper<Submission>();
 
@@ -77,7 +83,7 @@ export function FormSubmissionsPage({ user }: { user: AuthUser }) {
   const [deleting, setDeleting] = useState(false);
   const [search, setSearch] = useState("");
   const [exporting, setExporting] = useState(false);
-  const [filters, setFilters] = useState<Record<string, string>>({});
+  const [filters, setFilters] = useState<Record<string, SubmissionFilter>>({});
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const canEdit = access === "owner" || access === "admin" || access === "edit";
@@ -91,20 +97,55 @@ export function FormSubmissionsPage({ user }: { user: AuthUser }) {
     [form],
   );
 
-  const filterOptions = useMemo(() => {
+  const settings = useMemo<FormSettings>(
+    () => ({
+      ...DEFAULT_FORM_SETTINGS,
+      ...((form?.settings as unknown as FormSettings | null) ?? {}),
+    }),
+    [form],
+  );
+  const headerMode = settings.filterPlacement === "header";
+  const filterColumns = settings.filterColumns ?? 3;
+
+  const FILTERABLE_TYPES = new Set([
+    "text",
+    "textarea",
+    "number",
+    "select",
+    "checkbox",
+    "date",
+    "time",
+    "email",
+    "url",
+    "phone",
+    "radio",
+    "multi_select",
+    "rating",
+    "slider",
+    "currency",
+    "signature",
+    "file_upload",
+    "user",
+    "created_date",
+    "modified_date",
+    "updated_by_user",
+  ]);
+
+  const filterableFields = useMemo<FormField[]>(
+    () =>
+      fields.filter(
+        (field) =>
+          field.filterable !== false && FILTERABLE_TYPES.has(field.type),
+      ),
+    [fields],
+  );
+
+  const distinctValues = useMemo(() => {
     const map: Record<string, string[]> = {};
     if (!submissions) {
       return map;
     }
-    for (const field of fields) {
-      if (
-        field.type === "section_header" ||
-        field.type === "divider" ||
-        field.type === "paragraph" ||
-        field.type === "hidden"
-      ) {
-        continue;
-      }
+    for (const field of filterableFields) {
       const values = new Set<string>();
       for (const submission of submissions) {
         const value = (submission.data as Record<string, unknown>)[field.key];
@@ -118,7 +159,7 @@ export function FormSubmissionsPage({ user }: { user: AuthUser }) {
       }
     }
     return map;
-  }, [submissions, fields]);
+  }, [submissions, filterableFields]);
 
   const filteredSubmissions = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -129,19 +170,37 @@ export function FormSubmissionsPage({ user }: { user: AuthUser }) {
       ) {
         return false;
       }
-      for (const [key, expected] of Object.entries(filters)) {
-        if (!expected) {
-          continue;
-        }
-        const value = (submission.data as Record<string, unknown>)[key];
-        const str = Array.isArray(value) ? value.join(", ") : String(value ?? "");
-        if (str !== expected) {
+      const data = submission.data as Record<string, unknown>;
+      for (const filter of Object.values(filters)) {
+        if (!matchesFilter(data, filter)) {
           return false;
         }
       }
       return true;
     });
   }, [submissions, search, filters]);
+
+  function updateFilter(key: string, filter: SubmissionFilter | undefined) {
+    setFilters((prev) => {
+      const next = { ...prev };
+      if (filter) {
+        next[key] = filter;
+      } else {
+        delete next[key];
+      }
+      return next;
+    });
+  }
+
+  function addFilter(key: string) {
+    const field = fields.find((item) => item.key === key);
+    if (!field) {
+      return;
+    }
+    const operator =
+      filterOperatorsForType(field.type)[0]?.value ?? "equals";
+    updateFilter(key, { key, operator, value: "", value2: "" });
+  }
 
   const stats = useMemo(() => {
     if (!submissions || submissions.length === 0) {
@@ -307,6 +366,10 @@ export function FormSubmissionsPage({ user }: { user: AuthUser }) {
 
     const keyToLabel = new Map(fields.map((field) => [field.key, field.label]));
     const keyToType = new Map(fields.map((field) => [field.key, field.type]));
+    const keyToField = new Map(fields.map((field) => [field.key, field]));
+    const filterableKeySet = new Set(
+      filterableFields.map((field) => field.key),
+    );
 
     return [
       columnHelper.display({
@@ -340,7 +403,24 @@ export function FormSubmissionsPage({ user }: { user: AuthUser }) {
           (row) => (row.data as Record<string, unknown>)[key],
           {
             id: key,
-            header: keyToLabel.get(key) ?? key,
+            header: () => {
+              const field = keyToField.get(key);
+              const label = keyToLabel.get(key) ?? key;
+              if (!headerMode || !field || !filterableKeySet.has(key)) {
+                return <span>{label}</span>;
+              }
+              return (
+                <div className="flex min-w-40 flex-col gap-1.5">
+                  <span>{label}</span>
+                  <HeaderFilter
+                    field={field}
+                    filter={filters[key]}
+                    distinctValues={distinctValues[key] ?? []}
+                    onChange={(next) => updateFilter(key, next)}
+                  />
+                </div>
+              );
+            },
             cell: (info) => {
               const value = info.getValue();
               if (keyToType.get(key) === "file_upload") {
@@ -374,7 +454,7 @@ export function FormSubmissionsPage({ user }: { user: AuthUser }) {
         ),
       }),
     ];
-  }, [fields, submissions, canEdit, id, selected, filteredSubmissions, toggleAll, toggleSelected]);
+  }, [fields, submissions, canEdit, id, selected, filteredSubmissions, toggleAll, toggleSelected, headerMode, filters, distinctValues, filterableFields, updateFilter]);
 
   const table = useReactTable({
     data: filteredSubmissions,
@@ -522,35 +602,16 @@ export function FormSubmissionsPage({ user }: { user: AuthUser }) {
           </div>
         )}
 
-        {Object.keys(filterOptions).length > 0 && (
-          <div className="flex flex-wrap items-center gap-2 px-6 pt-4">
-            <span className="font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-neutral-400">
-              Filters
-            </span>
-            {Object.entries(filterOptions).map(([key, values]) => {
-              const label =
-                fields.find((field) => field.key === key)?.label ?? key;
-              return (
-                <select
-                  key={key}
-                  value={filters[key] ?? ""}
-                  onChange={(event) =>
-                    setFilters((prev) => ({
-                      ...prev,
-                      [key]: event.target.value,
-                    }))
-                  }
-                  className={`${selectClasses} w-auto text-xs`}
-                >
-                  <option value="">All {label}</option>
-                  {values.map((value) => (
-                    <option key={value} value={value}>
-                      {value}
-                    </option>
-                  ))}
-                </select>
-              );
-            })}
+        {!headerMode && filterableFields.length > 0 && (
+          <div className="px-6 pt-4">
+            <TopFilterGrid
+              filterableFields={filterableFields}
+              filters={filters}
+              distinctValues={distinctValues}
+              columns={filterColumns}
+              onFilterChange={updateFilter}
+              onAddFilter={addFilter}
+            />
           </div>
         )}
 
@@ -691,6 +752,239 @@ function RowActions({
           <TrashIcon className="size-3.5" />
           Delete
         </Button>
+      )}
+    </div>
+  );
+}
+
+function FilterValueInput({
+  field,
+  value,
+  distinctValues,
+  onChange,
+  inputCls,
+}: {
+  field: FormField;
+  value: string;
+  distinctValues: string[];
+  onChange: (value: string) => void;
+  inputCls: string;
+}) {
+  const isDate = ["date", "created_date", "modified_date"].includes(
+    field.type,
+  );
+  const isNumeric = ["number", "currency", "rating", "slider"].includes(
+    field.type,
+  );
+  const isCategorical = [
+    "select",
+    "radio",
+    "user",
+    "multi_select",
+    "checkbox",
+  ].includes(field.type);
+
+  if (isDate) {
+    return (
+      <input
+        type="date"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className={inputCls}
+      />
+    );
+  }
+  if (isCategorical) {
+    return (
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className={inputCls}
+      >
+        <option value="">Any</option>
+        {distinctValues.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
+    );
+  }
+  if (isNumeric) {
+    return (
+      <input
+        type="number"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className={inputCls}
+      />
+    );
+  }
+  return (
+    <input
+      type="text"
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      placeholder="Value"
+      className={inputCls}
+    />
+  );
+}
+
+function FilterControl({
+  field,
+  filter,
+  distinctValues,
+  onChange,
+}: {
+  field: FormField;
+  filter: SubmissionFilter | undefined;
+  distinctValues: string[];
+  onChange: (filter: SubmissionFilter | undefined) => void;
+}) {
+  const operators = filterOperatorsForType(field.type);
+  const operator = filter?.operator ?? operators[0]?.value ?? "equals";
+  const value = filter?.value ?? "";
+  const value2 = filter?.value2 ?? "";
+  const needsValue = operator !== "has_file" && operator !== "no_file";
+  const needsTwo = operator === "between";
+  const inputCls = `${inputClasses} text-xs`;
+
+  function update(patch: Partial<SubmissionFilter>) {
+    onChange({ key: field.key, operator, value, value2, ...patch });
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <select
+        value={operator}
+        onChange={(event) => update({ operator: event.target.value })}
+        className={inputCls}
+      >
+        {operators.map((op) => (
+          <option key={op.value} value={op.value}>
+            {op.label}
+          </option>
+        ))}
+      </select>
+      {needsValue && (
+        <FilterValueInput
+          field={field}
+          value={value}
+          distinctValues={distinctValues}
+          onChange={(next) => update({ value: next })}
+          inputCls={inputCls}
+        />
+      )}
+      {needsTwo && (
+        <FilterValueInput
+          field={field}
+          value={value2}
+          distinctValues={distinctValues}
+          onChange={(next) => update({ value2: next })}
+          inputCls={inputCls}
+        />
+      )}
+    </div>
+  );
+}
+
+function HeaderFilter({
+  field,
+  filter,
+  distinctValues,
+  onChange,
+}: {
+  field: FormField;
+  filter: SubmissionFilter | undefined;
+  distinctValues: string[];
+  onChange: (filter: SubmissionFilter | undefined) => void;
+}) {
+  return (
+    <FilterControl
+      field={field}
+      filter={filter}
+      distinctValues={distinctValues}
+      onChange={onChange}
+    />
+  );
+}
+
+function TopFilterGrid({
+  filterableFields,
+  filters,
+  distinctValues,
+  columns,
+  onFilterChange,
+  onAddFilter,
+}: {
+  filterableFields: FormField[];
+  filters: Record<string, SubmissionFilter>;
+  distinctValues: Record<string, string[]>;
+  columns: number;
+  onFilterChange: (key: string, filter: SubmissionFilter | undefined) => void;
+  onAddFilter: (key: string) => void;
+}) {
+  const active = filterableFields.filter((field) => filters[field.key]);
+  const available = filterableFields.filter((field) => !filters[field.key]);
+
+  return (
+    <div className="flex flex-col gap-2">
+      {active.length > 0 && (
+        <div
+          className="grid items-start gap-2"
+          style={{
+            gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
+          }}
+        >
+          {active.map((field) => (
+            <div
+              key={field.key}
+              className="flex flex-col gap-1.5 rounded-lg border border-neutral-100 bg-muted/50 p-2"
+            >
+              <div className="flex items-center justify-between gap-1">
+                <span className="truncate text-xs font-semibold text-neutral-700">
+                  {field.label}
+                </span>
+                <button
+                  type="button"
+                  aria-label={`Remove ${field.label} filter`}
+                  onClick={() => onFilterChange(field.key, undefined)}
+                  className="rounded px-1 text-base leading-none text-neutral-400 hover:bg-neutral-200 hover:text-neutral-700"
+                >
+                  ×
+                </button>
+              </div>
+              <FilterControl
+                field={field}
+                filter={filters[field.key]}
+                distinctValues={distinctValues[field.key] ?? []}
+                onChange={(next) => onFilterChange(field.key, next)}
+              />
+            </div>
+          ))}
+        </div>
+      )}
+      {available.length > 0 && (
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs text-neutral-500">Filter by:</span>
+          <select
+            value=""
+            onChange={(event) => {
+              if (event.target.value) {
+                onAddFilter(event.target.value);
+              }
+            }}
+            className={`${selectClasses} w-auto text-xs`}
+          >
+            <option value="">Select a field...</option>
+            {available.map((field) => (
+              <option key={field.key} value={field.key}>
+                {field.label}
+              </option>
+            ))}
+          </select>
+        </div>
       )}
     </div>
   );
