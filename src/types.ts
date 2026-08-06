@@ -117,6 +117,8 @@ export type FormField = {
   confirmField?: string;
   /** Whether this field appears in the submissions filter UI. Defaults to true. */
   filterable?: boolean;
+  /** Filter condition used on the submissions page (per field type). */
+  filterOperator?: string;
 };
 
 export type SubmissionData = Record<

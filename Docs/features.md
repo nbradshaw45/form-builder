@@ -99,7 +99,9 @@ Each element has settings in the right-hand inspector:
 
 ### Form settings
 
-Configured in the inspector when no element is selected:
+Configured in the inspector when no element is selected. Settings are grouped
+into sections — in the sidebar they are **collapsible accordions**; the pop-out
+(near-fullscreen) view shows them as **tabs across the top**.
 
 **Display**
 - How the form opens: **New page** or **Popup / modal** (with width and height
@@ -192,14 +194,18 @@ The submissions table (`/forms/:id/submissions`):
 - **Analytics row** — total responses, this week, avg/day, top field fill rate.
 - **Searchable, sortable table** with one column per visible field plus
   Submitted at.
-- **Smart field filters** — type-aware filter controls:
-  - Text/select/radio/user: **Equals / Not equals / Contains** (wildcard).
-  - Number/currency/rating/slider: **Equals / Greater / Less / Between**.
-  - Date fields: **On date / Before / After / Between dates** (date-only, no time).
-  - File upload: **Has upload / No upload**.
-  - Each field can be toggled out of the filter UI per element ("Show in
-    filters" in the builder); placement (on top vs under column headers) and
-    the number of columns for the top grid are form settings.
+- **Smart field filters** — every field with "Show in filters" enabled renders
+  its own filter control automatically (no manual selection):
+  - Each field's **condition** (Equals / Not equals / Contains; Greater / Less /
+    Between; On date / Before / After / Between dates; Has upload / No upload)
+    is chosen in the **element settings** of the edit form page — the options
+    are aware of the field type (dates get date conditions, numbers get numeric
+    ones, etc.).
+  - The submissions page shows only the matching **value input**: a text field,
+    a number field, date picker(s), or a dropdown of the field's existing
+    values (and a Has / No upload dropdown for file uploads).
+  - Placement (on top vs under column headers) and the number of columns for
+    the top filter grid are form settings.
 - **Bulk actions** — checkboxes on each row (plus select-all); a bulk bar
   offers **Export CSV / Export Excel** and **Delete** for the selected rows.
 - **Row actions**: View (record page), Edit (record page), Delete (confirm).

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import type {
   FieldValidation,
   FormAction,
@@ -11,8 +11,14 @@ import type { FieldType } from "../../types";
 import { inputClasses } from "../../shared/styles";
 import { isSystemField } from "./elementFactory";
 import { MASK_PRESETS } from "../../shared/mask";
+import { filterOperatorsForType } from "../../shared/filters";
 import { getForms, useQuery } from "wasp/client/operations";
-import { MaximizeIcon, MinimizeIcon } from "./icons";
+import {
+  ChevronDownIcon,
+  ChevronUpIcon,
+  MaximizeIcon,
+  MinimizeIcon,
+} from "./icons";
 
 interface FieldInspectorProps {
   element: FormField | null;
@@ -673,6 +679,39 @@ export function FieldInspector({
             onPatch(element.id, { filterable: checked })
           }
         />
+        {element.filterable !== false &&
+          element.type !== "file_upload" &&
+          filterOperatorsForType(element.type).length > 1 && (
+            <div className="flex flex-col gap-1">
+              <label htmlFor="inspector-filter-operator" className="label">
+                Filter condition
+              </label>
+              <select
+                id="inspector-filter-operator"
+                value={
+                  element.filterOperator ??
+                  filterOperatorsForType(element.type)[0]?.value ??
+                  "equals"
+                }
+                onChange={(event) =>
+                  onPatch(element.id, {
+                    filterOperator: event.target.value,
+                  })
+                }
+                className={inputClasses}
+              >
+                {filterOperatorsForType(element.type).map((operator) => (
+                  <option key={operator.value} value={operator.value}>
+                    {operator.label}
+                  </option>
+                ))}
+              </select>
+              <span className="text-xs text-neutral-400">
+                The submissions page filter will use this condition; only the
+                value input is shown there.
+              </span>
+            </div>
+          )}
       </div>
 
       {isSystem && (
@@ -760,443 +799,552 @@ function FormSettingsPanel({
     settings.successMode === "redirect" || settings.successMode === "both";
   const wantsMessage =
     settings.successMode === "message" || settings.successMode === "both";
+  const [activeTab, setActiveTab] = useState("display");
 
-  return (
-    <div
-      className={
-        expanded ? "flex flex-col gap-5" : "card flex flex-col gap-5 p-4"
-      }
-    >
-      <div className="flex items-start justify-between gap-2 border-b border-neutral-100 pb-3">
-        <div className="flex flex-col gap-0.5">
-          <h2 className="font-display text-sm font-bold tracking-[-0.02em] text-neutral-800">
-            Form settings
-          </h2>
-          <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-neutral-400">
-            Display &amp; after submit
-          </span>
-        </div>
-        {onExpand && (
-          <button
-            type="button"
-            onClick={onExpand}
-            aria-label={expanded ? "Close pop out" : "Pop out settings"}
-            title={expanded ? "Close" : "Pop out"}
-            className="rounded-md border border-neutral-200 bg-white p-1.5 text-neutral-400 transition-colors hover:border-neutral-300 hover:text-neutral-700"
-          >
-            {expanded ? (
-              <MinimizeIcon className="size-4" />
-            ) : (
-              <MaximizeIcon className="size-4" />
-            )}
-          </button>
-        )}
-      </div>
-
-      <div
-        className={
-          expanded
-            ? "grid grid-cols-1 items-start gap-x-8 gap-y-6 xl:grid-cols-2"
-            : "flex flex-col gap-5"
-        }
-      >
-
-      <div className="flex flex-col gap-1">
-        <label htmlFor="settings-display" className={labelClasses}>
-          How the form opens
-        </label>
-        <select
-          id="settings-display"
-          value={settings.displayMode ?? "page"}
-          onChange={(event) =>
-            onChange({
-              displayMode: event.target.value as FormSettings["displayMode"],
-            })
-          }
-          className={inputClasses}
-        >
-          <option value="page">New page</option>
-          <option value="modal">Popup / modal</option>
-        </select>
-      </div>
-
-      {isModal && (
-        <div className="flex flex-col gap-2.5 rounded-lg border border-neutral-100 bg-muted p-3">
+  const sections: { id: string; label: string; node: ReactNode }[] = [
+    {
+      id: "display",
+      label: "Display",
+      node: (
+        <>
           <div className="flex flex-col gap-1">
-            <label htmlFor="settings-modal-width" className={labelClasses}>
-              Popup width
+            <label htmlFor="settings-display" className={labelClasses}>
+              How the form opens
             </label>
             <select
-              id="settings-modal-width"
-              value={settings.modalWidth ?? 560}
+              id="settings-display"
+              value={settings.displayMode ?? "page"}
               onChange={(event) =>
-                onChange({ modalWidth: Number(event.target.value) })
+                onChange({
+                  displayMode: event.target.value as FormSettings["displayMode"],
+                })
               }
               className={inputClasses}
             >
-              {MODAL_WIDTHS.map((width) => (
-                <option key={width} value={width}>
-                  {width}px
-                </option>
-              ))}
+              <option value="page">New page</option>
+              <option value="modal">Popup / modal</option>
             </select>
           </div>
+
+          {isModal && (
+            <div className="flex flex-col gap-2.5 rounded-lg border border-neutral-100 bg-muted p-3">
+              <div className="flex flex-col gap-1">
+                <label htmlFor="settings-modal-width" className={labelClasses}>
+                  Popup width
+                </label>
+                <select
+                  id="settings-modal-width"
+                  value={settings.modalWidth ?? 560}
+                  onChange={(event) =>
+                    onChange({ modalWidth: Number(event.target.value) })
+                  }
+                  className={inputClasses}
+                >
+                  {MODAL_WIDTHS.map((width) => (
+                    <option key={width} value={width}>
+                      {width}px
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label htmlFor="settings-modal-height" className={labelClasses}>
+                  Popup height
+                </label>
+                <select
+                  id="settings-modal-height"
+                  value={settings.modalHeight ?? ""}
+                  onChange={(event) =>
+                    onChange({
+                      modalHeight:
+                        event.target.value === ""
+                          ? null
+                          : Number(event.target.value),
+                    })
+                  }
+                  className={inputClasses}
+                >
+                  {MODAL_HEIGHTS.map((option) => (
+                    <option
+                      key={String(option.value)}
+                      value={option.value ?? ""}
+                    >
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <p className="text-xs leading-snug text-neutral-400">
+                The form URL opens a centered popup with these window
+                dimensions.
+              </p>
+            </div>
+          )}
+        </>
+      ),
+    },
+    {
+      id: "steps",
+      label: "Steps",
+      node: (
+        <>
+          <ToggleRow
+            label="Multi-step wizard"
+            checked={settings.multiStep === true}
+            onChange={(checked) => onChange({ multiStep: checked })}
+          />
+          <p className="text-xs leading-snug text-neutral-400">
+            Split the form into steps at each Section header. Add Section
+            header elements to create steps; the section title becomes the
+            step name.
+          </p>
+        </>
+      ),
+    },
+    {
+      id: "after-submit",
+      label: "After submit",
+      node: (
+        <>
           <div className="flex flex-col gap-1">
-            <label htmlFor="settings-modal-height" className={labelClasses}>
-              Popup height
+            <label htmlFor="settings-success" className={labelClasses}>
+              After submit
             </label>
             <select
-              id="settings-modal-height"
-              value={settings.modalHeight ?? ""}
+              id="settings-success"
+              value={settings.successMode ?? "message"}
               onChange={(event) =>
                 onChange({
-                  modalHeight:
+                  successMode: event.target.value as FormSettings["successMode"],
+                })
+              }
+              className={inputClasses}
+            >
+              <option value="message">Show a success message</option>
+              <option value="redirect">Redirect</option>
+              <option value="both">Show message, then redirect</option>
+            </select>
+          </div>
+
+          {wantsMessage && (
+            <div className="flex flex-col gap-1">
+              <label htmlFor="settings-success-message" className={labelClasses}>
+                Success message
+              </label>
+              <textarea
+                id="settings-success-message"
+                value={settings.successMessage ?? ""}
+                onChange={(event) =>
+                  onChange({ successMessage: event.target.value })
+                }
+                rows={2}
+                placeholder="Thank you! Your response has been submitted."
+                className={inputClasses}
+              />
+              <span className="text-xs text-neutral-400">
+                Leave blank to use the default message.
+              </span>
+            </div>
+          )}
+
+          {wantsRedirect && (
+            <div className="flex flex-col gap-2.5 rounded-lg border border-neutral-100 bg-muted p-3">
+              <div className="flex flex-col gap-1">
+                <label
+                  htmlFor="settings-redirect-target"
+                  className={labelClasses}
+                >
+                  Redirect to
+                </label>
+                <select
+                  id="settings-redirect-target"
+                  value={settings.redirectTarget ?? "submissions"}
+                  onChange={(event) =>
+                    onChange({
+                      redirectTarget: event.target
+                        .value as FormSettings["redirectTarget"],
+                    })
+                  }
+                  className={inputClasses}
+                >
+                  <option value="submissions">
+                    This form&apos;s submissions page
+                  </option>
+                  <option value="custom">A custom URL</option>
+                </select>
+              </div>
+              {settings.redirectTarget === "custom" && (
+                <div className="flex flex-col gap-1">
+                  <label htmlFor="settings-redirect-url" className={labelClasses}>
+                    URL
+                  </label>
+                  <input
+                    id="settings-redirect-url"
+                    value={settings.redirectUrl ?? ""}
+                    onChange={(event) =>
+                      onChange({ redirectUrl: event.target.value })
+                    }
+                    placeholder="https://example.com/thanks"
+                    className={`${inputClasses} font-mono`}
+                  />
+                </div>
+              )}
+              <ToggleRow
+                label="Append response data to URL"
+                checked={settings.appendData === true}
+                onChange={(checked) => onChange({ appendData: checked })}
+              />
+            </div>
+          )}
+        </>
+      ),
+    },
+    {
+      id: "buttons",
+      label: "Buttons",
+      node: (
+        <>
+          <ToggleRow
+            label="Back button"
+            checked={settings.showBackButton !== false}
+            onChange={(checked) => onChange({ showBackButton: checked })}
+          />
+          <ToggleRow
+            label="Reset button"
+            checked={settings.showResetButton === true}
+            onChange={(checked) => onChange({ showResetButton: checked })}
+          />
+          <p className="text-xs leading-snug text-neutral-400">
+            Back returns to the submissions page; Reset clears the form or
+            restores the record&apos;s saved values.
+          </p>
+        </>
+      ),
+    },
+    {
+      id: "spam",
+      label: "Spam & availability",
+      node: (
+        <>
+          <ToggleRow
+            label="Honeypot"
+            checked={settings.honeypot === true}
+            onChange={(checked) => onChange({ honeypot: checked })}
+          />
+          <p className="text-xs leading-snug text-neutral-400">
+            Adds an invisible field that bots tend to fill; those submissions
+            are silently discarded.
+          </p>
+          <div className="flex flex-col gap-1">
+            <label htmlFor="settings-rate-limit" className="label">
+              Rate limit (per hour)
+            </label>
+            <input
+              id="settings-rate-limit"
+              type="number"
+              min={1}
+              value={settings.rateLimitPerHour ?? ""}
+              onChange={(event) =>
+                onChange({
+                  rateLimitPerHour:
                     event.target.value === ""
-                      ? null
+                      ? undefined
                       : Number(event.target.value),
                 })
               }
-              className={inputClasses}
-            >
-              {MODAL_HEIGHTS.map((option) => (
-                <option
-                  key={String(option.value)}
-                  value={option.value ?? ""}
-                >
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <p className="text-xs leading-snug text-neutral-400">
-            The form URL opens a centered popup with these window dimensions.
-          </p>
-        </div>
-      )}
-
-      <div className="flex flex-col gap-2.5 border-t border-neutral-100 pt-3">
-        <ToggleRow
-          label="Multi-step wizard"
-          checked={settings.multiStep === true}
-          onChange={(checked) => onChange({ multiStep: checked })}
-        />
-        <p className="text-xs leading-snug text-neutral-400">
-          Split the form into steps at each Section header. Add Section header
-          elements to create steps; the section title becomes the step name.
-        </p>
-      </div>
-
-      <div className="flex flex-col gap-2.5 border-t border-neutral-100 pt-3">
-        <div className="flex flex-col gap-1">
-          <label htmlFor="settings-success" className={labelClasses}>
-            After submit
-          </label>
-          <select
-            id="settings-success"
-            value={settings.successMode ?? "message"}
-            onChange={(event) =>
-              onChange({
-                successMode: event.target.value as FormSettings["successMode"],
-              })
-            }
-            className={inputClasses}
-          >
-            <option value="message">Show a success message</option>
-            <option value="redirect">Redirect</option>
-            <option value="both">Show message, then redirect</option>
-          </select>
-        </div>
-
-        {wantsMessage && (
-          <div className="flex flex-col gap-1">
-            <label htmlFor="settings-success-message" className={labelClasses}>
-              Success message
-            </label>
-            <textarea
-              id="settings-success-message"
-              value={settings.successMessage ?? ""}
-              onChange={(event) =>
-                onChange({ successMessage: event.target.value })
-              }
-              rows={2}
-              placeholder="Thank you! Your response has been submitted."
+              placeholder="No limit"
               className={inputClasses}
             />
             <span className="text-xs text-neutral-400">
-              Leave blank to use the default message.
+              Rejects submissions after the limit is reached in a rolling hour.
             </span>
           </div>
-        )}
-
-        {wantsRedirect && (
-          <div className="flex flex-col gap-2.5 rounded-lg border border-neutral-100 bg-muted p-3">
+          <div className="grid grid-cols-2 gap-2">
             <div className="flex flex-col gap-1">
-              <label
-                htmlFor="settings-redirect-target"
-                className={labelClasses}
-              >
-                Redirect to
+              <label htmlFor="settings-open-date" className="label">
+                Open from
               </label>
-              <select
-                id="settings-redirect-target"
-                value={settings.redirectTarget ?? "submissions"}
+              <input
+                id="settings-open-date"
+                type="datetime-local"
+                value={toDatetimeLocal(settings.openDate)}
                 onChange={(event) =>
                   onChange({
-                    redirectTarget: event.target
-                      .value as FormSettings["redirectTarget"],
+                    openDate: event.target.value
+                      ? new Date(event.target.value).toISOString()
+                      : undefined,
                   })
                 }
                 className={inputClasses}
-              >
-                <option value="submissions">
-                  This form&apos;s submissions page
-                </option>
-                <option value="custom">A custom URL</option>
-              </select>
+              />
             </div>
-            {settings.redirectTarget === "custom" && (
-              <div className="flex flex-col gap-1">
-                <label htmlFor="settings-redirect-url" className={labelClasses}>
-                  URL
-                </label>
-                <input
-                  id="settings-redirect-url"
-                  value={settings.redirectUrl ?? ""}
-                  onChange={(event) =>
-                    onChange({ redirectUrl: event.target.value })
-                  }
-                  placeholder="https://example.com/thanks"
-                  className={`${inputClasses} font-mono`}
-                />
-              </div>
-            )}
-            <ToggleRow
-              label="Append response data to URL"
-              checked={settings.appendData === true}
-              onChange={(checked) => onChange({ appendData: checked })}
-            />
+            <div className="flex flex-col gap-1">
+              <label htmlFor="settings-close-date" className="label">
+                Open until
+              </label>
+              <input
+                id="settings-close-date"
+                type="datetime-local"
+                value={toDatetimeLocal(settings.closeDate)}
+                onChange={(event) =>
+                  onChange({
+                    closeDate: event.target.value
+                      ? new Date(event.target.value).toISOString()
+                      : undefined,
+                  })
+                }
+                className={inputClasses}
+              />
+            </div>
           </div>
-        )}
-      </div>
-
-      <div className="flex flex-col gap-2.5 border-t border-neutral-100 pt-3">
-        <span className={labelClasses}>Buttons</span>
-        <ToggleRow
-          label="Back button"
-          checked={settings.showBackButton !== false}
-          onChange={(checked) => onChange({ showBackButton: checked })}
-        />
-        <ToggleRow
-          label="Reset button"
-          checked={settings.showResetButton === true}
-          onChange={(checked) => onChange({ showResetButton: checked })}
-        />
-        <p className="text-xs leading-snug text-neutral-400">
-          Back returns to the submissions page; Reset clears the form or
-          restores the record&apos;s saved values.
-        </p>
-      </div>
-
-      <div className="flex flex-col gap-2.5 border-t border-neutral-100 pt-3">
-        <span className={labelClasses}>Spam &amp; availability</span>
-        <ToggleRow
-          label="Honeypot"
-          checked={settings.honeypot === true}
-          onChange={(checked) => onChange({ honeypot: checked })}
-        />
-        <p className="text-xs leading-snug text-neutral-400">
-          Adds an invisible field that bots tend to fill; those submissions are
-          silently discarded.
-        </p>
-        <div className="flex flex-col gap-1">
-          <label htmlFor="settings-rate-limit" className="label">
-            Rate limit (per hour)
-          </label>
-          <input
-            id="settings-rate-limit"
-            type="number"
-            min={1}
-            value={settings.rateLimitPerHour ?? ""}
-            onChange={(event) =>
-              onChange({
-                rateLimitPerHour:
-                  event.target.value === ""
-                    ? undefined
-                    : Number(event.target.value),
-              })
-            }
-            placeholder="No limit"
-            className={inputClasses}
-          />
-          <span className="text-xs text-neutral-400">
-            Rejects submissions after the limit is reached in a rolling hour.
-          </span>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
+          <p className="text-xs text-neutral-400">
+            Submissions outside the window are rejected (the form page shows a
+            &ldquo;closed&rdquo; notice).
+          </p>
+        </>
+      ),
+    },
+    {
+      id: "filters",
+      label: "Submissions filters",
+      node: (
+        <>
           <div className="flex flex-col gap-1">
-            <label htmlFor="settings-open-date" className="label">
-              Open from
+            <label htmlFor="settings-filter-placement" className="label">
+              Placement
             </label>
-            <input
-              id="settings-open-date"
-              type="datetime-local"
-              value={toDatetimeLocal(settings.openDate)}
+            <select
+              id="settings-filter-placement"
+              value={settings.filterPlacement ?? "top"}
               onChange={(event) =>
                 onChange({
-                  openDate: event.target.value
-                    ? new Date(event.target.value).toISOString()
-                    : undefined,
+                  filterPlacement: event.target.value as "top" | "header",
                 })
               }
               className={inputClasses}
-            />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label htmlFor="settings-close-date" className="label">
-              Open until
-            </label>
-            <input
-              id="settings-close-date"
-              type="datetime-local"
-              value={toDatetimeLocal(settings.closeDate)}
-              onChange={(event) =>
-                onChange({
-                  closeDate: event.target.value
-                    ? new Date(event.target.value).toISOString()
-                    : undefined,
-                })
-              }
-              className={inputClasses}
-            />
-          </div>
-        </div>
-        <p className="text-xs text-neutral-400">
-          Submissions outside the window are rejected (the form page shows a
-          &ldquo;closed&rdquo; notice).
-        </p>
-      </div>
-
-      <div className="flex flex-col gap-2.5 border-t border-neutral-100 pt-3">
-        <span className={labelClasses}>Submissions filters</span>
-        <div className="flex flex-col gap-1">
-          <label htmlFor="settings-filter-placement" className="label">
-            Placement
-          </label>
-          <select
-            id="settings-filter-placement"
-            value={settings.filterPlacement ?? "top"}
-            onChange={(event) =>
-              onChange({
-                filterPlacement: event.target.value as "top" | "header",
-              })
-            }
-            className={inputClasses}
-          >
-            <option value="top">On top of the table</option>
-            <option value="header">Under column headers</option>
-          </select>
-        </div>
-        <div className="flex flex-col gap-1">
-          <label htmlFor="settings-filter-columns" className="label">
-            Columns (top placement)
-          </label>
-          <select
-            id="settings-filter-columns"
-            value={settings.filterColumns ?? 3}
-            onChange={(event) =>
-              onChange({ filterColumns: Number(event.target.value) })
-            }
-            className={inputClasses}
-          >
-            {[1, 2, 3, 4, 6].map((count) => (
-              <option key={count} value={count}>
-                {count} {count === 1 ? "column" : "columns"}
-              </option>
-            ))}
-          </select>
-          <span className="text-xs text-neutral-400">
-            Fewer filters per row means the table stays higher on the page.
-          </span>
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-2.5 border-t border-neutral-100 pt-3">
-        <span className={labelClasses}>Automation</span>
-        <div className="flex flex-col gap-1">
-          <label htmlFor="settings-webhook-url" className="label">
-            Webhook URL
-          </label>
-          <input
-            id="settings-webhook-url"
-            value={settings.webhookUrl ?? ""}
-            onChange={(event) =>
-              onChange({ webhookUrl: event.target.value })
-            }
-            placeholder="https://example.com/hooks/form-builder"
-            className={`${inputClasses} font-mono`}
-          />
-          <span className="text-xs text-neutral-400">
-            Called on every submission create/update with the response data and
-            an HMAC signature.
-          </span>
-        </div>
-        <div className="flex flex-col gap-1">
-          <label htmlFor="settings-webhook-secret" className="label">
-            Webhook secret
-          </label>
-          <div className="flex gap-1.5">
-            <input
-              id="settings-webhook-secret"
-              value={settings.webhookSecret ?? ""}
-              readOnly
-              placeholder="Not set"
-              className={`${inputClasses} flex-1 font-mono`}
-            />
-            <button
-              type="button"
-              onClick={() =>
-                onChange({
-                  webhookSecret:
-                    Math.random().toString(36).slice(2) +
-                    Math.random().toString(36).slice(2),
-                })
-              }
-              className="shrink-0 rounded-lg border border-neutral-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-neutral-600 hover:border-primary-400 hover:text-primary-700"
             >
-              Generate
-            </button>
+              <option value="top">On top of the table</option>
+              <option value="header">Under column headers</option>
+            </select>
           </div>
-          <span className="text-xs text-neutral-400">
-            Sent as{" "}
-            <code className="font-mono">X-Form-Signature: sha256=&lt;hmac&gt;</code>.
-          </span>
-        </div>
-        <ToggleRow
-          label="Show a receipt number"
-          checked={settings.enableReceipt === true}
-          onChange={(checked) => onChange({ enableReceipt: checked })}
-        />
-        <ToggleRow
-          label="Let submitters edit their response"
-          checked={settings.allowSelfEdit === true}
-          onChange={(checked) => onChange({ allowSelfEdit: checked })}
-        />
-      </div>
+          <div className="flex flex-col gap-1">
+            <label htmlFor="settings-filter-columns" className="label">
+              Columns (top placement)
+            </label>
+            <select
+              id="settings-filter-columns"
+              value={settings.filterColumns ?? 3}
+              onChange={(event) =>
+                onChange({ filterColumns: Number(event.target.value) })
+              }
+              className={inputClasses}
+            >
+              {[1, 2, 3, 4, 6].map((count) => (
+                <option key={count} value={count}>
+                  {count} {count === 1 ? "column" : "columns"}
+                </option>
+              ))}
+            </select>
+            <span className="text-xs text-neutral-400">
+              Fewer filters per row means the table stays higher on the page.
+            </span>
+          </div>
+        </>
+      ),
+    },
+    {
+      id: "automation",
+      label: "Automation",
+      node: (
+        <>
+          <div className="flex flex-col gap-1">
+            <label htmlFor="settings-webhook-url" className="label">
+              Webhook URL
+            </label>
+            <input
+              id="settings-webhook-url"
+              value={settings.webhookUrl ?? ""}
+              onChange={(event) =>
+                onChange({ webhookUrl: event.target.value })
+              }
+              placeholder="https://example.com/hooks/form-builder"
+              className={`${inputClasses} font-mono`}
+            />
+            <span className="text-xs text-neutral-400">
+              Called on every submission create/update with the response data
+              and an HMAC signature.
+            </span>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label htmlFor="settings-webhook-secret" className="label">
+              Webhook secret
+            </label>
+            <div className="flex gap-1.5">
+              <input
+                id="settings-webhook-secret"
+                value={settings.webhookSecret ?? ""}
+                readOnly
+                placeholder="Not set"
+                className={`${inputClasses} flex-1 font-mono`}
+              />
+              <button
+                type="button"
+                onClick={() =>
+                  onChange({
+                    webhookSecret:
+                      Math.random().toString(36).slice(2) +
+                      Math.random().toString(36).slice(2),
+                  })
+                }
+                className="shrink-0 rounded-lg border border-neutral-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-neutral-600 hover:border-primary-400 hover:text-primary-700"
+              >
+                Generate
+              </button>
+            </div>
+            <span className="text-xs text-neutral-400">
+              Sent as{" "}
+              <code className="font-mono">
+                X-Form-Signature: sha256=&lt;hmac&gt;
+              </code>
+              .
+            </span>
+          </div>
+          <ToggleRow
+            label="Show a receipt number"
+            checked={settings.enableReceipt === true}
+            onChange={(checked) => onChange({ enableReceipt: checked })}
+          />
+          <ToggleRow
+            label="Let submitters edit their response"
+            checked={settings.allowSelfEdit === true}
+            onChange={(checked) => onChange({ allowSelfEdit: checked })}
+          />
+        </>
+      ),
+    },
+    {
+      id: "actions",
+      label: "Actions",
+      node: (
+        <>
+          <p className="text-xs leading-snug text-neutral-400">
+            Custom steps that run before or after a submission is stored. Set a
+            field value, call an API, update the submission, or copy it into
+            another form.
+          </p>
+          <FormActionsEditor
+            settings={settings}
+            fieldOptions={fieldOptions}
+            onChange={onChange}
+          />
+        </>
+      ),
+    },
+  ];
 
-      <div className="flex flex-col gap-2.5 border-t border-neutral-100 pt-3">
-        <span className={labelClasses}>Actions</span>
-        <p className="text-xs leading-snug text-neutral-400">
-          Custom steps that run before or after a submission is stored. Set a
-          field value, call an API, update the submission, or copy it into
-          another form.
-        </p>
-        <FormActionsEditor
-          settings={settings}
-          fieldOptions={fieldOptions}
-          onChange={onChange}
-        />
+  const header = (
+    <div className="flex items-start justify-between gap-2 border-b border-neutral-100 pb-3">
+      <div className="flex flex-col gap-0.5">
+        <h2 className="font-display text-sm font-bold tracking-[-0.02em] text-neutral-800">
+          Form settings
+        </h2>
+        <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-neutral-400">
+          Display &amp; after submit
+        </span>
       </div>
+      {onExpand && (
+        <button
+          type="button"
+          onClick={onExpand}
+          aria-label={expanded ? "Close pop out" : "Pop out settings"}
+          title={expanded ? "Close" : "Pop out"}
+          className="rounded-md border border-neutral-200 bg-white p-1.5 text-neutral-400 transition-colors hover:border-neutral-300 hover:text-neutral-700"
+        >
+          {expanded ? (
+            <MinimizeIcon className="size-4" />
+          ) : (
+            <MaximizeIcon className="size-4" />
+          )}
+        </button>
+      )}
+    </div>
+  );
+
+  if (expanded) {
+    const activeSection =
+      sections.find((section) => section.id === activeTab) ?? sections[0];
+    return (
+      <div className="flex flex-col gap-4">
+        {header}
+        <div className="flex flex-wrap gap-1 border-b border-neutral-100 pb-2">
+          {sections.map((section) => (
+            <button
+              key={section.id}
+              type="button"
+              onClick={() => setActiveTab(section.id)}
+              className={`rounded-lg px-3 py-1.5 text-[13px] font-semibold transition-colors ${
+                activeTab === section.id
+                  ? "bg-primary-50 text-primary-700"
+                  : "text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700"
+              }`}
+            >
+              {section.label}
+            </button>
+          ))}
+        </div>
+        <div className="flex flex-col gap-3">{activeSection.node}</div>
       </div>
+    );
+  }
+
+  return (
+    <div className="card flex flex-col gap-2 p-4">
+      {header}
+      {sections.map((section) => (
+        <SettingsAccordion
+          key={section.id}
+          label={section.label}
+          defaultOpen={section.id === "display"}
+        >
+          {section.node}
+        </SettingsAccordion>
+      ))}
+    </div>
+  );
+}
+
+function SettingsAccordion({
+  label,
+  defaultOpen = false,
+  children,
+}: {
+  label: string;
+  defaultOpen?: boolean;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="overflow-hidden rounded-lg border border-neutral-100">
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between gap-2 rounded-lg bg-muted/60 px-3 py-2.5 text-left transition-colors hover:bg-muted"
+      >
+        <span className="text-[13px] font-semibold text-neutral-800">
+          {label}
+        </span>
+        {open ? (
+          <ChevronUpIcon className="size-4 text-neutral-400" />
+        ) : (
+          <ChevronDownIcon className="size-4 text-neutral-400" />
+        )}
+      </button>
+      {open && (
+        <div className="flex flex-col gap-3 border-t border-neutral-100 p-3">
+          {children}
+        </div>
+      )}
     </div>
   );
 }

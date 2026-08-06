@@ -1,4 +1,4 @@
-import type { FieldType } from "../types";
+import type { FieldType, FormField } from "../types";
 
 export type SubmissionFilter = {
   key: string;
@@ -6,6 +6,31 @@ export type SubmissionFilter = {
   value?: string;
   value2?: string;
 };
+
+export function operatorForField(field: FormField): string {
+  const options = filterOperatorsForType(field.type);
+  const configured = field.filterOperator;
+  if (configured && options.some((option) => option.value === configured)) {
+    return configured;
+  }
+  return options[0]?.value ?? "equals";
+}
+
+export function isFilterActive(
+  field: FormField,
+  entry: { value: string; value2: string } | undefined,
+): boolean {
+  if (!entry) {
+    return false;
+  }
+  if (field.type === "file_upload") {
+    return entry.value === "has_file" || entry.value === "no_file";
+  }
+  if (operatorForField(field) === "between") {
+    return entry.value !== "" && entry.value2 !== "";
+  }
+  return entry.value !== "";
+}
 
 export type FilterOperator = {
   value: string;

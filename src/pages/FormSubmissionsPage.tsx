@@ -21,15 +21,17 @@ import { useParams } from "react-router";
 import { Button, ButtonLink } from "../shared/components/Button";
 import { Card, CardHead, DataFoot, DataToolbar } from "../shared/components/Card";
 import { ConfirmDialog } from "../components/Modal";
-import { selectClasses, inputClasses } from "../shared/styles";
+import { inputClasses } from "../shared/styles";
 import { EyeIcon, PencilIcon, PlusIcon, ShareIcon, TrashIcon } from "../components/builder/icons";
 import {
-  filterOperatorsForType,
+  isFilterActive,
   matchesFilter,
-  type SubmissionFilter,
+  operatorForField,
 } from "../shared/filters";
 import type { FormField, FormSettings } from "../types";
 import { DEFAULT_FORM_SETTINGS } from "../types";
+
+type FilterEntry = { value: string; value2: string };
 
 const columnHelper = createColumnHelper<Submission>();
 
@@ -83,7 +85,7 @@ export function FormSubmissionsPage({ user }: { user: AuthUser }) {
   const [deleting, setDeleting] = useState(false);
   const [search, setSearch] = useState("");
   const [exporting, setExporting] = useState(false);
-  const [filters, setFilters] = useState<Record<string, SubmissionFilter>>({});
+  const [filters, setFilters] = useState<Record<string, FilterEntry>>({});
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const canEdit = access === "owner" || access === "admin" || access === "edit";
@@ -171,35 +173,42 @@ export function FormSubmissionsPage({ user }: { user: AuthUser }) {
         return false;
       }
       const data = submission.data as Record<string, unknown>;
-      for (const filter of Object.values(filters)) {
-        if (!matchesFilter(data, filter)) {
+      for (const [key, entry] of Object.entries(filters)) {
+        const field = fields.find((item) => item.key === key);
+        if (!field || !isFilterActive(field, entry)) {
+          continue;
+        }
+        const operator =
+          field.type === "file_upload"
+            ? entry.value === "no_file"
+              ? "no_file"
+              : "has_file"
+            : operatorForField(field);
+        if (
+          !matchesFilter(data, {
+            key,
+            operator,
+            value: entry.value,
+            value2: entry.value2,
+          })
+        ) {
           return false;
         }
       }
       return true;
     });
-  }, [submissions, search, filters]);
+  }, [submissions, search, filters, fields]);
 
-  function updateFilter(key: string, filter: SubmissionFilter | undefined) {
+  function updateFilter(key: string, entry: FilterEntry | undefined) {
     setFilters((prev) => {
       const next = { ...prev };
-      if (filter) {
-        next[key] = filter;
+      if (entry && (entry.value !== "" || entry.value2 !== "")) {
+        next[key] = entry;
       } else {
         delete next[key];
       }
       return next;
     });
-  }
-
-  function addFilter(key: string) {
-    const field = fields.find((item) => item.key === key);
-    if (!field) {
-      return;
-    }
-    const operator =
-      filterOperatorsForType(field.type)[0]?.value ?? "equals";
-    updateFilter(key, { key, operator, value: "", value2: "" });
   }
 
   const stats = useMemo(() => {
@@ -610,7 +619,6 @@ export function FormSubmissionsPage({ user }: { user: AuthUser }) {
               distinctValues={distinctValues}
               columns={filterColumns}
               onFilterChange={updateFilter}
-              onAddFilter={addFilter}
             />
           </div>
         )}
@@ -759,12 +767,14 @@ function RowActions({
 
 function FilterValueInput({
   field,
+  operator,
   value,
   distinctValues,
   onChange,
   inputCls,
 }: {
   field: FormField;
+  operator: string;
   value: string;
   distinctValues: string[];
   onChange: (value: string) => void;
@@ -794,7 +804,17 @@ function FilterValueInput({
       />
     );
   }
-  if (isCategorical) {
+  if (isNumeric) {
+    return (
+      <input
+        type="number"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className={inputCls}
+      />
+    );
+  }
+  if (isCategorical && operator !== "contains") {
     return (
       <select
         value={value}
@@ -808,16 +828,6 @@ function FilterValueInput({
           </option>
         ))}
       </select>
-    );
-  }
-  if (isNumeric) {
-    return (
-      <input
-        type="number"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className={inputCls}
-      />
     );
   }
   return (
@@ -838,47 +848,54 @@ function FilterControl({
   onChange,
 }: {
   field: FormField;
-  filter: SubmissionFilter | undefined;
+  filter: FilterEntry | undefined;
   distinctValues: string[];
-  onChange: (filter: SubmissionFilter | undefined) => void;
+  onChange: (filter: FilterEntry | undefined) => void;
 }) {
-  const operators = filterOperatorsForType(field.type);
-  const operator = filter?.operator ?? operators[0]?.value ?? "equals";
+  const operator = operatorForField(field);
   const value = filter?.value ?? "";
   const value2 = filter?.value2 ?? "";
-  const needsValue = operator !== "has_file" && operator !== "no_file";
-  const needsTwo = operator === "between";
   const inputCls = `${inputClasses} text-xs`;
 
-  function update(patch: Partial<SubmissionFilter>) {
-    onChange({ key: field.key, operator, value, value2, ...patch });
+  if (field.type === "file_upload") {
+    return (
+      <select
+        value={value}
+        onChange={(event) =>
+          onChange(
+            event.target.value
+              ? { value: event.target.value, value2: "" }
+              : undefined,
+          )
+        }
+        className={inputCls}
+      >
+        <option value="">Any</option>
+        <option value="has_file">Has upload</option>
+        <option value="no_file">No upload</option>
+      </select>
+    );
+  }
+
+  function update(patch: Partial<FilterEntry>) {
+    const next = { value, value2, ...patch };
+    onChange({ value: next.value, value2: next.value2 });
   }
 
   return (
     <div className="flex flex-col gap-1.5">
-      <select
-        value={operator}
-        onChange={(event) => update({ operator: event.target.value })}
-        className={inputCls}
-      >
-        {operators.map((op) => (
-          <option key={op.value} value={op.value}>
-            {op.label}
-          </option>
-        ))}
-      </select>
-      {needsValue && (
+      <FilterValueInput
+        field={field}
+        operator={operator}
+        value={value}
+        distinctValues={distinctValues}
+        onChange={(next) => update({ value: next })}
+        inputCls={inputCls}
+      />
+      {operator === "between" && (
         <FilterValueInput
           field={field}
-          value={value}
-          distinctValues={distinctValues}
-          onChange={(next) => update({ value: next })}
-          inputCls={inputCls}
-        />
-      )}
-      {needsTwo && (
-        <FilterValueInput
-          field={field}
+          operator={operator}
           value={value2}
           distinctValues={distinctValues}
           onChange={(next) => update({ value2: next })}
@@ -896,9 +913,9 @@ function HeaderFilter({
   onChange,
 }: {
   field: FormField;
-  filter: SubmissionFilter | undefined;
+  filter: FilterEntry | undefined;
   distinctValues: string[];
-  onChange: (filter: SubmissionFilter | undefined) => void;
+  onChange: (filter: FilterEntry | undefined) => void;
 }) {
   return (
     <FilterControl
@@ -916,76 +933,52 @@ function TopFilterGrid({
   distinctValues,
   columns,
   onFilterChange,
-  onAddFilter,
 }: {
   filterableFields: FormField[];
-  filters: Record<string, SubmissionFilter>;
+  filters: Record<string, FilterEntry>;
   distinctValues: Record<string, string[]>;
   columns: number;
-  onFilterChange: (key: string, filter: SubmissionFilter | undefined) => void;
-  onAddFilter: (key: string) => void;
+  onFilterChange: (key: string, filter: FilterEntry | undefined) => void;
 }) {
-  const active = filterableFields.filter((field) => filters[field.key]);
-  const available = filterableFields.filter((field) => !filters[field.key]);
+  if (filterableFields.length === 0) {
+    return null;
+  }
 
   return (
-    <div className="flex flex-col gap-2">
-      {active.length > 0 && (
+    <div
+      className="grid items-start gap-2"
+      style={{
+        gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
+      }}
+    >
+      {filterableFields.map((field) => (
         <div
-          className="grid items-start gap-2"
-          style={{
-            gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
-          }}
+          key={field.key}
+          className="flex flex-col gap-1.5 rounded-lg border border-neutral-100 bg-muted/50 p-2"
         >
-          {active.map((field) => (
-            <div
-              key={field.key}
-              className="flex flex-col gap-1.5 rounded-lg border border-neutral-100 bg-muted/50 p-2"
-            >
-              <div className="flex items-center justify-between gap-1">
-                <span className="truncate text-xs font-semibold text-neutral-700">
-                  {field.label}
-                </span>
-                <button
-                  type="button"
-                  aria-label={`Remove ${field.label} filter`}
-                  onClick={() => onFilterChange(field.key, undefined)}
-                  className="rounded px-1 text-base leading-none text-neutral-400 hover:bg-neutral-200 hover:text-neutral-700"
-                >
-                  ×
-                </button>
-              </div>
-              <FilterControl
-                field={field}
-                filter={filters[field.key]}
-                distinctValues={distinctValues[field.key] ?? []}
-                onChange={(next) => onFilterChange(field.key, next)}
-              />
-            </div>
-          ))}
+          <div className="flex items-center justify-between gap-1">
+            <span className="truncate text-xs font-semibold text-neutral-700">
+              {field.label}
+            </span>
+            {filters[field.key] && (
+              <button
+                type="button"
+                aria-label={`Clear ${field.label} filter`}
+                onClick={() => onFilterChange(field.key, undefined)}
+                className="rounded px-1 text-base leading-none text-neutral-400 hover:bg-neutral-200 hover:text-neutral-700"
+              >
+                ×
+              </button>
+            )}
+          </div>
+          <FilterControl
+            field={field}
+            filter={filters[field.key]}
+            distinctValues={distinctValues[field.key] ?? []}
+            onChange={(next) => onFilterChange(field.key, next)}
+          />
         </div>
-      )}
-      {available.length > 0 && (
-        <div className="flex items-center gap-1.5">
-          <span className="text-xs text-neutral-500">Filter by:</span>
-          <select
-            value=""
-            onChange={(event) => {
-              if (event.target.value) {
-                onAddFilter(event.target.value);
-              }
-            }}
-            className={`${selectClasses} w-auto text-xs`}
-          >
-            <option value="">Select a field...</option>
-            {available.map((field) => (
-              <option key={field.key} value={field.key}>
-                {field.label}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
+      ))}
     </div>
   );
 }
