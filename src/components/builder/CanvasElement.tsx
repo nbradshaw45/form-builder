@@ -88,15 +88,26 @@ export function CanvasElement({
               Step {stepNumber}
             </div>
           )}
-          <FieldControl
-            field={element}
-            value={null}
-            onChange={() => {
-              /* Preview only */
-            }}
-            allValues={{}}
-            disabled
-          />
+          {element.type === "hidden" ? (
+            <div className="flex flex-col gap-1">
+              <span className="text-[13px] font-medium text-neutral-800">
+                {element.label}
+              </span>
+              <span className="rounded-md border border-dashed border-neutral-300 bg-muted px-2.5 py-2 font-mono text-[11px] text-neutral-400">
+                Hidden field — value stored on submit
+              </span>
+            </div>
+          ) : (
+            <FieldControl
+              field={element}
+              value={null}
+              onChange={() => {
+                /* Preview only */
+              }}
+              allValues={{}}
+              disabled
+            />
+          )}
         </div>
       </div>
       <div className="absolute right-2 top-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">

@@ -9,6 +9,7 @@ import type {
   CreateForm,
   DeleteForm,
   DeleteSubmission,
+  DeleteSubmissions,
   DeleteUser,
   RemoveFormAccess,
   SetFormAccess,
@@ -450,6 +451,38 @@ export const deleteSubmission: DeleteSubmission<
 
   await context.entities.Submission.delete({
     where: { id: submissionId },
+  });
+};
+
+type DeleteSubmissionsArgs = {
+  submissionIds: string[];
+};
+
+export const deleteSubmissions: DeleteSubmissions<
+  DeleteSubmissionsArgs,
+  void
+> = async ({ submissionIds }, context) => {
+  if (!context.user) {
+    throw new HttpError(401);
+  }
+  if (!Array.isArray(submissionIds) || submissionIds.length === 0) {
+    return;
+  }
+
+  const submissions = await context.entities.Submission.findMany({
+    where: { id: { in: submissionIds } },
+    select: { form: { select: { id: true } } },
+  });
+  for (const submission of submissions) {
+    const access = await getFormAccessForUser(
+      submission.form.id,
+      context.user,
+    );
+    assertCanEdit(access);
+  }
+
+  await context.entities.Submission.deleteMany({
+    where: { id: { in: submissionIds } },
   });
 };
 

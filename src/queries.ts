@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import ExcelJS from "exceljs";
 import type { Form, Submission } from "wasp/entities";
 import type { FormField } from "./types";
 import { HttpError, prisma } from "wasp/server";
@@ -13,6 +14,7 @@ import type {
   GetSubmission,
   GetSubmissionByToken,
   GetSubmissionsCsv,
+  GetSubmissionsExcel,
   GetUsers,
 } from "wasp/server/operations";
 import {
@@ -285,9 +287,9 @@ function csvEscape(value: unknown): string {
 }
 
 export const getSubmissionsCsv: GetSubmissionsCsv<
-  { formId: string },
+  { formId: string; submissionIds?: string[] },
   SubmissionsCsvResult
-> = async ({ formId }, context) => {
+> = async ({ formId, submissionIds }, context) => {
   if (!context.user) {
     throw new HttpError(401);
   }
@@ -336,20 +338,110 @@ export const getSubmissionsCsv: GetSubmissionsCsv<
     "Submitted at",
     "Updated at",
   ];
-  const rows = form.submissions.map((submission) => {
-    const data = submission.data as Record<string, unknown>;
-    return [
-      ...keys.map((key) => csvEscape(data[key])),
-      csvEscape(submission.createdAt.toISOString()),
-      csvEscape(submission.updatedAt.toISOString()),
-    ];
-  });
+  const selectedSet = submissionIds ? new Set(submissionIds) : null;
+  const rows = form.submissions
+    .filter((submission) => !selectedSet || selectedSet.has(submission.id))
+    .map((submission) => {
+      const data = submission.data as Record<string, unknown>;
+      return [
+        ...keys.map((key) => csvEscape(data[key])),
+        csvEscape(submission.createdAt.toISOString()),
+        csvEscape(submission.updatedAt.toISOString()),
+      ];
+    });
   const content = [
     header.map(csvEscape).join(","),
     ...rows.map((row) => row.join(",")),
   ].join("\n");
 
   return { fileName: `${form.title}.csv`, content };
+};
+
+export type SubmissionsExcelResult = {
+  fileName: string;
+  dataBase64: string;
+};
+
+export const getSubmissionsExcel: GetSubmissionsExcel<
+  { formId: string; submissionIds?: string[] },
+  SubmissionsExcelResult
+> = async ({ formId, submissionIds }, context) => {
+  if (!context.user) {
+    throw new HttpError(401);
+  }
+  const access = await getFormAccessForUser(formId, context.user);
+  assertCanView(access);
+
+  const form = await context.entities.Form.findUnique({
+    where: { id: formId },
+    include: { submissions: true },
+  });
+  if (!form) {
+    throw new HttpError(404, "Form not found");
+  }
+
+  const fields = Array.isArray(form.fields)
+    ? (form.fields as unknown as FormField[])
+    : [];
+  const keys: string[] = [];
+  const keyToLabel = new Map(fields.map((field) => [field.key, field.label]));
+  for (const field of fields) {
+    if (
+      field.type === "section_header" ||
+      field.type === "divider" ||
+      field.type === "paragraph" ||
+      field.type === "hidden"
+    ) {
+      continue;
+    }
+    if (field.showInTable === false) {
+      continue;
+    }
+    if (!keys.includes(field.key)) {
+      keys.push(field.key);
+    }
+  }
+  for (const submission of form.submissions) {
+    const data = submission.data as Record<string, unknown>;
+    for (const key of Object.keys(data)) {
+      if (!keys.includes(key)) {
+        keys.push(key);
+      }
+    }
+  }
+
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet("Submissions");
+  sheet.columns = [
+    ...keys.map((key) => ({
+      header: keyToLabel.get(key) ?? key,
+      key,
+      width: 24,
+    })),
+    { header: "Submitted at", key: "_submittedAt", width: 24 },
+    { header: "Updated at", key: "_updatedAt", width: 24 },
+  ];
+  sheet.getRow(1).font = { bold: true };
+
+  const selectedSet = submissionIds ? new Set(submissionIds) : null;
+  for (const submission of form.submissions) {
+    if (selectedSet && !selectedSet.has(submission.id)) {
+      continue;
+    }
+    const data = submission.data as Record<string, unknown>;
+    const row: Record<string, unknown> = { _submittedAt: submission.createdAt.toISOString(), _updatedAt: submission.updatedAt.toISOString() };
+    for (const key of keys) {
+      const value = data[key];
+      row[key] = Array.isArray(value) ? value.join(", ") : value;
+    }
+    sheet.addRow(row);
+  }
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  return {
+    fileName: `${form.title}.xlsx`,
+    dataBase64: Buffer.from(buffer).toString("base64"),
+  };
 };
 
 export const getUsers: GetUsers<void, AdminUser[]> = async (_args, context) => {

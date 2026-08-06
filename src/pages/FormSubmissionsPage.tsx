@@ -9,16 +9,19 @@ import {
 } from "@tanstack/react-table";
 import {
   deleteSubmission,
+  deleteSubmissions,
   getFile,
   getForm,
   getFormSubmissions,
   getSubmissionsCsv,
+  getSubmissionsExcel,
   useQuery,
 } from "wasp/client/operations";
 import { useParams } from "react-router";
 import { Button, ButtonLink } from "../shared/components/Button";
 import { Card, CardHead, DataFoot, DataToolbar } from "../shared/components/Card";
 import { ConfirmDialog } from "../components/Modal";
+import { selectClasses } from "../shared/styles";
 import { EyeIcon, PencilIcon, PlusIcon, ShareIcon, TrashIcon } from "../components/builder/icons";
 import type { FormField } from "../types";
 
@@ -61,7 +64,7 @@ function formatCellValue(key: string, value: unknown): string {
 export function FormSubmissionsPage({ user }: { user: AuthUser }) {
   const { id = "" } = useParams<{ id: string }>();
   const { data: form } = useQuery(getForm, { id });
-  const { data: submissionsData, isLoading, error } = useQuery(
+  const { data: submissionsData, isLoading, error, refetch } = useQuery(
     getFormSubmissions,
     { formId: id },
   );
@@ -70,21 +73,15 @@ export function FormSubmissionsPage({ user }: { user: AuthUser }) {
   const access = submissionsData?.access ?? "view";
 
   const [deleteTarget, setDeleteTarget] = useState<Submission | null>(null);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [search, setSearch] = useState("");
   const [exporting, setExporting] = useState(false);
+  const [filters, setFilters] = useState<Record<string, string>>({});
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const canEdit = access === "owner" || access === "admin" || access === "edit";
   const canManage = access === "owner" || access === "admin";
-
-  const filteredSubmissions = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    if (!query || !submissions) {
-      return submissions ?? [];
-    }
-    return submissions.filter((submission) =>
-      JSON.stringify(submission.data).toLowerCase().includes(query),
-    );
-  }, [submissions, search]);
 
   const fields = useMemo<FormField[]>(
     () =>
@@ -93,6 +90,58 @@ export function FormSubmissionsPage({ user }: { user: AuthUser }) {
         : [],
     [form],
   );
+
+  const filterOptions = useMemo(() => {
+    const map: Record<string, string[]> = {};
+    if (!submissions) {
+      return map;
+    }
+    for (const field of fields) {
+      if (
+        field.type === "section_header" ||
+        field.type === "divider" ||
+        field.type === "paragraph" ||
+        field.type === "hidden"
+      ) {
+        continue;
+      }
+      const values = new Set<string>();
+      for (const submission of submissions) {
+        const value = (submission.data as Record<string, unknown>)[field.key];
+        if (value === null || value === undefined || value === "") {
+          continue;
+        }
+        values.add(Array.isArray(value) ? value.join(", ") : String(value));
+      }
+      if (values.size > 0) {
+        map[field.key] = [...values].sort();
+      }
+    }
+    return map;
+  }, [submissions, fields]);
+
+  const filteredSubmissions = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return (submissions ?? []).filter((submission) => {
+      if (
+        query &&
+        !JSON.stringify(submission.data).toLowerCase().includes(query)
+      ) {
+        return false;
+      }
+      for (const [key, expected] of Object.entries(filters)) {
+        if (!expected) {
+          continue;
+        }
+        const value = (submission.data as Record<string, unknown>)[key];
+        const str = Array.isArray(value) ? value.join(", ") : String(value ?? "");
+        if (str !== expected) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [submissions, search, filters]);
 
   const stats = useMemo(() => {
     if (!submissions || submissions.length === 0) {
@@ -135,10 +184,13 @@ export function FormSubmissionsPage({ user }: { user: AuthUser }) {
     };
   }, [submissions, fields]);
 
-  async function exportCsv() {
+  async function exportCsv(ids?: string[]) {
     setExporting(true);
     try {
-      const { fileName, content } = await getSubmissionsCsv({ formId: id });
+      const { fileName, content } = await getSubmissionsCsv({
+        formId: id,
+        submissionIds: ids,
+      });
       const blob = new Blob([content], {
         type: "text/csv;charset=utf-8",
       });
@@ -152,6 +204,69 @@ export function FormSubmissionsPage({ user }: { user: AuthUser }) {
       window.alert(`Export failed: ${String(err)}`);
     } finally {
       setExporting(false);
+    }
+  }
+
+  async function exportExcel(ids?: string[]) {
+    setExporting(true);
+    try {
+      const { fileName, dataBase64 } = await getSubmissionsExcel({
+        formId: id,
+        submissionIds: ids,
+      });
+      const bytes = atob(dataBase64);
+      const array = new Uint8Array(bytes.length);
+      for (let i = 0; i < bytes.length; i++) {
+        array[i] = bytes.charCodeAt(i);
+      }
+      const blob = new Blob([array], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = fileName;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      window.alert(`Export failed: ${String(err)}`);
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  function toggleSelected(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }
+
+  function toggleAll() {
+    setSelected((prev) => {
+      if (prev.size === filteredSubmissions.length && filteredSubmissions.length > 0) {
+        return new Set();
+      }
+      return new Set(filteredSubmissions.map((submission) => submission.id));
+    });
+  }
+
+  async function confirmBulkDelete() {
+    setDeleting(true);
+    try {
+      await deleteSubmissions({ submissionIds: [...selected] });
+      setSelected(new Set());
+      setBulkDeleteOpen(false);
+      await refetch();
+    } catch (err) {
+      window.alert(`Error while deleting submissions: ${String(err)}`);
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -194,6 +309,32 @@ export function FormSubmissionsPage({ user }: { user: AuthUser }) {
     const keyToType = new Map(fields.map((field) => [field.key, field.type]));
 
     return [
+      columnHelper.display({
+        id: "row-select",
+        header: () => (
+          <input
+            type="checkbox"
+            aria-label="Select all"
+            checked={
+              filteredSubmissions.length > 0 &&
+              filteredSubmissions.every((submission) =>
+                selected.has(submission.id),
+              )
+            }
+            onChange={toggleAll}
+            className="size-4 rounded border-neutral-300 accent-primary-600"
+          />
+        ),
+        cell: (info) => (
+          <input
+            type="checkbox"
+            aria-label="Select row"
+            checked={selected.has(info.row.original.id)}
+            onChange={() => toggleSelected(info.row.original.id)}
+            className="size-4 rounded border-neutral-300 accent-primary-600"
+          />
+        ),
+      }),
       ...allKeys.map((key) =>
         columnHelper.accessor(
           (row) => (row.data as Record<string, unknown>)[key],
@@ -233,7 +374,7 @@ export function FormSubmissionsPage({ user }: { user: AuthUser }) {
         ),
       }),
     ];
-  }, [fields, submissions, canEdit, id]);
+  }, [fields, submissions, canEdit, id, selected, filteredSubmissions, toggleAll, toggleSelected]);
 
   const table = useReactTable({
     data: filteredSubmissions,
@@ -292,6 +433,14 @@ export function FormSubmissionsPage({ user }: { user: AuthUser }) {
           >
             {exporting ? "Exporting..." : "Export CSV"}
           </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => void exportExcel()}
+            disabled={exporting || count === 0}
+          >
+            {exporting ? "Exporting..." : "Export Excel"}
+          </Button>
           {canManage && (
             <ButtonLink to="/forms/:id/access" params={{ id }} variant="ghost">
               <ShareIcon className="size-3.5" />
@@ -332,6 +481,78 @@ export function FormSubmissionsPage({ user }: { user: AuthUser }) {
             }
           />
         </div>
+
+        {selected.size > 0 && (
+          <div className="mx-6 mt-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-primary-200 bg-primary-50 px-4 py-2.5">
+            <span className="text-sm font-medium text-primary-800">
+              {selected.size} selected
+            </span>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={exporting}
+                onClick={() => void exportCsv([...selected])}
+              >
+                Export CSV
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={exporting}
+                onClick={() => void exportExcel([...selected])}
+              >
+                Export Excel
+              </Button>
+              <Button
+                size="sm"
+                variant="danger"
+                onClick={() => setBulkDeleteOpen(true)}
+              >
+                Delete
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setSelected(new Set())}
+              >
+                Clear
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {Object.keys(filterOptions).length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 px-6 pt-4">
+            <span className="font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-neutral-400">
+              Filters
+            </span>
+            {Object.entries(filterOptions).map(([key, values]) => {
+              const label =
+                fields.find((field) => field.key === key)?.label ?? key;
+              return (
+                <select
+                  key={key}
+                  value={filters[key] ?? ""}
+                  onChange={(event) =>
+                    setFilters((prev) => ({
+                      ...prev,
+                      [key]: event.target.value,
+                    }))
+                  }
+                  className={`${selectClasses} w-auto text-xs`}
+                >
+                  <option value="">All {label}</option>
+                  {values.map((value) => (
+                    <option key={value} value={value}>
+                      {value}
+                    </option>
+                  ))}
+                </select>
+              );
+            })}
+          </div>
+        )}
 
         {count === 0 ? (
           <p className="p-6 text-neutral-500">
@@ -411,6 +632,16 @@ export function FormSubmissionsPage({ user }: { user: AuthUser }) {
         <DeleteSubmissionDialog
           submission={deleteTarget}
           onCancel={() => setDeleteTarget(null)}
+        />
+      )}
+
+      {bulkDeleteOpen && (
+        <ConfirmDialog
+          title={`Delete ${selected.size} submission${selected.size === 1 ? "" : "s"}?`}
+          message="Selected submissions will be permanently deleted."
+          isLoading={deleting}
+          onConfirm={() => void confirmBulkDelete()}
+          onCancel={() => setBulkDeleteOpen(false)}
         />
       )}
     </div>

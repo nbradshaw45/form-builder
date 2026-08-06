@@ -6,6 +6,7 @@ import {
   createForm,
   deleteForm,
   deleteSubmission,
+  deleteSubmissions,
   deleteUser,
   removeFormAccess,
   setFormAccess,
@@ -26,6 +27,7 @@ import {
   getSubmission,
   getSubmissionByToken,
   getSubmissionsCsv,
+  getSubmissionsExcel,
   getUsers,
 } from "./src/queries" with { type: "ref" };
 import { LoginPage } from "./src/auth/LoginPage" with { type: "ref" };
@@ -103,6 +105,9 @@ export default app({
       auth: false,
     }),
     query(getSubmissionsCsv, { entities: ["Form", "FormAccess", "Submission"] }),
+    query(getSubmissionsExcel, {
+      entities: ["Form", "FormAccess", "Submission"],
+    }),
     query(getUsers, { entities: ["User"] }),
     query(getFormAccess, { entities: ["Form", "FormAccess", "User"] }),
     action(createForm, { entities: ["Form"] }),
@@ -114,6 +119,9 @@ export default app({
     action(updateUser, { entities: ["User"] }),
     action(addUser, { entities: ["User"] }),
     action(deleteUser, { entities: ["User"] }),
+    action(deleteSubmissions, {
+      entities: ["Submission", "Form", "FormAccess", "User"],
+    }),
     action(uploadFile, { entities: ["UploadedFile", "Form"], auth: false }),
     action(updateSubmissionByToken, {
       entities: ["Submission", "Form"],

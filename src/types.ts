@@ -16,6 +16,8 @@ export type FieldType =
   | "currency"
   | "signature"
   | "file_upload"
+  | "confirm"
+  | "hidden"
   | "math"
   | "user"
   | "section_header"
@@ -111,6 +113,8 @@ export type FormField = {
   defaultValue?: string;
   /** Input mask pattern (# digit, A/a letter, * alphanumeric, literals auto-inserted). */
   mask?: string;
+  /** For confirm fields: key of the field this value must match. */
+  confirmField?: string;
 };
 
 export type SubmissionData = Record<

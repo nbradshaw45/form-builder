@@ -28,8 +28,8 @@ high-impact gaps worth closing. Legend: ✅ = have, 🟡 = partial, ❌ = missin
 | Text / textarea / number / select / checkbox / date / time | ✅ | ✅ | |
 | Email / URL / phone (formatting + **country detection**) | ✅ | 🟡 | We validate email/URL/phone but have no auto-formatting/input masks |
 | Radio & checkbox **images** | ✅ | ❌ | Image-backed options |
-| **Confirmation fields** (email/password confirm) | ✅ | ❌ | Would reuse "must match" validation + a field pair |
-| **Hidden fields** | ✅ | ❌ | Store tracking/static values not shown to users |
+| **Confirmation fields** (email/password confirm) | ✅ | ✅ | New "Confirmation" element (must match another field) |
+| **Hidden fields** | ✅ | ✅ | New "Hidden field" element (value via default/URL, stored) |
 | **Input masks** (phone, currency, card, custom) | ✅ | 🟡 | Text & phone fields support presets (phone/card/date/zip/SSN) + custom masks; no currency mask |
 | File upload | ✅ | ✅ | We support single-file; no multi-file/S3 yet |
 | Rating (stars/hearts/thumbs, 1–10) | ✅ | 🟡 | Stars only (3/5/7/10) |
@@ -57,11 +57,11 @@ high-impact gaps worth closing. Legend: ✅ = have, 🟡 = partial, ❌ = missin
 |---|---|---|---|
 | Submissions management (list/filter/search) | ✅ | ✅ | Table + search + record view/edit/delete |
 | CSV export | ✅ | ✅ | |
-| **Excel export** | ✅ | ❌ | CSV only |
+| **Excel export** | ✅ | ✅ | `.xlsx` via exceljs (all or selected rows) |
 | **PDF generation** from submissions | ✅ | ❌ | No PDFs (agreements, invoices, consent) |
 | Submission **edit history / diffs** | ✅ | ❌ | No change log |
 | **Analytics dashboard / charts** | ✅ | 🟡 | Basic stats row only (totals, week, avg/day, fill rate) |
-| Bulk actions (bulk delete/export) | ✅ | ❌ | Row-by-row only |
+| Bulk actions (bulk delete/export) | ✅ | ✅ | Row checkboxes + bulk delete/export CSV/Excel |
 | Conditional formatting / fields in results | ✅ | ❌ | Static columns only |
 
 ## 5. Notifications & integrations
@@ -113,7 +113,7 @@ high-impact gaps worth closing. Legend: ✅ = have, 🟡 = partial, ❌ = missin
 **High impact, partial:**
 4. **Email templates** (HTML, attachments, smart tags)
 5. **Input masks** (done for text/phone) and confirmation/hidden fields
-6. **Excel export**, submission **edit history**, deeper **analytics**
+6. Submission **edit history**, deeper **analytics**
 
 **Done since this was written:**
 - **Spam protection & availability** — honeypot, per-form rate limiting, and
@@ -122,6 +122,9 @@ high-impact gaps worth closing. Legend: ✅ = have, 🟡 = partial, ❌ = missin
   (`?key=value`) are implemented.
 - **Input masking** — presets (phone, credit card, date, zip, SSN) and custom
   patterns for text/phone fields.
+- **Submissions UX** — per-field filtering, bulk select with bulk delete and
+  CSV/Excel export, and **Excel (.xlsx) export** are implemented.
+- **Confirmation & hidden fields** — new field elements implemented.
 
 **Nice-to-have:**
 7. CRM/email provider integrations, Google Analytics, multi-file uploads, image radios, rich text, rule groups (AND/OR), theming, undo/redo.
@@ -160,4 +163,4 @@ webhooks.
 ### Runner-up
 - **Email templates** (HTML body, smart tags, file attachments) — extends the
   existing email action.
-- **Confirmation & hidden fields** — moderate, closes several field gaps at once.
+- **Submission edit history** — change log with diffs per submission.

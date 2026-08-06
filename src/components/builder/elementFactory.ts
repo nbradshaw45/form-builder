@@ -23,6 +23,8 @@ export const FIELD_DEFINITIONS: FieldDefinition[] = [
   { type: "date", name: "Date", description: "Date picker", category: "input" },
   { type: "time", name: "Time", description: "Time picker", category: "input" },
   { type: "user", name: "User", description: "Dropdown of users", category: "input" },
+  { type: "confirm", name: "Confirmation", description: "Re-type another field", category: "input" },
+  { type: "hidden", name: "Hidden field", description: "Stores a value not shown", category: "input" },
   { type: "math", name: "Math", description: "Calculated field", category: "input" },
   { type: "rating", name: "Rating", description: "Star rating scale", category: "advanced" },
   { type: "slider", name: "Slider", description: "Numeric range", category: "advanced" },
@@ -61,6 +63,8 @@ const DEFAULT_LABELS: Record<FieldType, string> = {
   currency: "Currency",
   signature: "Signature",
   file_upload: "File upload",
+  confirm: "Confirmation",
+  hidden: "Hidden field",
   user: "User",
   math: "Calculated field",
   section_header: "Section header",
@@ -140,6 +144,10 @@ export function createElement(
       return { ...base, penColor: "#1e293b", penWidth: 2 };
     case "file_upload":
       return { ...base, maxFileSizeMb: 5, accept: "" };
+    case "confirm":
+      return { ...base, confirmField: "" };
+    case "hidden":
+      return { ...base, defaultValue: "" };
     case "math":
       return { ...base, formula: "[text_field] * 1" };
     case "section_header":

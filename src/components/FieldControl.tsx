@@ -36,6 +36,10 @@ export function FieldControl({
 }: FieldControlProps) {
   const { type, label, required, helpText, placeholder } = field;
 
+  if (type === "hidden") {
+    return null;
+  }
+
   if (type === "section_header") {
     return (
       <div className="flex flex-col gap-1 pt-2">
@@ -408,7 +412,7 @@ export function FieldControl({
         ? "text"
         : type === "created_date" || type === "modified_date"
           ? "date"
-          : type === "updated_by_user" || type === "phone"
+          : type === "updated_by_user" || type === "phone" || type === "confirm"
             ? type === "phone"
               ? "tel"
               : "text"

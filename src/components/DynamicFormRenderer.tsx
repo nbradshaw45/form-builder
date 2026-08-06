@@ -47,6 +47,7 @@ const EDITTABLE_TYPES = new Set([
   "signature",
   "file_upload",
   "user",
+  "confirm",
 ]);
 
 const LAYOUT_TYPES = new Set(["section_header", "divider", "paragraph"]);
@@ -72,6 +73,9 @@ export function isFieldVisible(
 }
 
 function isSubmittableField(field: FormField): boolean {
+  if (field.type === "hidden") {
+    return true;
+  }
   if (EDITTABLE_TYPES.has(field.type)) {
     return true;
   }
@@ -269,6 +273,28 @@ export function DynamicFormRenderer({
     values: SubmissionData,
     fields: FormField[],
   ): string | null {
+    if (field.type === "hidden") {
+      return null;
+    }
+    if (field.type === "confirm") {
+      const targetValue = field.confirmField
+        ? values[field.confirmField]
+        : undefined;
+      if (
+        targetValue !== undefined &&
+        targetValue !== null &&
+        targetValue !== ""
+      ) {
+        if (String(value ?? "") !== String(targetValue)) {
+          const targetLabel =
+            fields.find((f) => f.key === field.confirmField)?.label ??
+            field.confirmField;
+          return `Does not match ${targetLabel}`;
+        }
+      }
+      return null;
+    }
+
     const required =
       field.required ||
       (field.requiredWhen ? isFieldVisible(field.requiredWhen, values) : false);
@@ -498,10 +524,12 @@ export function DynamicFormRenderer({
             const hasHeader = header?.type === "section_header";
             const title = hasHeader ? header.label : undefined;
             const subtext = hasHeader ? header.description : undefined;
-            const visible = step.filter(
-              (field) =>
-                !field.hidden && isFieldVisible(field.visibleWhen, values),
-            );
+      const visible = step.filter(
+        (field) =>
+          !field.hidden &&
+          field.type !== "hidden" &&
+          isFieldVisible(field.visibleWhen, values),
+      );
 
             return (
               <section key={stepIndex} className="flex flex-col gap-4">
@@ -576,7 +604,9 @@ export function DynamicFormRenderer({
         </div>
 
         <div className={gridRowClasses}>
-          {visibleFields.map((field) => renderField(field))}
+          {visibleFields
+            .filter((field) => field.type !== "hidden")
+            .map((field) => renderField(field))}
         </div>
 
         {(activeStepIndex > 0 || (!hideSubmit && !readOnly)) && (
@@ -634,7 +664,9 @@ export function DynamicFormRenderer({
         />
       )}
       <div className={gridRowClasses}>
-        {visibleFields.map((field) => renderField(field))}
+        {visibleFields
+          .filter((field) => field.type !== "hidden")
+          .map((field) => renderField(field))}
       </div>
 
       {submitError && (

@@ -67,6 +67,8 @@ const TYPE_NAMES: Record<FieldType, string> = {
   currency: "Currency",
   signature: "Signature",
   file_upload: "File upload",
+  confirm: "Confirmation",
+  hidden: "Hidden field",
   user: "User",
   math: "Math / Calculated",
   section_header: "Section header",
@@ -260,6 +262,40 @@ export function FieldInspector({
 
       {["text", "phone"].includes(element.type) && (
         <MaskEditor element={element} onPatch={onPatch} />
+      )}
+
+      {element.type === "confirm" && (
+        <div className="flex flex-col gap-1">
+          <label htmlFor="inspector-confirm-field" className={labelClasses}>
+            Confirm field
+          </label>
+          <select
+            id="inspector-confirm-field"
+            value={element.confirmField ?? ""}
+            onChange={(event) =>
+              onPatch(element.id, { confirmField: event.target.value })
+            }
+            className={inputClasses}
+          >
+            <option value="">Select a field</option>
+            {ruleTargets.map((target) => (
+              <option key={target.id} value={target.key}>
+                {target.label}
+              </option>
+            ))}
+          </select>
+          <span className="text-xs text-neutral-400">
+            The value must match this field (e.g. email or password confirm).
+          </span>
+        </div>
+      )}
+
+      {element.type === "hidden" && (
+        <p className="rounded-lg border border-neutral-100 bg-muted px-3 py-2 text-xs leading-relaxed text-neutral-500">
+          Not shown to users. Set a value via the Default value field or a URL
+          param like <code className="font-mono">?key=value</code>; it is
+          stored with the submission.
+        </p>
       )}
 
       {["select", "radio", "multi_select"].includes(element.type) && (

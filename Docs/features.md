@@ -30,6 +30,8 @@ canvas, or drag it onto the canvas at a specific position.
 | Date | `string` | Date picker |
 | Time | `string` | Time picker |
 | User | `string` (email) | Dropdown of the current users (name label, email stored) |
+| Confirmation | `string` | Re-type another field (e.g. email/password confirm); must match its "Confirm field" |
+| Hidden field | `string` | Not shown to users; value set via Default value or `?key=value`, stored with the submission |
 | Math | computed | Formula-driven calculated field |
 
 **Advanced elements**
@@ -190,10 +192,15 @@ The submissions table (`/forms/:id/submissions`):
 - **Analytics row** — total responses, this week, avg/day, top field fill rate.
 - **Searchable, sortable table** with one column per visible field plus
   Submitted at.
+- **Field filters** — a "Filters" row lets you narrow rows by each field's
+  distinct values (combined with the text search).
+- **Bulk actions** — checkboxes on each row (plus select-all); a bulk bar
+  offers **Export CSV / Export Excel** and **Delete** for the selected rows.
 - **Row actions**: View (record page), Edit (record page), Delete (confirm).
 - Arrays render comma-joined; signatures show a label; file uploads show a
   **Download** button (fetches the stored file, auth-gated).
-- **Export CSV** — downloads all rows as a CSV (server-generated).
+- **Export CSV** and **Export Excel (.xlsx)** — download all rows (or the
+  selected rows) as a file (server-generated).
 
 ---
 
