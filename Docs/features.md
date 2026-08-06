@@ -184,6 +184,11 @@ into sections — in the sidebar they are **collapsible accordions**; the pop-ou
     a default state on page load).
 - Conditions are evaluated **in order** on page load and whenever a value
   changes; later conditions see values produced by earlier ones.
+- **Show field / Hide field** actions combine with a field's own
+  **Visibility rule** (its "show conditionally" setting): the field is visible
+  only when **both** its own rule is satisfied **and** no condition action
+  hides it. For anything beyond a simple local rule, prefer the form-level
+  conditions below.
 - Actions:
   - **Show field / Hide field** — fields hidden by logic are skipped on
     submit.
