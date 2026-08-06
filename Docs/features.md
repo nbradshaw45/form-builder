@@ -65,6 +65,10 @@ Each element has settings in the right-hand inspector:
   appear conditionally based on another field's value (dependent dropdowns)
 - **Default value** — prefills the field on new submissions; URL params
   (`?field=value`) override it for that visit.
+- **Input mask** (text & phone fields) — formats as the user types, with
+  presets (Phone `(###) ###-####`, US phone `+1 (###) ###-####`, Credit card,
+  Date, Zip, SSN) or a custom pattern (`#` digit, `A`/`a` letter, `*` any,
+  other characters auto-inserted). Masked values are stored as displayed.
 
 ### Math / calculations
 

@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { getFile, uploadFile, useQuery } from "wasp/client/operations";
 import type { FormField, SubmissionData } from "../types";
 import { formatFormulaValue } from "./builder/formula";
+import { maskInput } from "../shared/mask";
 import {
   errorTextClasses,
   fieldClasses,
@@ -401,14 +402,17 @@ export function FieldControl({
       );
     }
 
+    const hasMask = Boolean(field.mask) && (type === "text" || type === "phone");
     const htmlType =
-      type === "created_date" || type === "modified_date"
-        ? "date"
-        : type === "updated_by_user" || type === "phone"
-          ? type === "phone"
-            ? "tel"
-            : "text"
-          : type;
+      hasMask
+        ? "text"
+        : type === "created_date" || type === "modified_date"
+          ? "date"
+          : type === "updated_by_user" || type === "phone"
+            ? type === "phone"
+              ? "tel"
+              : "text"
+            : type;
 
     return (
       <input
@@ -423,8 +427,16 @@ export function FieldControl({
                 ? "email"
                 : undefined
         }
-        value={(value as string) ?? ""}
-        onChange={(event) => onChange(event.target.value)}
+        value={
+          hasMask
+            ? maskInput((value as string) ?? "", field.mask ?? "")
+            : (value as string) ?? ""
+        }
+        onChange={(event) =>
+          hasMask
+            ? onChange(maskInput(event.target.value, field.mask ?? ""))
+            : onChange(event.target.value)
+        }
         placeholder={placeholder}
         disabled={disabled}
         className={inputClasses}

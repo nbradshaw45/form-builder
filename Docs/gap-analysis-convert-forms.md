@@ -30,7 +30,7 @@ high-impact gaps worth closing. Legend: ✅ = have, 🟡 = partial, ❌ = missin
 | Radio & checkbox **images** | ✅ | ❌ | Image-backed options |
 | **Confirmation fields** (email/password confirm) | ✅ | ❌ | Would reuse "must match" validation + a field pair |
 | **Hidden fields** | ✅ | ❌ | Store tracking/static values not shown to users |
-| **Input masks** (phone, currency, card, custom) | ✅ | ❌ | No mask/format-as-you-type |
+| **Input masks** (phone, currency, card, custom) | ✅ | 🟡 | Text & phone fields support presets (phone/card/date/zip/SSN) + custom masks; no currency mask |
 | File upload | ✅ | ✅ | We support single-file; no multi-file/S3 yet |
 | Rating (stars/hearts/thumbs, 1–10) | ✅ | 🟡 | Stars only (3/5/7/10) |
 | Signature | ✅ | ✅ | |
@@ -112,7 +112,7 @@ high-impact gaps worth closing. Legend: ✅ = have, 🟡 = partial, ❌ = missin
 
 **High impact, partial:**
 4. **Email templates** (HTML, attachments, smart tags)
-5. **Input masks** and confirmation/hidden fields
+5. **Input masks** (done for text/phone) and confirmation/hidden fields
 6. **Excel export**, submission **edit history**, deeper **analytics**
 
 **Done since this was written:**
@@ -120,6 +120,8 @@ high-impact gaps worth closing. Legend: ✅ = have, 🟡 = partial, ❌ = missin
   open/close date windows are implemented.
 - **Auto-populate** — field default values and query-string prefill
   (`?key=value`) are implemented.
+- **Input masking** — presets (phone, credit card, date, zip, SSN) and custom
+  patterns for text/phone fields.
 
 **Nice-to-have:**
 7. CRM/email provider integrations, Google Analytics, multi-file uploads, image radios, rich text, rule groups (AND/OR), theming, undo/redo.
@@ -158,5 +160,4 @@ webhooks.
 ### Runner-up
 - **Email templates** (HTML body, smart tags, file attachments) — extends the
   existing email action.
-- **Input masks** and confirmation/hidden fields — moderate, closes several
-  field gaps at once.
+- **Confirmation & hidden fields** — moderate, closes several field gaps at once.

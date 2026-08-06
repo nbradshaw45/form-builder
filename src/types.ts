@@ -109,6 +109,8 @@ export type FormField = {
   mathDecimals?: number;
   /** Prefill value for new submissions (also overridable via ?key=value URL). */
   defaultValue?: string;
+  /** Input mask pattern (# digit, A/a letter, * alphanumeric, literals auto-inserted). */
+  mask?: string;
 };
 
 export type SubmissionData = Record<

@@ -10,6 +10,7 @@ import type {
 import type { FieldType } from "../../types";
 import { inputClasses } from "../../shared/styles";
 import { isSystemField } from "./elementFactory";
+import { MASK_PRESETS } from "../../shared/mask";
 import { getForms, useQuery } from "wasp/client/operations";
 import { MaximizeIcon, MinimizeIcon } from "./icons";
 
@@ -255,6 +256,10 @@ export function FieldInspector({
             <code className="font-mono">?key=value</code> override it.
           </span>
         </div>
+      )}
+
+      {["text", "phone"].includes(element.type) && (
+        <MaskEditor element={element} onPatch={onPatch} />
       )}
 
       {["select", "radio", "multi_select"].includes(element.type) && (
@@ -1933,6 +1938,64 @@ function ValidationEditor({
           />
         </div>
       )}
+    </div>
+  );
+}
+
+function MaskEditor({
+  element,
+  onPatch,
+}: {
+  element: FormField;
+  onPatch: (id: string, patch: Partial<FormField>) => void;
+}) {
+  const mask = element.mask ?? "";
+  const presetMatch = MASK_PRESETS.find((preset) => preset.mask === mask);
+  const selectValue = presetMatch ? presetMatch.mask : mask ? "custom" : "";
+
+  function handleSelect(value: string) {
+    if (value === "") {
+      onPatch(element.id, { mask: undefined });
+    } else if (value === "custom") {
+      onPatch(element.id, { mask: presetMatch ? "" : mask });
+    } else {
+      onPatch(element.id, { mask: value });
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-1">
+      <span className={labelClasses}>Input mask</span>
+      <select
+        value={selectValue}
+        onChange={(event) => handleSelect(event.target.value)}
+        className={inputClasses}
+      >
+        <option value="">None</option>
+        {MASK_PRESETS.map((preset) => (
+          <option key={preset.mask} value={preset.mask}>
+            {preset.label}
+          </option>
+        ))}
+        <option value="custom">Custom...</option>
+      </select>
+      {selectValue === "custom" && (
+        <input
+          value={mask}
+          onChange={(event) =>
+            onPatch(element.id, { mask: event.target.value })
+          }
+          placeholder="(###) ###-####"
+          className={`${inputClasses} font-mono`}
+        />
+      )}
+      <span className="text-xs text-neutral-400">
+        Format as users type.{" "}
+        <code className="font-mono">#</code> digit,{" "}
+        <code className="font-mono">A</code> letter,{" "}
+        <code className="font-mono">*</code> any; other characters are
+        auto-inserted.
+      </span>
     </div>
   );
 }
