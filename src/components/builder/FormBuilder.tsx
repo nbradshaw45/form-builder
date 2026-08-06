@@ -387,7 +387,10 @@ export function FormBuilder({
           onDragEnd={handleDragEnd}
           onDragCancel={handleDragCancel}
         >
-          <div className="grid items-start gap-4 xl:grid-cols-[260px_minmax(0,1fr)_320px]">
+          <div
+            className="grid items-start gap-4 xl:grid-cols-[260px_minmax(0,1fr)_320px]"
+            onClick={() => setSelectedId(null)}
+          >
             <ElementPalette onAdd={addElement} />
             <Canvas
               elements={elements}
@@ -407,6 +410,7 @@ export function FormBuilder({
               onLabelChange={handleLabelChange}
               onKeyChange={handleKeyChange}
               onPatch={handlePatch}
+              onDeselect={() => setSelectedId(null)}
               onSettingsChange={(patch) =>
                 setSettings((prev) => ({ ...prev, ...patch }))
               }

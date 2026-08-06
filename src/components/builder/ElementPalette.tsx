@@ -38,7 +38,10 @@ function PaletteItem({
         type="button"
         ref={setNodeRef}
         style={style}
-        onClick={() => onAdd(type)}
+        onClick={(event) => {
+          event.stopPropagation();
+          onAdd(type);
+        }}
         {...attributes}
         {...listeners}
         className="flex w-full cursor-grab items-center gap-2.5 rounded-lg border border-neutral-200 bg-white px-3 py-2.5 text-left transition-colors duration-150 hover:border-primary-400 hover:bg-primary-50 active:cursor-grabbing"

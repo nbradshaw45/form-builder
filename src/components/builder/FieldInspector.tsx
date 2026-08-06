@@ -18,6 +18,7 @@ import {
 } from "../../shared/filters";
 import { getForms, useQuery } from "wasp/client/operations";
 import {
+  ArrowLeftIcon,
   ChevronDownIcon,
   ChevronUpIcon,
   MaximizeIcon,
@@ -31,6 +32,7 @@ interface FieldInspectorProps {
   onLabelChange: (element: FormField, label: string) => void;
   onKeyChange: (element: FormField, key: string) => void;
   onPatch: (id: string, patch: Partial<FormField>) => void;
+  onDeselect: () => void;
   onSettingsChange: (patch: Partial<FormSettings>) => void;
 }
 
@@ -96,6 +98,7 @@ export function FieldInspector({
   onLabelChange,
   onKeyChange,
   onPatch,
+  onDeselect,
   onSettingsChange,
 }: FieldInspectorProps) {
   const [settingsExpanded, setSettingsExpanded] = useState(false);
@@ -165,510 +168,538 @@ export function FieldInspector({
   }
 
   return (
-    <aside className="card flex flex-col gap-4 p-4">
-      <div className="flex flex-col gap-0.5 border-b border-neutral-100 pb-3">
-        <h2 className="font-display text-sm font-bold tracking-[-0.02em] text-neutral-800">
-          Settings
-        </h2>
-        <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-neutral-400">
-          {TYPE_NAMES[element.type]}
-        </span>
-      </div>
-
-      {!isMath && (
-        <div className="flex flex-col gap-1">
-          <label htmlFor="inspector-label" className={labelClasses}>
-            Label
-          </label>
-          <input
-            id="inspector-label"
-            value={element.label}
-            onChange={(event) => onLabelChange(element, event.target.value)}
-            className={inputClasses}
-          />
-        </div>
-      )}
-
-      {!isMath && (
-        <div className="flex flex-col gap-1">
-          <label htmlFor="inspector-key" className={labelClasses}>
-            Field key
-          </label>
-          <input
-            id="inspector-key"
-            value={element.key}
-            onChange={(event) => onKeyChange(element, event.target.value)}
-            className={`${inputClasses} font-mono`}
-          />
-          <span className="text-xs text-neutral-400">
-            Stored as the JSON key in submissions.
+    <aside
+      className="card flex flex-col gap-4 p-4"
+      onClick={(event) => event.stopPropagation()}
+    >
+      <div className="flex items-start justify-between gap-2 border-b border-neutral-100 pb-3">
+        <div className="flex flex-col gap-0.5">
+          <h2 className="font-display text-sm font-bold tracking-[-0.02em] text-neutral-800">
+            Settings
+          </h2>
+          <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-neutral-400">
+            {TYPE_NAMES[element.type]}
           </span>
         </div>
-      )}
-
-      <div className="flex flex-col gap-1">
-        <label htmlFor="inspector-width" className={labelClasses}>
-          Column width
-        </label>
-        <select
-          id="inspector-width"
-          value={element.width ?? 12}
-          onChange={(event) =>
-            onPatch(element.id, { width: Number(event.target.value) })
-          }
-          className={inputClasses}
+        <button
+          type="button"
+          onClick={onDeselect}
+          aria-label="Back to form settings"
+          title="Back to form settings"
+          className="inline-flex items-center gap-1.5 rounded-md border border-neutral-200 bg-white px-2 py-1.5 text-xs font-semibold text-neutral-500 transition-colors hover:border-neutral-300 hover:text-neutral-700"
         >
-          {WIDTH_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-        <span className="text-xs text-neutral-400">
-          Spans a 12-column grid; elements wrap to the next row when the row
-          is full.
-        </span>
+          <ArrowLeftIcon className="size-3.5" />
+          Form settings
+        </button>
       </div>
 
-      {!isLayout &&
-        !["checkbox", "date", "time", "user", "radio", "multi_select", "rating", "slider", "signature", "file_upload"].includes(
-          element.type,
-        ) && (
-        <div className="flex flex-col gap-1">
-          <label htmlFor="inspector-placeholder" className={labelClasses}>
-            Placeholder
-          </label>
-          <input
-            id="inspector-placeholder"
-            value={element.placeholder ?? ""}
-            onChange={(event) =>
-              onPatch(element.id, { placeholder: event.target.value })
-            }
-            className={inputClasses}
-          />
-        </div>
-      )}
+      <SettingsAccordion
+        key={`${element.id}-general`}
+        label="General"
+        defaultOpen
+      >
+        {!isMath && (
+          <div className="flex flex-col gap-1">
+            <label htmlFor="inspector-label" className={labelClasses}>
+              Label
+            </label>
+            <input
+              id="inspector-label"
+              value={element.label}
+              onChange={(event) => onLabelChange(element, event.target.value)}
+              className={inputClasses}
+            />
+          </div>
+        )}
 
-      {!isLayout && !isMath && !isSystemField(element.type) && (
-        <div className="flex flex-col gap-1">
-          <label htmlFor="inspector-default" className={labelClasses}>
-            Default value
-          </label>
-          <input
-            id="inspector-default"
-            value={element.defaultValue ?? ""}
-            onChange={(event) =>
-              onPatch(element.id, { defaultValue: event.target.value })
-            }
-            placeholder="Prefilled on new submissions (or ?key=value)"
-            className={inputClasses}
-          />
-          <span className="text-xs text-neutral-400">
-            Prefills this field on new records. URL params like{" "}
-            <code className="font-mono">?key=value</code> override it.
-          </span>
-        </div>
-      )}
+        {!isMath && (
+          <div className="flex flex-col gap-1">
+            <label htmlFor="inspector-key" className={labelClasses}>
+              Field key
+            </label>
+            <input
+              id="inspector-key"
+              value={element.key}
+              onChange={(event) => onKeyChange(element, event.target.value)}
+              className={`${inputClasses} font-mono`}
+            />
+            <span className="text-xs text-neutral-400">
+              Stored as the JSON key in submissions.
+            </span>
+          </div>
+        )}
 
-      {["text", "phone"].includes(element.type) && (
-        <MaskEditor element={element} onPatch={onPatch} />
-      )}
-
-      {element.type === "confirm" && (
         <div className="flex flex-col gap-1">
-          <label htmlFor="inspector-confirm-field" className={labelClasses}>
-            Confirm field
+          <label htmlFor="inspector-width" className={labelClasses}>
+            Column width
           </label>
           <select
-            id="inspector-confirm-field"
-            value={element.confirmField ?? ""}
+            id="inspector-width"
+            value={element.width ?? 12}
             onChange={(event) =>
-              onPatch(element.id, { confirmField: event.target.value })
+              onPatch(element.id, { width: Number(event.target.value) })
             }
             className={inputClasses}
           >
-            <option value="">Select a field</option>
-            {ruleTargets.map((target) => (
-              <option key={target.id} value={target.key}>
-                {target.label}
+            {WIDTH_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
               </option>
             ))}
           </select>
           <span className="text-xs text-neutral-400">
-            The value must match this field (e.g. email or password confirm).
+            Spans a 12-column grid; elements wrap to the next row when the row
+            is full.
           </span>
         </div>
-      )}
 
-      {element.type === "hidden" && (
-        <p className="rounded-lg border border-neutral-100 bg-muted px-3 py-2 text-xs leading-relaxed text-neutral-500">
-          Not shown to users. Set a value via the Default value field or a URL
-          param like <code className="font-mono">?key=value</code>; it is
-          stored with the submission.
-        </p>
-      )}
-
-      {["select", "radio", "multi_select"].includes(element.type) && (
-        <OptionsEditor
-          element={element}
-          ruleTargets={ruleTargets}
-          onPatch={onPatch}
-        />
-      )}
-
-      {["radio", "multi_select"].includes(element.type) && (
-        <div className="flex flex-col gap-1">
-          <span className={labelClasses}>Layout</span>
-          <select
-            value={element.layout ?? "stacked"}
-            onChange={(event) =>
-              onPatch(element.id, {
-                layout: event.target.value as "inline" | "stacked",
-              })
-            }
-            className={inputClasses}
-          >
-            <option value="stacked">Stacked</option>
-            <option value="inline">Inline</option>
-          </select>
-        </div>
-      )}
-
-      {element.type === "slider" && (
-        <div className="flex flex-col gap-2">
-          <span className={labelClasses}>Range</span>
-          <div className="grid grid-cols-3 gap-2">
-            <div className="flex flex-col gap-1">
-              <label htmlFor="inspector-min" className="text-xs text-neutral-500">
-                Min
-              </label>
-              <input
-                id="inspector-min"
-                type="number"
-                value={element.min ?? 0}
-                onChange={(event) =>
-                  onPatch(element.id, { min: Number(event.target.value) })
-                }
-                className={inputClasses}
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label htmlFor="inspector-max" className="text-xs text-neutral-500">
-                Max
-              </label>
-              <input
-                id="inspector-max"
-                type="number"
-                value={element.max ?? 100}
-                onChange={(event) =>
-                  onPatch(element.id, { max: Number(event.target.value) })
-                }
-                className={inputClasses}
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label htmlFor="inspector-step" className="text-xs text-neutral-500">
-                Step
-              </label>
-              <input
-                id="inspector-step"
-                type="number"
-                value={element.step ?? 1}
-                onChange={(event) =>
-                  onPatch(element.id, { step: Number(event.target.value) })
-                }
-                className={inputClasses}
-              />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {element.type === "currency" && (
-        <div className="flex flex-col gap-2">
-          <div className="grid grid-cols-2 gap-2">
-            <div className="flex flex-col gap-1">
-              <label htmlFor="inspector-prefix" className="text-xs text-neutral-500">
-                Prefix
-              </label>
-              <input
-                id="inspector-prefix"
-                value={element.prefix ?? ""}
-                onChange={(event) =>
-                  onPatch(element.id, { prefix: event.target.value })
-                }
-                placeholder="$"
-                className={inputClasses}
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label htmlFor="inspector-suffix" className="text-xs text-neutral-500">
-                Suffix
-              </label>
-              <input
-                id="inspector-suffix"
-                value={element.suffix ?? ""}
-                onChange={(event) =>
-                  onPatch(element.id, { suffix: event.target.value })
-                }
-                placeholder="USD"
-                className={inputClasses}
-              />
-            </div>
-          </div>
+        {!isLayout &&
+          !["checkbox", "date", "time", "user", "radio", "multi_select", "rating", "slider", "signature", "file_upload"].includes(
+            element.type,
+          ) && (
           <div className="flex flex-col gap-1">
-            <label htmlFor="inspector-decimals" className="text-xs text-neutral-500">
-              Decimals
+            <label htmlFor="inspector-placeholder" className={labelClasses}>
+              Placeholder
+            </label>
+            <input
+              id="inspector-placeholder"
+              value={element.placeholder ?? ""}
+              onChange={(event) =>
+                onPatch(element.id, { placeholder: event.target.value })
+              }
+              className={inputClasses}
+            />
+          </div>
+        )}
+
+        {!isLayout && !isMath && !isSystemField(element.type) && (
+          <div className="flex flex-col gap-1">
+            <label htmlFor="inspector-default" className={labelClasses}>
+              Default value
+            </label>
+            <input
+              id="inspector-default"
+              value={element.defaultValue ?? ""}
+              onChange={(event) =>
+                onPatch(element.id, { defaultValue: event.target.value })
+              }
+              placeholder="Prefilled on new submissions (or ?key=value)"
+              className={inputClasses}
+            />
+            <span className="text-xs text-neutral-400">
+              Prefills this field on new records. URL params like{" "}
+              <code className="font-mono">?key=value</code> override it.
+            </span>
+          </div>
+        )}
+
+        {["text", "phone"].includes(element.type) && (
+          <MaskEditor element={element} onPatch={onPatch} />
+        )}
+
+        {element.type === "confirm" && (
+          <div className="flex flex-col gap-1">
+            <label htmlFor="inspector-confirm-field" className={labelClasses}>
+              Confirm field
             </label>
             <select
-              id="inspector-decimals"
-              value={element.decimals ?? 2}
+              id="inspector-confirm-field"
+              value={element.confirmField ?? ""}
               onChange={(event) =>
-                onPatch(element.id, { decimals: Number(event.target.value) })
+                onPatch(element.id, { confirmField: event.target.value })
               }
               className={inputClasses}
             >
-              <option value={0}>0</option>
-              <option value={2}>2</option>
+              <option value="">Select a field</option>
+              {ruleTargets.map((target) => (
+                <option key={target.id} value={target.key}>
+                  {target.label}
+                </option>
+              ))}
             </select>
-          </div>
-        </div>
-      )}
-
-      {element.type === "rating" && (
-        <div className="flex flex-col gap-1">
-          <span className={labelClasses}>Stars</span>
-          <select
-            value={element.starCount ?? 5}
-            onChange={(event) =>
-              onPatch(element.id, {
-                starCount: Number(event.target.value) as 3 | 5 | 7 | 10,
-              })
-            }
-            className={inputClasses}
-          >
-            <option value={3}>3</option>
-            <option value={5}>5</option>
-            <option value={7}>7</option>
-            <option value={10}>10</option>
-          </select>
-        </div>
-      )}
-
-      {element.type === "file_upload" && (
-        <div className="flex flex-col gap-2">
-          <div className="flex flex-col gap-1">
-            <label htmlFor="inspector-accept" className="text-xs text-neutral-500">
-              Allowed file types
-            </label>
-            <input
-              id="inspector-accept"
-              value={element.accept ?? ""}
-              onChange={(event) =>
-                onPatch(element.id, { accept: event.target.value })
-              }
-              placeholder=".pdf,.png,image/jpeg"
-              className={`${inputClasses} font-mono`}
-            />
             <span className="text-xs text-neutral-400">
-              Comma-separated MIME types or extensions. Leave blank to allow
-              anything.
+              The value must match this field (e.g. email or password confirm).
             </span>
           </div>
+        )}
+
+        {element.type === "hidden" && (
+          <p className="rounded-lg border border-neutral-100 bg-muted px-3 py-2 text-xs leading-relaxed text-neutral-500">
+            Not shown to users. Set a value via the Default value field or a URL
+            param like <code className="font-mono">?key=value</code>; it is
+            stored with the submission.
+          </p>
+        )}
+
+        {element.type === "user" && (
+          <p className="rounded-lg border border-neutral-100 bg-muted px-3 py-2 text-xs leading-relaxed text-neutral-500">
+            Options are populated from the current users list. The selected
+            user&apos;s email is stored in submissions.
+          </p>
+        )}
+
+        {!isLayout && (
           <div className="flex flex-col gap-1">
-            <label htmlFor="inspector-maxsize" className="text-xs text-neutral-500">
-              Max size (MB)
+            <label htmlFor="inspector-help" className={labelClasses}>
+              Help text
             </label>
             <input
-              id="inspector-maxsize"
-              type="number"
-              min={1}
-              max={10}
-              value={element.maxFileSizeMb ?? 5}
+              id="inspector-help"
+              value={element.helpText ?? ""}
               onChange={(event) =>
-                onPatch(element.id, {
-                  maxFileSizeMb: Number(event.target.value),
-                })
+                onPatch(element.id, { helpText: event.target.value })
               }
               className={inputClasses}
             />
           </div>
-        </div>
-      )}
+        )}
 
-      {element.type === "signature" && (
-        <div className="flex flex-col gap-2">
+        {(element.type === "section_header" || element.type === "paragraph") && (
           <div className="flex flex-col gap-1">
-            <label htmlFor="inspector-pen-color" className="text-xs text-neutral-500">
-              Pen color
+            <label htmlFor="inspector-description" className={labelClasses}>
+              {element.type === "section_header" ? "Subtext" : "Secondary text"}
             </label>
-            <input
-              id="inspector-pen-color"
-              type="color"
-              value={element.penColor ?? "#1e293b"}
+            <textarea
+              id="inspector-description"
+              value={element.description ?? ""}
               onChange={(event) =>
-                onPatch(element.id, { penColor: event.target.value })
+                onPatch(element.id, { description: event.target.value })
               }
-              className="h-9 w-full cursor-pointer rounded-lg border border-neutral-300 bg-white"
-            />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label htmlFor="inspector-pen-width" className="text-xs text-neutral-500">
-              Pen width
-            </label>
-            <input
-              id="inspector-pen-width"
-              type="number"
-              min={1}
-              max={10}
-              value={element.penWidth ?? 2}
-              onChange={(event) =>
-                onPatch(element.id, { penWidth: Number(event.target.value) })
-              }
+              rows={3}
               className={inputClasses}
             />
           </div>
-        </div>
+        )}
+      </SettingsAccordion>
+
+      {["select", "radio", "multi_select"].includes(element.type) && (
+        <SettingsAccordion key={`${element.id}-options`} label="Options">
+          <OptionsEditor
+            element={element}
+            ruleTargets={ruleTargets}
+            onPatch={onPatch}
+          />
+          {["radio", "multi_select"].includes(element.type) && (
+            <div className="flex flex-col gap-1">
+              <span className={labelClasses}>Layout</span>
+              <select
+                value={element.layout ?? "stacked"}
+                onChange={(event) =>
+                  onPatch(element.id, {
+                    layout: event.target.value as "inline" | "stacked",
+                  })
+                }
+                className={inputClasses}
+              >
+                <option value="stacked">Stacked</option>
+                <option value="inline">Inline</option>
+              </select>
+            </div>
+          )}
+        </SettingsAccordion>
       )}
 
-      {element.type === "user" && (
-        <p className="rounded-lg border border-neutral-100 bg-muted px-3 py-2 text-xs leading-relaxed text-neutral-500">
-          Options are populated from the current users list. The selected
-          user&apos;s email is stored in submissions.
-        </p>
+      {["slider", "currency", "rating", "file_upload", "signature"].includes(
+        element.type,
+      ) && (
+        <SettingsAccordion key={`${element.id}-format`} label="Formatting">
+          {element.type === "slider" && (
+            <div className="flex flex-col gap-2">
+              <span className={labelClasses}>Range</span>
+              <div className="grid grid-cols-3 gap-2">
+                <div className="flex flex-col gap-1">
+                  <label htmlFor="inspector-min" className="text-xs text-neutral-500">
+                    Min
+                  </label>
+                  <input
+                    id="inspector-min"
+                    type="number"
+                    value={element.min ?? 0}
+                    onChange={(event) =>
+                      onPatch(element.id, { min: Number(event.target.value) })
+                    }
+                    className={inputClasses}
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label htmlFor="inspector-max" className="text-xs text-neutral-500">
+                    Max
+                  </label>
+                  <input
+                    id="inspector-max"
+                    type="number"
+                    value={element.max ?? 100}
+                    onChange={(event) =>
+                      onPatch(element.id, { max: Number(event.target.value) })
+                    }
+                    className={inputClasses}
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label htmlFor="inspector-step" className="text-xs text-neutral-500">
+                    Step
+                  </label>
+                  <input
+                    id="inspector-step"
+                    type="number"
+                    value={element.step ?? 1}
+                    onChange={(event) =>
+                      onPatch(element.id, { step: Number(event.target.value) })
+                    }
+                    className={inputClasses}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {element.type === "currency" && (
+            <div className="flex flex-col gap-2">
+              <div className="grid grid-cols-2 gap-2">
+                <div className="flex flex-col gap-1">
+                  <label htmlFor="inspector-prefix" className="text-xs text-neutral-500">
+                    Prefix
+                  </label>
+                  <input
+                    id="inspector-prefix"
+                    value={element.prefix ?? ""}
+                    onChange={(event) =>
+                      onPatch(element.id, { prefix: event.target.value })
+                    }
+                    placeholder="$"
+                    className={inputClasses}
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label htmlFor="inspector-suffix" className="text-xs text-neutral-500">
+                    Suffix
+                  </label>
+                  <input
+                    id="inspector-suffix"
+                    value={element.suffix ?? ""}
+                    onChange={(event) =>
+                      onPatch(element.id, { suffix: event.target.value })
+                    }
+                    placeholder="USD"
+                    className={inputClasses}
+                  />
+                </div>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label htmlFor="inspector-decimals" className="text-xs text-neutral-500">
+                  Decimals
+                </label>
+                <select
+                  id="inspector-decimals"
+                  value={element.decimals ?? 2}
+                  onChange={(event) =>
+                    onPatch(element.id, { decimals: Number(event.target.value) })
+                  }
+                  className={inputClasses}
+                >
+                  <option value={0}>0</option>
+                  <option value={2}>2</option>
+                </select>
+              </div>
+            </div>
+          )}
+
+          {element.type === "rating" && (
+            <div className="flex flex-col gap-1">
+              <span className={labelClasses}>Stars</span>
+              <select
+                value={element.starCount ?? 5}
+                onChange={(event) =>
+                  onPatch(element.id, {
+                    starCount: Number(event.target.value) as 3 | 5 | 7 | 10,
+                  })
+                }
+                className={inputClasses}
+              >
+                <option value={3}>3</option>
+                <option value={5}>5</option>
+                <option value={7}>7</option>
+                <option value={10}>10</option>
+              </select>
+            </div>
+          )}
+
+          {element.type === "file_upload" && (
+            <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-1">
+                <label htmlFor="inspector-accept" className="text-xs text-neutral-500">
+                  Allowed file types
+                </label>
+                <input
+                  id="inspector-accept"
+                  value={element.accept ?? ""}
+                  onChange={(event) =>
+                    onPatch(element.id, { accept: event.target.value })
+                  }
+                  placeholder=".pdf,.png,image/jpeg"
+                  className={`${inputClasses} font-mono`}
+                />
+                <span className="text-xs text-neutral-400">
+                  Comma-separated MIME types or extensions. Leave blank to allow
+                  anything.
+                </span>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label htmlFor="inspector-maxsize" className="text-xs text-neutral-500">
+                  Max size (MB)
+                </label>
+                <input
+                  id="inspector-maxsize"
+                  type="number"
+                  min={1}
+                  max={10}
+                  value={element.maxFileSizeMb ?? 5}
+                  onChange={(event) =>
+                    onPatch(element.id, {
+                      maxFileSizeMb: Number(event.target.value),
+                    })
+                  }
+                  className={inputClasses}
+                />
+              </div>
+            </div>
+          )}
+
+          {element.type === "signature" && (
+            <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-1">
+                <label htmlFor="inspector-pen-color" className="text-xs text-neutral-500">
+                  Pen color
+                </label>
+                <input
+                  id="inspector-pen-color"
+                  type="color"
+                  value={element.penColor ?? "#1e293b"}
+                  onChange={(event) =>
+                    onPatch(element.id, { penColor: event.target.value })
+                  }
+                  className="h-9 w-full cursor-pointer rounded-lg border border-neutral-300 bg-white"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label htmlFor="inspector-pen-width" className="text-xs text-neutral-500">
+                  Pen width
+                </label>
+                <input
+                  id="inspector-pen-width"
+                  type="number"
+                  min={1}
+                  max={10}
+                  value={element.penWidth ?? 2}
+                  onChange={(event) =>
+                    onPatch(element.id, { penWidth: Number(event.target.value) })
+                  }
+                  className={inputClasses}
+                />
+              </div>
+            </div>
+          )}
+        </SettingsAccordion>
       )}
 
       {isMath && (
-        <div className="flex flex-col gap-2">
-          <div className="flex flex-col gap-1">
-            <label htmlFor="inspector-formula" className={labelClasses}>
-              Formula
-            </label>
-            <textarea
-              id="inspector-formula"
-              value={element.formula ?? ""}
-              onChange={(event) =>
-                onPatch(element.id, { formula: event.target.value })
-              }
-              rows={3}
-              className={`${inputClasses} font-mono`}
-              placeholder="[quantity] * [unit_price]"
-            />
-            <span className="text-xs text-neutral-400">
-              Reference other fields with square brackets, e.g.{" "}
-              <code className="font-mono">[quantity] * [unit_price]</code>.
-            </span>
-          </div>
-          {ruleTargets.length > 0 && (
-            <div className="flex flex-wrap gap-1">
-              {ruleTargets.map((target) => (
-                <button
-                  key={target.id}
-                  type="button"
-                  onClick={() => insertFormulaKey(target.key)}
-                  className="rounded border border-neutral-300 bg-white px-2 py-1 font-mono text-xs text-neutral-600 hover:border-primary-400 hover:text-primary-700"
-                >
-                  [{target.key}]
-                </button>
-              ))}
+        <SettingsAccordion key={`${element.id}-formula`} label="Formula">
+          <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-1">
+              <label htmlFor="inspector-formula" className={labelClasses}>
+                Formula
+              </label>
+              <textarea
+                id="inspector-formula"
+                value={element.formula ?? ""}
+                onChange={(event) =>
+                  onPatch(element.id, { formula: event.target.value })
+                }
+                rows={3}
+                className={`${inputClasses} font-mono`}
+                placeholder="[quantity] * [unit_price]"
+              />
+              <span className="text-xs text-neutral-400">
+                Reference other fields with square brackets, e.g.{" "}
+                <code className="font-mono">[quantity] * [unit_price]</code>.
+              </span>
             </div>
-          )}
-          <div className="flex flex-col gap-1">
-            <label htmlFor="inspector-math-decimals" className={labelClasses}>
-              Rounding
-            </label>
-            <select
-              id="inspector-math-decimals"
-              value={element.mathDecimals ?? 2}
-              onChange={(event) =>
-                onPatch(element.id, {
-                  mathDecimals: Number(event.target.value),
-                })
-              }
-              className={inputClasses}
-            >
-              <option value={0}>0 decimals</option>
-              <option value={1}>1 decimal</option>
-              <option value={2}>2 decimals</option>
-              <option value={3}>3 decimals</option>
-              <option value={4}>4 decimals</option>
-            </select>
-            <span className="text-xs text-neutral-400">
-              Functions:{" "}
-              <code className="font-mono">
-                sum(..) avg(..) min(..) max(..) round(x,d) abs(x) count(..)
-                if(cond,a,b) dateDiff(a,b)
-              </code>
-            </span>
+            {ruleTargets.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {ruleTargets.map((target) => (
+                  <button
+                    key={target.id}
+                    type="button"
+                    onClick={() => insertFormulaKey(target.key)}
+                    className="rounded border border-neutral-300 bg-white px-2 py-1 font-mono text-xs text-neutral-600 hover:border-primary-400 hover:text-primary-700"
+                  >
+                    [{target.key}]
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="flex flex-col gap-1">
+              <label htmlFor="inspector-math-decimals" className={labelClasses}>
+                Rounding
+              </label>
+              <select
+                id="inspector-math-decimals"
+                value={element.mathDecimals ?? 2}
+                onChange={(event) =>
+                  onPatch(element.id, {
+                    mathDecimals: Number(event.target.value),
+                  })
+                }
+                className={inputClasses}
+              >
+                <option value={0}>0 decimals</option>
+                <option value={1}>1 decimal</option>
+                <option value={2}>2 decimals</option>
+                <option value={3}>3 decimals</option>
+                <option value={4}>4 decimals</option>
+              </select>
+              <span className="text-xs text-neutral-400">
+                Functions:{" "}
+                <code className="font-mono">
+                  sum(..) avg(..) min(..) max(..) round(x,d) abs(x) count(..)
+                  if(cond,a,b) dateDiff(a,b)
+                </code>
+              </span>
+            </div>
           </div>
-        </div>
+        </SettingsAccordion>
       )}
 
-      {!isLayout && (
-        <div className="flex flex-col gap-1">
-          <label htmlFor="inspector-help" className={labelClasses}>
-            Help text
+      {!isLayout && !isMath && (
+        <SettingsAccordion
+          key={`${element.id}-validation`}
+          label="Required & validation"
+        >
+          <label className="flex items-center gap-2 text-sm font-medium text-neutral-800">
+            <input
+              type="checkbox"
+              checked={Boolean(element.required)}
+              onChange={(event) =>
+                onPatch(element.id, { required: event.target.checked })
+              }
+              className="size-4 rounded border-neutral-300 text-primary-500 focus:ring-primary-500"
+            />
+            Required
           </label>
-          <input
-            id="inspector-help"
-            value={element.helpText ?? ""}
-            onChange={(event) =>
-              onPatch(element.id, { helpText: event.target.value })
-            }
-            className={inputClasses}
+          <ValidationEditor
+            element={element}
+            ruleTargets={ruleTargets}
+            onPatch={onPatch}
           />
-        </div>
-      )}
-
-      {(element.type === "section_header" || element.type === "paragraph") && (
-        <div className="flex flex-col gap-1">
-          <label htmlFor="inspector-description" className={labelClasses}>
-            {element.type === "section_header" ? "Subtext" : "Secondary text"}
-          </label>
-          <textarea
-            id="inspector-description"
-            value={element.description ?? ""}
-            onChange={(event) =>
-              onPatch(element.id, { description: event.target.value })
-            }
-            rows={3}
-            className={inputClasses}
+          <RequiredWhenEditor
+            element={element}
+            ruleTargets={ruleTargets}
+            onPatch={onPatch}
           />
-        </div>
+        </SettingsAccordion>
       )}
 
-      {!isLayout && !isMath && (
-        <label className="flex items-center gap-2 text-sm font-medium text-neutral-800">
-          <input
-            type="checkbox"
-            checked={Boolean(element.required)}
-            onChange={(event) =>
-              onPatch(element.id, { required: event.target.checked })
-            }
-            className="size-4 rounded border-neutral-300 text-primary-500 focus:ring-primary-500"
-          />
-          Required
-        </label>
-      )}
-
-      {!isLayout && !isMath && (
-        <ValidationEditor
-          element={element}
-          ruleTargets={ruleTargets}
-          onPatch={onPatch}
-        />
-      )}
-
-      {!isLayout && !isMath && (
-        <RequiredWhenEditor
-          element={element}
-          ruleTargets={ruleTargets}
-          onPatch={onPatch}
-        />
-      )}
-
-      <div className="flex flex-col gap-2.5 border-t border-neutral-100 pt-3">
-        <span className={labelClasses}>Data table &amp; filters</span>
+      <SettingsAccordion key={`${element.id}-data`} label="Data table & filters">
         <ToggleRow
           label="Show in data table"
           checked={element.showInTable !== false}
@@ -741,11 +772,10 @@ export function FieldInspector({
               </span>
             </div>
           )}
-      </div>
+      </SettingsAccordion>
 
       {isSystem && (
-        <div className="flex flex-col gap-2.5 border-t border-neutral-100 pt-3">
-          <span className={labelClasses}>System field</span>
+        <SettingsAccordion key={`${element.id}-system`} label="System field">
           <ToggleRow
             label="Show on form"
             checked={element.hidden !== true}
@@ -784,14 +814,16 @@ export function FieldInspector({
             Values are filled automatically when a response is submitted or
             updated.
           </p>
-        </div>
+        </SettingsAccordion>
       )}
 
-      <RulesEditor
-        element={element}
-        ruleTargets={ruleTargets}
-        onPatch={onPatch}
-      />
+      <SettingsAccordion key={`${element.id}-visibility`} label="Visibility">
+        <RulesEditor
+          element={element}
+          ruleTargets={ruleTargets}
+          onPatch={onPatch}
+        />
+      </SettingsAccordion>
     </aside>
   );
 }
@@ -2393,8 +2425,7 @@ function RulesEditor({
   }
 
   return (
-    <div className="flex flex-col gap-2 border-t border-neutral-200 pt-3">
-      <span className={labelClasses}>Visibility rule</span>
+    <div className="flex flex-col gap-2">
       <label className="flex items-center gap-2 text-sm font-medium text-neutral-800">
         <input
           type="checkbox"

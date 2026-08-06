@@ -51,7 +51,9 @@ server-side (`updated_by_user` records the acting user's email or name).
 
 ### Field settings (inspector)
 
-Each element has settings in the right-hand inspector:
+Each element has settings in the right-hand inspector, grouped into
+**collapsible accordions** (General, Options, Formatting, Formula, Required &
+validation, Data table & filters, System field, Visibility):
 
 - **Label**, **Field key** (stored JSON key), **Column width**
 - **Placeholder**, **Help text**, **Required**, **Show in data table**
@@ -95,7 +97,9 @@ Each element has settings in the right-hand inspector:
   (e.g. 12 = 100%, 6 = 50%, 4 = 33%, 3 = 25%). Elements wrap automatically
   when a row fills up.
 - Duplicate / delete actions per element.
-- Clicking empty canvas deselects and returns to form settings.
+- Clicking empty canvas deselects and returns to form settings; the element
+  settings panel also has a **Form settings** button, and clicking anywhere
+  outside the element or its settings (e.g. the palette) deselects too.
 
 ### Form settings
 
