@@ -48,6 +48,7 @@ import { FormSubmissionsPage } from "./src/pages/FormSubmissionsPage" with { typ
 import { RedirectToForms } from "./src/pages/RedirectToForms" with { type: "ref" };
 import { AdminUsersPage } from "./src/pages/AdminUsersPage" with { type: "ref" };
 import { FormAccessPage } from "./src/pages/FormAccessPage" with { type: "ref" };
+import { DocsPage } from "./src/pages/DocsPage" with { type: "ref" };
 
 export default app({
   name: "formBuilder",
@@ -98,6 +99,7 @@ export default app({
     ),
     route("FormAccessRoute", "/forms/:id/access", page(FormAccessPage, { authRequired: true })),
     route("AdminUsersRoute", "/admin/users", page(AdminUsersPage, { authRequired: true })),
+    route("DocsRoute", "/docs", page(DocsPage, { authRequired: true })),
     route("LoginRoute", "/login", page(LoginPage)),
     route("SignupRoute", "/signup", page(SignupPage)),
 

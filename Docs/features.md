@@ -43,6 +43,7 @@ canvas, or drag it onto the canvas at a specific position.
 | Currency | `number \| null` | Number input with prefix/suffix and decimals |
 | Signature | PNG data URL | Canvas draw pad with pen color/width |
 | File upload | file id | Uploads to server storage (max size/type configurable) |
+| Captcha | (not stored) | Cloudflare Turnstile widget; verified server-side on submit |
 
 **Layout elements**: Section header, Divider, Paragraph.
 
@@ -138,6 +139,10 @@ into sections — in the sidebar they are **collapsible accordions**; the pop-ou
 **Spam & availability**
 - **Honeypot** — an invisible field bots tend to fill; those submissions are
   silently discarded (the submitter still sees success).
+- **Minimum time to submit** — rejects submissions completed faster than N
+  seconds (client sends load timestamp; enforced server-side).
+- **Captcha element** — Cloudflare Turnstile widget (`REACT_APP_TURNSTILE_SITE_KEY`
+  / `TURNSTILE_SECRET_KEY`); token verified on submit and never stored.
 - **Rate limit (per hour)** — rejects submissions after the limit is reached in
   a rolling hour (429 with a friendly message).
 - **Open from / Open until** — submissions outside the window are rejected
@@ -171,10 +176,11 @@ into sections — in the sidebar they are **collapsible accordions**; the pop-ou
   - **Send email** (after submit) — emails the response summary + record link
     via SMTP (requires `SMTP_*` env vars). Recipients combine a hard-coded
     comma-separated list, a chosen field's value (e.g. a User or Email field)
-    if it looks like an email, and optionally the submitter's email. The
-    subject supports smart tags, an optional custom **HTML body template**
-    (smart tags; falls back to the default summary when blank), and an
-    optional **PDF attachment** of the submission.
+    if it looks like an email, and optionally the submitter's email. Optional
+    **CC**, **BCC**, and **Reply-To** (smart tags supported). The subject
+    supports smart tags, an optional custom **HTML body template** (smart tags
+    + `{if}…{/if}` conditionals; falls back to the default summary when blank),
+    and an optional **PDF attachment** of the submission.
   - API calls are restricted to `http(s)` URLs and time out after 10s.
 
 **Smart tags**
@@ -185,8 +191,12 @@ subjects/bodies, the success message, and redirect URLs:
 - `{field.KEY}` (formatted value), `{field.KEY.label}` (field label)
 - `{form.title}`, `{form.id}`, `{submission.id}`, `{record_url}`, `{receipt}`,
   `{date}`
+- `{submission.context.ip}`, `{submission.context.referrer}`,
+  `{submission.context.utmSource}`, … (any captured context key)
 - `{all_fields}` (plain-text "Label: value" lines) and `{all_fields_html}`
   (HTML list)
+- Conditional blocks: `{if field.status == approved}…{/if}` (also `!=`,
+  `contains`, or truthy `{if field.notes}`)
 
 Unknown tags render as empty; empty values are skipped in `{all_fields}`.
 
@@ -243,7 +253,9 @@ All three modes honor the form's **display mode** (page vs popup with configured
 window size) and the after-submit settings.
 
 The record view page also has a **Download PDF** button (authenticated viewers
-with form access) that generates a PDF of the submission server-side.
+with form access) that generates a PDF of the submission server-side, and a
+**Submission context** panel (IP, referrer, source page, UTM params, browser)
+captured automatically on create.
 
 ### PDF generation
 

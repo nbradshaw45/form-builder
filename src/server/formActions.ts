@@ -98,6 +98,24 @@ async function callHttp(
   }
 }
 
+function collectEmailList(
+  raw: string | undefined,
+  tagContext: SmartTagContext,
+): string[] {
+  if (!raw?.trim()) {
+    return [];
+  }
+  const rendered = renderSmartTags(raw, tagContext);
+  const emails: string[] = [];
+  for (const part of rendered.split(",")) {
+    const trimmed = part.trim().toLowerCase();
+    if (trimmed && EMAIL_RE.test(trimmed)) {
+      emails.push(trimmed);
+    }
+  }
+  return emails;
+}
+
 function collectEmailRecipients(
   action: Extract<FormAction, { type: "email" }>,
   data: SubmissionData,
@@ -249,13 +267,27 @@ export async function runAfterSubmitActions(
           );
         }
       }
+      const submissionContext =
+        submission.context && typeof submission.context === "object"
+          ? (submission.context as SmartTagContext["context"])
+          : undefined;
       const tagContext: SmartTagContext = {
         form: { id: form.id, title: form.title },
         fields,
         data: sourceData,
         submissionId: submission.id,
         recordUrl: `${config.frontendUrl}/forms/${form.id}/records/${submission.id}`,
+        context: submissionContext,
       };
+      const cc = collectEmailList(action.cc, tagContext);
+      const bcc = collectEmailList(action.bcc, tagContext);
+      const replyToRaw = action.replyTo?.trim()
+        ? renderSmartTags(action.replyTo, tagContext).trim()
+        : "";
+      const replyTo =
+        replyToRaw && EMAIL_RE.test(replyToRaw.toLowerCase())
+          ? replyToRaw.toLowerCase()
+          : undefined;
       const customSubject = action.subject?.trim();
       const bodyTemplate = action.bodyTemplate?.trim();
       if (bodyTemplate) {
@@ -264,20 +296,34 @@ export async function runAfterSubmitActions(
           customSubject || `New response for "${form.title}"`,
           tagContext,
         );
-        await sendEmail(recipients, subject, stripHtmlTags(html), html, attachments);
+        await sendEmail({
+          recipients,
+          subject,
+          text: stripHtmlTags(html),
+          html,
+          attachments,
+          cc,
+          bcc,
+          replyTo,
+        });
       } else {
         const { subject, text, html } = buildEmailSummary(
           form,
           submission,
           "submission.created",
         );
-        await sendEmail(
+        await sendEmail({
           recipients,
-          customSubject ? renderSmartTags(customSubject, tagContext) : subject,
+          subject: customSubject
+            ? renderSmartTags(customSubject, tagContext)
+            : subject,
           text,
           html,
           attachments,
-        );
+          cc,
+          bcc,
+          replyTo,
+        });
       }
     }
   }

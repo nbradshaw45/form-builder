@@ -31,6 +31,7 @@ import {
   recordModeField,
 } from "../../shared/logic";
 import { getForms, getFormUsers, useQuery } from "wasp/client/operations";
+import { HelpBubble } from "../../shared/components/HelpBubble";
 import {
   ArrowLeftIcon,
   ChevronDownIcon,
@@ -86,6 +87,7 @@ const TYPE_NAMES: Record<FieldType, string> = {
   currency: "Currency",
   signature: "Signature",
   file_upload: "File upload",
+  captcha: "Captcha",
   confirm: "Confirmation",
   hidden: "Hidden field",
   user: "User",
@@ -155,12 +157,13 @@ export function FieldInspector({
     element.type === "divider" ||
     element.type === "paragraph";
   const isMath = element.type === "math";
+  const isCaptcha = element.type === "captcha";
   const isSystem = isSystemField(element.type);
 
   const ruleTargets = allElements.filter(
     (candidate) =>
       candidate.id !== element.id &&
-      !["section_header", "divider", "paragraph", "math"].includes(
+      !["section_header", "divider", "paragraph", "math", "captcha"].includes(
         candidate.type,
       ),
   );
@@ -264,7 +267,18 @@ export function FieldInspector({
           </span>
         </div>
 
+        {isCaptcha && (
+          <p className="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-xs leading-snug text-neutral-500">
+            Renders a Cloudflare Turnstile widget. Tokens are verified
+            server-side on submit and never stored. Configure{" "}
+            <code className="font-mono">REACT_APP_TURNSTILE_SITE_KEY</code> and{" "}
+            <code className="font-mono">TURNSTILE_SECRET_KEY</code>.{" "}
+            <HelpBubble article="captcha" className="ml-1 align-middle" />
+          </p>
+        )}
+
         {!isLayout &&
+          !isCaptcha &&
           !["checkbox", "date", "time", "user", "radio", "multi_select", "rating", "slider", "signature", "file_upload"].includes(
             element.type,
           ) && (
@@ -283,7 +297,7 @@ export function FieldInspector({
           </div>
         )}
 
-        {!isLayout && !isMath && !isSystemField(element.type) && (
+        {!isLayout && !isMath && !isCaptcha && !isSystemField(element.type) && (
           <div className="flex flex-col gap-1">
             <label htmlFor="inspector-default" className={labelClasses}>
               Default value
@@ -681,7 +695,7 @@ export function FieldInspector({
         </SettingsAccordion>
       )}
 
-      {!isLayout && !isMath && (
+      {!isLayout && !isMath && !isCaptcha && (
         <SettingsAccordion
           key={`${element.id}-validation`}
           label="Required & validation"
@@ -711,6 +725,8 @@ export function FieldInspector({
       )}
 
       <SettingsAccordion key={`${element.id}-data`} label="Data table & filters">
+        {!isCaptcha && (
+          <>
         <ToggleRow
           label="Show in data table"
           checked={element.showInTable !== false}
@@ -725,7 +741,15 @@ export function FieldInspector({
             onPatch(element.id, { filterable: checked })
           }
         />
+          </>
+        )}
+        {isCaptcha && (
+          <p className="text-xs text-neutral-400">
+            Captcha tokens are not stored with submissions.
+          </p>
+        )}
         {element.filterable !== false &&
+          !isCaptcha &&
           element.type !== "file_upload" &&
           filterOperatorsForType(element.type).length > 1 && (
             <div className="flex flex-col gap-1">
@@ -759,6 +783,7 @@ export function FieldInspector({
             </div>
           )}
         {element.filterable !== false &&
+          !isCaptcha &&
           supportsFilterInputChoice(element.type) && (
             <div className="flex flex-col gap-1">
               <label htmlFor="inspector-filter-input" className="label">
@@ -882,7 +907,7 @@ function FormSettingsPanel({
     ...fields
       .filter(
         (field) =>
-          !["section_header", "divider", "paragraph", "math"].includes(
+          !["section_header", "divider", "paragraph", "math", "captcha"].includes(
             field.type,
           ),
       )
@@ -1128,6 +1153,13 @@ function FormSettingsPanel({
       label: "Spam & availability",
       node: (
         <>
+          <div className="flex items-start justify-between gap-2">
+            <p className="text-xs leading-snug text-neutral-400">
+              Block bots and control when this form accepts responses. Pair with
+              a Captcha element for public forms.
+            </p>
+            <HelpBubble article="spam" align="right" />
+          </div>
           <ToggleRow
             label="Honeypot"
             checked={settings.honeypot === true}
@@ -1137,6 +1169,31 @@ function FormSettingsPanel({
             Adds an invisible field that bots tend to fill; those submissions
             are silently discarded.
           </p>
+          <div className="flex flex-col gap-1">
+            <label htmlFor="settings-min-submit" className="label">
+              Minimum time to submit (seconds)
+            </label>
+            <input
+              id="settings-min-submit"
+              type="number"
+              min={0}
+              value={settings.minSubmitSeconds ?? ""}
+              onChange={(event) =>
+                onChange({
+                  minSubmitSeconds:
+                    event.target.value === ""
+                      ? undefined
+                      : Number(event.target.value),
+                })
+              }
+              placeholder="Off"
+              className={inputClasses}
+            />
+            <span className="text-xs text-neutral-400">
+              Rejects submissions completed faster than this (typical bots).
+              Leave blank to disable.
+            </span>
+          </div>
           <div className="flex flex-col gap-1">
             <label htmlFor="settings-rate-limit" className="label">
               Rate limit (per hour)
@@ -1394,11 +1451,15 @@ function FormSettingsPanel({
       label: "Actions",
       node: (
         <>
-          <p className="text-xs leading-snug text-neutral-400">
-            Custom steps that run before or after a submission is stored. Set a
-            field value, call an API, update the submission, or copy it into
-            another form.
-          </p>
+          <div className="flex items-start justify-between gap-2">
+            <p className="text-xs leading-snug text-neutral-400">
+              Custom steps that run before or after a submission is stored. Set a
+              field value, call an API, update the submission, copy it into
+              another form, or send email (with CC/BCC/Reply-To and{" "}
+              {"{if}"} templates).
+            </p>
+            <HelpBubble article="actions" align="right" />
+          </div>
           <FormActionsEditor
             settings={settings}
             fieldOptions={fieldOptions}
@@ -1882,6 +1943,39 @@ function FormActionsEditor({
                   Attach a PDF of the submission
                 </label>
                 <input
+                  value={action.cc ?? ""}
+                  onChange={(event) =>
+                    updateAction(action.id, {
+                      cc: event.target.value || undefined,
+                    })
+                  }
+                  placeholder="CC (optional, comma-separated)"
+                  aria-label="CC"
+                  className={`${inputClasses} font-mono text-xs`}
+                />
+                <input
+                  value={action.bcc ?? ""}
+                  onChange={(event) =>
+                    updateAction(action.id, {
+                      bcc: event.target.value || undefined,
+                    })
+                  }
+                  placeholder="BCC (optional, comma-separated)"
+                  aria-label="BCC"
+                  className={`${inputClasses} font-mono text-xs`}
+                />
+                <input
+                  value={action.replyTo ?? ""}
+                  onChange={(event) =>
+                    updateAction(action.id, {
+                      replyTo: event.target.value || undefined,
+                    })
+                  }
+                  placeholder="Reply-To (optional)"
+                  aria-label="Reply-To"
+                  className={`${inputClasses} font-mono text-xs`}
+                />
+                <input
                   value={action.subject ?? ""}
                   onChange={(event) =>
                     updateAction(action.id, { subject: event.target.value })
@@ -1901,13 +1995,16 @@ function FormActionsEditor({
                   aria-label="Body template"
                   className={`${inputClasses} font-mono text-xs`}
                 />
-                <span className="text-[11px] text-neutral-400">
-                  Smart tags work in the subject and body: {"{field.email}"},{" "}
-                  {"{field.email.label}"}, {"{form.title}"}, {"{all_fields}"},{" "}
-                  {"{all_fields_html}"}, {"{record_url}"}, {"{receipt}"},{" "}
-                  {"{submission.id}"}, {"{date}"}. Leave the body blank to use
-                  the default summary. Requires SMTP to be configured on the
-                  server.
+                <span className="flex items-start gap-1.5 text-[11px] text-neutral-400">
+                  <span>
+                    Smart tags: {"{field.email}"}, {"{form.title}"},{" "}
+                    {"{all_fields}"}, {"{record_url}"}, {"{receipt}"},{" "}
+                    {"{submission.context.utmSource}"}, {"{date}"}.
+                    Conditionals: {"{if field.status == approved}…{/if}"}.
+                    CC/BCC/Reply-To also accept smart tags. Leave the body blank
+                    for the default summary. Requires SMTP.
+                  </span>
+                  <HelpBubble article="smart-tags" align="right" />
                 </span>
               </div>
             )}

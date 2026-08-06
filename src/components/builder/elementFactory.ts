@@ -31,6 +31,7 @@ export const FIELD_DEFINITIONS: FieldDefinition[] = [
   { type: "currency", name: "Currency", description: "Money amount", category: "advanced" },
   { type: "signature", name: "Signature", description: "Draw a signature", category: "advanced" },
   { type: "file_upload", name: "File upload", description: "Attach a file", category: "advanced" },
+  { type: "captcha", name: "Captcha", description: "Cloudflare Turnstile spam check", category: "advanced" },
   { type: "section_header", name: "Section Header", description: "Title and subtext", category: "layout" },
   { type: "divider", name: "Divider", description: "Horizontal rule", category: "layout" },
   { type: "paragraph", name: "Paragraph", description: "Rich help text", category: "layout" },
@@ -63,6 +64,7 @@ const DEFAULT_LABELS: Record<FieldType, string> = {
   currency: "Currency",
   signature: "Signature",
   file_upload: "File upload",
+  captcha: "Captcha",
   confirm: "Confirmation",
   hidden: "Hidden field",
   user: "User",
@@ -144,6 +146,14 @@ export function createElement(
       return { ...base, penColor: "#1e293b", penWidth: 2 };
     case "file_upload":
       return { ...base, maxFileSizeMb: 5, accept: "" };
+    case "captcha":
+      return {
+        ...base,
+        required: true,
+        showInTable: false,
+        filterable: false,
+        label: "Verification",
+      };
     case "confirm":
       return { ...base, confirmField: "" };
     case "hidden":

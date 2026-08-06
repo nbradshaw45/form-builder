@@ -45,6 +45,12 @@ import {
   applyBeforeSubmitActions,
   runAfterSubmitActions,
 } from "./server/formActions";
+import { getRequestIp, getRequestUserAgent } from "./server/requestContext";
+import {
+  isTurnstileConfigured,
+  verifyTurnstileToken,
+} from "./server/turnstile";
+import type { SubmissionContext } from "./shared/submissionContext";
 
 function serialize(value: unknown) {
   return JSON.parse(JSON.stringify(value));
@@ -353,10 +359,11 @@ type SubmitFormArgs = {
   formId: string;
   data: SubmissionData;
   submitterEmail?: string;
+  context?: SubmissionContext;
 };
 
 export const submitForm: SubmitForm<SubmitFormArgs, Submission> = async (
-  { formId, data, submitterEmail },
+  { formId, data, submitterEmail, context: clientContext },
   context,
 ) => {
   const form = await context.entities.Form.findUnique({
@@ -388,6 +395,22 @@ export const submitForm: SubmitForm<SubmitFormArgs, Submission> = async (
     throw new HttpError(400, "This form is now closed.");
   }
 
+  const formLoadedAtRaw = data["_formLoadedAt"];
+  delete data["_formLoadedAt"];
+  const minSeconds = settings.minSubmitSeconds;
+  if (minSeconds && minSeconds > 0) {
+    const loadedAt =
+      typeof formLoadedAtRaw === "string" || typeof formLoadedAtRaw === "number"
+        ? Number(formLoadedAtRaw)
+        : NaN;
+    if (!Number.isFinite(loadedAt) || nowMs - loadedAt < minSeconds * 1000) {
+      throw new HttpError(
+        400,
+        "Please take a moment to review the form before submitting.",
+      );
+    }
+  }
+
   const honeypotValue =
     typeof data["_honeypot"] === "string" ? data["_honeypot"] : "";
   delete data["_honeypot"];
@@ -397,10 +420,37 @@ export const submitForm: SubmitForm<SubmitFormArgs, Submission> = async (
       id: "spam-discarded",
       formId,
       data: serialize(data),
+      context: null,
       editToken: null,
       createdAt: timestamp,
       updatedAt: timestamp,
     } as unknown as Submission;
+  }
+
+  const fields = Array.isArray(form.fields)
+    ? (form.fields as unknown as FormField[])
+    : [];
+  const captchaFields = fields.filter((field) => field.type === "captcha");
+  if (captchaFields.length > 0) {
+    if (!isTurnstileConfigured()) {
+      throw new HttpError(
+        500,
+        "Captcha is enabled on this form but TURNSTILE_SECRET_KEY is not configured.",
+      );
+    }
+    const remoteIp = getRequestIp();
+    for (const field of captchaFields) {
+      const token = data[field.key];
+      delete data[field.key];
+      const tokenStr = typeof token === "string" ? token : "";
+      const ok = await verifyTurnstileToken(tokenStr, remoteIp);
+      if (!ok) {
+        throw new HttpError(
+          400,
+          "Captcha verification failed. Please try again.",
+        );
+      }
+    }
   }
 
   if (settings.rateLimitPerHour) {
@@ -443,6 +493,21 @@ export const submitForm: SubmitForm<SubmitFormArgs, Submission> = async (
 
   const adjustedData = await applyBeforeSubmitActions(form, data);
 
+  const submissionContext: SubmissionContext = {
+    ...(clientContext && typeof clientContext === "object"
+      ? clientContext
+      : {}),
+    ip: getRequestIp(),
+    userAgent:
+      clientContext?.userAgent?.trim() || getRequestUserAgent() || undefined,
+  };
+  // Drop empty string values so the JSON stays tidy.
+  for (const key of Object.keys(submissionContext) as (keyof SubmissionContext)[]) {
+    if (!submissionContext[key]) {
+      delete submissionContext[key];
+    }
+  }
+
   const submission = await context.entities.Submission.create({
     data: {
       form: {
@@ -451,6 +516,7 @@ export const submitForm: SubmitForm<SubmitFormArgs, Submission> = async (
         },
       },
       data: serialize({ ...adjustedData, ...systemValues }),
+      context: serialize(submissionContext),
       editToken,
     },
   });

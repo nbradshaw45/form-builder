@@ -1,4 +1,5 @@
 import type { FormField, SubmissionData } from "../types";
+import type { SubmissionContext } from "./submissionContext";
 
 /**
  * Context available to smart tags. Works on both client and server —
@@ -12,6 +13,8 @@ export type SmartTagContext = {
   submissionId?: string;
   recordUrl?: string;
   receipt?: string;
+  /** Optional submission context (IP, UTM, etc.). */
+  context?: SubmissionContext | null;
 };
 
 export function escapeHtml(value: string): string {
@@ -69,6 +72,86 @@ function fieldEntries(ctx: SmartTagContext): { label: string; value: string }[] 
     .filter((entry) => entry.value !== "");
 }
 
+function isTruthyValue(value: SubmissionData[string]): boolean {
+  if (value === null || value === undefined || value === "") {
+    return false;
+  }
+  if (typeof value === "boolean") {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    return value.length > 0;
+  }
+  return true;
+}
+
+function unquote(raw: string): string {
+  const trimmed = raw.trim();
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    return trimmed.slice(1, -1);
+  }
+  return trimmed;
+}
+
+/**
+ * Evaluate a simple `{if …}` condition.
+ * Supported forms:
+ * - `field.KEY` — truthy field value
+ * - `field.KEY == value` / `field.KEY != value`
+ * - `field.KEY contains value`
+ */
+export function evaluateIfCondition(
+  expression: string,
+  ctx: SmartTagContext,
+): boolean {
+  const expr = expression.trim();
+  if (!expr) {
+    return false;
+  }
+
+  const comparison = expr.match(
+    /^(field\.[a-zA-Z0-9_]+)\s*(==|!=|contains)\s*(.+)$/i,
+  );
+  if (comparison) {
+    const [, left, op, rawRight] = comparison;
+    const key = left.slice("field.".length);
+    const leftValue = formatFieldValue(
+      ctx.fields.find((field) => field.key === key),
+      ctx.data[key],
+    );
+    const rightValue = unquote(rawRight);
+    switch (op.toLowerCase()) {
+      case "==":
+        return leftValue === rightValue;
+      case "!=":
+        return leftValue !== rightValue;
+      case "contains":
+        return leftValue.toLowerCase().includes(rightValue.toLowerCase());
+      default:
+        return false;
+    }
+  }
+
+  if (expr.startsWith("field.")) {
+    const key = expr.slice("field.".length);
+    return isTruthyValue(ctx.data[key]);
+  }
+
+  return false;
+}
+
+/** Expand `{if …}…{/if}` blocks (non-nested). Unmatched conditions remove the block. */
+export function renderIfBlocks(template: string, ctx: SmartTagContext): string {
+  return template.replace(
+    /\{if\s+([^}]+)\}([\s\S]*?)\{\/if\}/gi,
+    (_match, expression: string, body: string) =>
+      evaluateIfCondition(expression, ctx) ? body : "",
+  );
+}
+
 function resolveTag(tag: string, ctx: SmartTagContext): string {
   if (tag.startsWith("field.")) {
     const rest = tag.slice("field.".length);
@@ -78,6 +161,11 @@ function resolveTag(tag: string, ctx: SmartTagContext): string {
     }
     const field = ctx.fields.find((f) => f.key === rest);
     return formatFieldValue(field, ctx.data[rest]);
+  }
+  if (tag.startsWith("submission.context.")) {
+    const key = tag.slice("submission.context.".length) as keyof SubmissionContext;
+    const value = ctx.context?.[key];
+    return value == null ? "" : String(value);
   }
   switch (tag) {
     case "form.title":
@@ -110,13 +198,16 @@ function resolveTag(tag: string, ctx: SmartTagContext): string {
 
 /**
  * Replace `{...}` smart tags in a template. Unknown tags render as an
- * empty string. Supported tags:
- * `{field.KEY}`, `{field.KEY.label}`, `{form.title}`, `{form.id}`,
- * `{submission.id}`, `{record_url}`, `{receipt}`, `{date}`,
- * `{all_fields}`, `{all_fields_html}`.
+ * empty string. Supports `{if field.x == y}…{/if}` conditional blocks.
+ *
+ * Tags: `{field.KEY}`, `{field.KEY.label}`, `{form.title}`, `{form.id}`,
+ * `{submission.id}`, `{submission.context.*}`, `{record_url}`, `{receipt}`,
+ * `{date}`, `{all_fields}`, `{all_fields_html}`.
  */
 export function renderSmartTags(template: string, ctx: SmartTagContext): string {
-  return template.replace(/\{([a-zA-Z0-9_.]+)\}/g, (_match, tag: string) =>
-    resolveTag(tag, ctx),
+  const withConditionals = renderIfBlocks(template, ctx);
+  return withConditionals.replace(
+    /\{([a-zA-Z0-9_.]+)\}/g,
+    (_match, tag: string) => resolveTag(tag, ctx),
   );
 }

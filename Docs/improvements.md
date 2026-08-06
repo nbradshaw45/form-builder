@@ -464,27 +464,28 @@ first item in the next round below.
     form link (reachable from the submissions page / form settings).
 13. **Channel presets** — Slack / Discord / Teams webhook templates on top of
     the generic webhook.
-14. **Spam controls beyond honeypot** — CAPTCHA element (Cloudflare Turnstile
-    or reCAPTCHA), minimum time-to-submit, email/domain blocklist, and
-    unique-value enforcement. (Open/close dates, honeypot, and rate limiting
-    are already live.)
+14. ~~**Spam controls beyond honeypot**~~ — **implemented**: Cloudflare
+    Turnstile captcha element + per-form minimum time to submit (open/close
+    dates, honeypot, and rate limiting were already live).
 15. **Public form API** — token-authenticated endpoint for submitting responses
     from other systems (external tools, scripts).
 16. **Payments** — Stripe checkout on submit for paid forms (gate submission
     creation on payment success).
 17. ~~**Smart tags + HTML email templates**~~ — **implemented**:
     `renderSmartTags` in `src/shared/smartTags.ts` (`{field.x}`, `{all_fields}`,
-    `{record_url}`, `{receipt}`, …) used in email subjects/bodies, the success
-    message, and redirect URLs; email action has a custom HTML body template.
-    Not done: CC/BCC/Reply-To, conditional content blocks (`{if}`).
+    `{record_url}`, `{receipt}`, `{submission.context.*}`, …) used in email
+    subjects/bodies, the success message, and redirect URLs; email action has
+    a custom HTML body template, **CC/BCC/Reply-To**, and `{if}…{/if}`
+    conditional content blocks. Not done: resend/tracking.
 18. ~~**PDF generation from submissions**~~ — **implemented**:
     `buildSubmissionPdf` (`src/server/pdf.ts`, pdfkit), `getSubmissionPdf`
     query, Download PDF on the record page + per-row on the submissions table,
     and an "Attach a PDF" option on the email action (sent via a direct
     nodemailer transporter since Wasp's emailSender has no attachment support).
-19. **Context tracking** — capture IP, country, device/browser, referrer,
-    source page, and UTM params per submission; expose as system fields and
-    filters.
+19. ~~**Context tracking**~~ — **implemented**: `Submission.context` JSON
+    (IP via request middleware, UA/referrer/source page/UTM/screen from the
+    client); shown on the record view; exposed as `{submission.context.*}`
+    smart tags.
 20. **Submission status & internal notes** — status selector (new/reviewed/
     archived) + notes on submissions; filter by status.
 21. **Storage controls** — per-form "don't store submissions" toggle and
@@ -530,16 +531,12 @@ does not cascade the target form's own actions (avoids loops).
 
 ### Recommended next (shortlist)
 
-Refreshed after shipping smart tags/email templates (D17), PDF generation
-(D18), and form templates/duplication/export-import (B2 + D22) — see
-`Docs/gap-analysis-convert-forms.md` for the full comparison.
+Refreshed after shipping spam controls (D14), context tracking (D19), and
+email polish (CC/BCC/Reply-To + `{if}` blocks):
 
-1. **Spam controls** (D14) — Turnstile element + min-time-to-submit; small
-   effort, protects every public form.
-2. **Context tracking** (D19) — IP/geo/referrer/UTM per submission; small
-   schema addition, big analytics value.
-3. **Email polish** — CC/BCC/Reply-To on the email action, conditional content
-   blocks (`{if}`) in templates, resend.
-4. **Submission status & internal notes** (D20) — makes review workflows
+1. **Submission status & internal notes** (D20) — makes review workflows
    manageable.
-5. **Integration presets** (D13) — Slack/Discord/Teams webhook templates.
+2. **Integration presets** (D13) — Slack/Discord/Teams webhook templates.
+3. **Per-form theming** (A) — accent color, logo, scoped custom CSS.
+4. **Embed & QR** (D12) — iframe snippet + QR for the form link.
+5. **Deeper analytics** (E24) — volume charts and per-option breakdowns.

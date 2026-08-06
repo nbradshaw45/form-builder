@@ -59,6 +59,7 @@ const EDITTABLE_TYPES = new Set([
   "file_upload",
   "user",
   "confirm",
+  "captcha",
 ]);
 
 const LAYOUT_TYPES = new Set(["section_header", "divider", "paragraph"]);
@@ -163,6 +164,7 @@ export function DynamicFormRenderer({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [currentStep, setCurrentStep] = useState(0);
   const [honeypotValue, setHoneypotValue] = useState("");
+  const formLoadedAtRef = useRef(Date.now());
 
   const { data: userOptions } = useQuery(getFormUsers);
 
@@ -339,6 +341,12 @@ export function DynamicFormRenderer({
     if (field.type === "hidden") {
       return null;
     }
+    if (field.type === "captcha") {
+      if (isEmptyValue(field, value)) {
+        return "Please complete the captcha";
+      }
+      return null;
+    }
     if (field.type === "confirm") {
       const targetValue = field.confirmField
         ? values[field.confirmField]
@@ -495,6 +503,9 @@ export function DynamicFormRenderer({
     }
     if (honeypot) {
       data["_honeypot"] = honeypotValue;
+    }
+    if (settings?.minSubmitSeconds && settings.minSubmitSeconds > 0) {
+      data["_formLoadedAt"] = String(formLoadedAtRef.current);
     }
 
     setIsSubmitting(true);

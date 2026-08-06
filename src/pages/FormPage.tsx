@@ -26,6 +26,12 @@ import {
   renderSmartTags,
   type SmartTagContext,
 } from "../shared/smartTags";
+import {
+  collectClientContext,
+  CONTEXT_DISPLAY_KEYS,
+  formatContextLabel,
+  type SubmissionContext,
+} from "../shared/submissionContext";
 
 const DEFAULT_SUCCESS_MESSAGE = "Thank you! Your response has been submitted.";
 const RECORD_SAVED_MESSAGE = "Record saved successfully.";
@@ -165,6 +171,7 @@ export function FormPage() {
   function smartTagContext(
     data: SubmissionData,
     submissionId?: string,
+    submissionContext?: SubmissionContext | null,
   ): SmartTagContext {
     return {
       form: { id: formId, title: formTitle },
@@ -175,6 +182,7 @@ export function FormPage() {
         ? `${window.location.origin}/forms/${formId}/records/${submissionId}`
         : undefined,
       receipt: submissionId ? buildReceipt(submissionId) : undefined,
+      context: submissionContext ?? undefined,
     };
   }
 
@@ -267,7 +275,12 @@ export function FormPage() {
         await updateSubmission({ submissionId, data });
       }
     } else {
-      const result = await submitForm({ formId, data, submitterEmail });
+      const result = await submitForm({
+        formId,
+        data,
+        submitterEmail,
+        context: collectClientContext(),
+      });
       savedSubmissionId = result.id;
       setLastSubmission({
         id: result.id,
@@ -439,6 +452,17 @@ export function FormPage() {
     />
   );
 
+  const recordContext =
+    record?.submission?.context &&
+    typeof record.submission.context === "object"
+      ? (record.submission.context as SubmissionContext)
+      : null;
+
+  const contextPanel =
+    recordMode === "view" && recordContext ? (
+      <SubmissionContextPanel context={recordContext} />
+    ) : null;
+
   if (isModal) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
@@ -462,6 +486,7 @@ export function FormPage() {
             </p>
           )}
           {formBody}
+          {contextPanel}
         </div>
       </div>
     );
@@ -478,7 +503,38 @@ export function FormPage() {
           </p>
         )}
         {formBody}
+        {contextPanel}
       </section>
+    </div>
+  );
+}
+
+function SubmissionContextPanel({ context }: { context: SubmissionContext }) {
+  const entries = CONTEXT_DISPLAY_KEYS.map((key) => {
+    const value = context[key];
+    if (!value) {
+      return null;
+    }
+    return (
+      <div key={key} className="flex flex-col gap-0.5 sm:flex-row sm:gap-3">
+        <dt className="min-w-[7.5rem] shrink-0 font-mono text-[10px] font-semibold uppercase tracking-[0.1em] text-neutral-400">
+          {formatContextLabel(key)}
+        </dt>
+        <dd className="break-all text-sm text-neutral-700">{value}</dd>
+      </div>
+    );
+  }).filter(Boolean);
+
+  if (entries.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="flex flex-col gap-3 border-t border-neutral-100 pt-5">
+      <h2 className="font-display text-sm font-bold tracking-[-0.02em] text-neutral-800">
+        Submission context
+      </h2>
+      <dl className="flex flex-col gap-2.5">{entries}</dl>
     </div>
   );
 }

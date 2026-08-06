@@ -102,17 +102,25 @@ export type EmailAttachment = {
   contentType?: string;
 };
 
+export type SendEmailOptions = {
+  recipients: string[];
+  subject: string;
+  text: string;
+  html: string;
+  cc?: string[];
+  bcc?: string[];
+  replyTo?: string;
+  attachments?: EmailAttachment[];
+};
+
 /**
  * Wasp's `emailSender` supports only { to, subject, text, html } — no
- * attachments. When attachments are needed we send through a direct
- * nodemailer transporter built from the same SMTP_* env vars Wasp uses.
+ * attachments / CC / BCC / Reply-To. When those are needed we send through a
+ * direct nodemailer transporter built from the same SMTP_* env vars.
  */
-async function sendWithAttachments(
+async function sendViaSmtp(
   to: string,
-  subject: string,
-  text: string,
-  html: string,
-  attachments: EmailAttachment[],
+  options: Omit<SendEmailOptions, "recipients">,
 ): Promise<void> {
   const transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST,
@@ -125,10 +133,13 @@ async function sendWithAttachments(
   await transporter.sendMail({
     from: '"Form Builder" <noreply@formbuilder.local>',
     to,
-    subject,
-    text,
-    html,
-    attachments,
+    cc: options.cc?.length ? options.cc.join(", ") : undefined,
+    bcc: options.bcc?.length ? options.bcc.join(", ") : undefined,
+    replyTo: options.replyTo || undefined,
+    subject: options.subject,
+    text: options.text,
+    html: options.html,
+    attachments: options.attachments,
   });
 }
 
@@ -138,16 +149,51 @@ export async function sendEmail(
   text: string,
   html: string,
   attachments?: EmailAttachment[],
+  extras?: { cc?: string[]; bcc?: string[]; replyTo?: string },
+): Promise<void>;
+export async function sendEmail(options: SendEmailOptions): Promise<void>;
+export async function sendEmail(
+  recipientsOrOptions: string[] | SendEmailOptions,
+  subject?: string,
+  text?: string,
+  html?: string,
+  attachments?: EmailAttachment[],
+  extras?: { cc?: string[]; bcc?: string[]; replyTo?: string },
 ): Promise<void> {
+  const options: SendEmailOptions = Array.isArray(recipientsOrOptions)
+    ? {
+        recipients: recipientsOrOptions,
+        subject: subject ?? "",
+        text: text ?? "",
+        html: html ?? "",
+        attachments,
+        cc: extras?.cc,
+        bcc: extras?.bcc,
+        replyTo: extras?.replyTo,
+      }
+    : recipientsOrOptions;
+
   if (!process.env.SMTP_HOST || !process.env.SMTP_USERNAME) {
     return;
   }
-  for (const to of recipients) {
+
+  const needsSmtpExtras =
+    Boolean(options.attachments?.length) ||
+    Boolean(options.cc?.length) ||
+    Boolean(options.bcc?.length) ||
+    Boolean(options.replyTo?.trim());
+
+  for (const to of options.recipients) {
     try {
-      if (attachments && attachments.length > 0) {
-        await sendWithAttachments(to, subject, text, html, attachments);
+      if (needsSmtpExtras) {
+        await sendViaSmtp(to, options);
       } else {
-        await emailSender.send({ to, subject, text, html });
+        await emailSender.send({
+          to,
+          subject: options.subject,
+          text: options.text,
+          html: options.html,
+        });
       }
     } catch (err) {
       console.error(`Email notification failed for ${to}:`, err);

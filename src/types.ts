@@ -16,6 +16,7 @@ export type FieldType =
   | "currency"
   | "signature"
   | "file_upload"
+  | "captcha"
   | "confirm"
   | "hidden"
   | "math"
@@ -212,6 +213,11 @@ export type FormSettings = {
   allowSelfEdit?: boolean;
   /** Add an invisible honeypot field; bots that fill it are silently rejected. */
   honeypot?: boolean;
+  /**
+   * Reject submissions completed in under this many seconds (bot/speed check).
+   * Undefined / 0 = disabled.
+   */
+  minSubmitSeconds?: number;
   /** Max submissions per rolling hour. Undefined = unlimited. */
   rateLimitPerHour?: number;
   /** ISO datetime before which submissions are rejected. */
@@ -304,9 +310,18 @@ export type FormAction =
       recipientField?: string;
       /** Also email the person who submitted. */
       includeSubmitter?: boolean;
+      /** Comma-separated CC recipients. Supports smart tags. */
+      cc?: string;
+      /** Comma-separated BCC recipients. Supports smart tags. */
+      bcc?: string;
+      /** Reply-To address. Supports smart tags. */
+      replyTo?: string;
       /** Optional custom subject line. Supports smart tags. */
       subject?: string;
-      /** Optional custom HTML body. Supports smart tags; empty uses the default summary. */
+      /**
+       * Optional custom HTML body. Supports smart tags and `{if}…{/if}`
+       * conditional blocks; empty uses the default summary.
+       */
       bodyTemplate?: string;
       /**
        * Attach a PDF of the submission to the email. Sent via a direct

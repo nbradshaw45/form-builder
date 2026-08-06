@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getFile, uploadFile, useQuery } from "wasp/client/operations";
 import type { FormField, SubmissionData } from "../types";
 import { formatFormulaValue } from "./builder/formula";
@@ -363,6 +363,24 @@ export function FieldControl({
           onChange={onChange}
           disabled={disabled}
           formId={formId}
+        />
+        {helpText && <span className={helpTextClasses}>{helpText}</span>}
+        {error && <span className={errorTextClasses}>{error}</span>}
+      </div>
+    );
+  }
+
+  if (type === "captcha") {
+    return (
+      <div className={fieldClasses}>
+        <span className={labelClasses}>
+          {label}
+          <span className="text-danger"> *</span>
+        </span>
+        <TurnstileControl
+          value={typeof value === "string" ? value : ""}
+          onChange={(token) => onChange(token)}
+          disabled={disabled}
         />
         {helpText && <span className={helpTextClasses}>{helpText}</span>}
         {error && <span className={errorTextClasses}>{error}</span>}
@@ -878,4 +896,143 @@ function formatBytes(bytes: number): string {
     return `${(bytes / 1024).toFixed(1)} KB`;
   }
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+declare global {
+  interface Window {
+    turnstile?: {
+      render: (
+        element: HTMLElement,
+        options: {
+          sitekey: string;
+          callback?: (token: string) => void;
+          "expired-callback"?: () => void;
+          "error-callback"?: () => void;
+          theme?: "light" | "dark" | "auto";
+        },
+      ) => string;
+      reset: (widgetId?: string) => void;
+      remove: (widgetId?: string) => void;
+    };
+  }
+}
+
+let turnstileScriptPromise: Promise<void> | null = null;
+
+function loadTurnstileScript(): Promise<void> {
+  if (typeof window === "undefined") {
+    return Promise.resolve();
+  }
+  if (window.turnstile) {
+    return Promise.resolve();
+  }
+  if (turnstileScriptPromise) {
+    return turnstileScriptPromise;
+  }
+  turnstileScriptPromise = new Promise((resolve, reject) => {
+    const existing = document.querySelector<HTMLScriptElement>(
+      'script[src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"]',
+    );
+    if (existing) {
+      existing.addEventListener("load", () => resolve());
+      existing.addEventListener("error", () =>
+        reject(new Error("Failed to load Turnstile")),
+      );
+      if (window.turnstile) {
+        resolve();
+      }
+      return;
+    }
+    const script = document.createElement("script");
+    script.src =
+      "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("Failed to load Turnstile"));
+    document.head.appendChild(script);
+  });
+  return turnstileScriptPromise;
+}
+
+function TurnstileControl({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: string;
+  onChange: (token: string) => void;
+  disabled?: boolean;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const widgetIdRef = useRef<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const siteKey =
+    (import.meta.env.REACT_APP_TURNSTILE_SITE_KEY as string | undefined)?.trim() ||
+    "";
+
+  useEffect(() => {
+    if (disabled || !siteKey || !containerRef.current) {
+      return;
+    }
+    let cancelled = false;
+
+    void loadTurnstileScript()
+      .then(() => {
+        if (cancelled || !containerRef.current || !window.turnstile) {
+          return;
+        }
+        if (widgetIdRef.current) {
+          window.turnstile.remove(widgetIdRef.current);
+          widgetIdRef.current = null;
+        }
+        widgetIdRef.current = window.turnstile.render(containerRef.current, {
+          sitekey: siteKey,
+          callback: (token) => onChange(token),
+          "expired-callback": () => onChange(""),
+          "error-callback": () => onChange(""),
+          theme: "light",
+        });
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setLoadError(err instanceof Error ? err.message : String(err));
+        }
+      });
+
+    return () => {
+      cancelled = true;
+      if (widgetIdRef.current && window.turnstile) {
+        window.turnstile.remove(widgetIdRef.current);
+        widgetIdRef.current = null;
+      }
+    };
+    // Re-render widget when site key / disabled changes; onChange is stable enough.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [siteKey, disabled]);
+
+  if (disabled) {
+    return (
+      <p className="text-sm text-neutral-400">
+        {value ? "Captcha verified" : "Captcha (hidden in view mode)"}
+      </p>
+    );
+  }
+
+  if (!siteKey) {
+    return (
+      <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+        Set <code className="font-mono text-xs">REACT_APP_TURNSTILE_SITE_KEY</code>{" "}
+        in <code className="font-mono text-xs">.env.client</code> to enable captcha.
+      </p>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div ref={containerRef} />
+      {loadError && (
+        <span className={errorTextClasses}>{loadError}</span>
+      )}
+    </div>
+  );
 }

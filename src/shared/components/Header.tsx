@@ -28,6 +28,11 @@ export function Header() {
                     Forms
                   </ButtonLink>
                 </li>
+                <li>
+                  <ButtonLink to="/docs" variant="ghost" size="sm">
+                    Wiki
+                  </ButtonLink>
+                </li>
                 {user.role === "ADMIN" && (
                   <li>
                     <ButtonLink to="/admin/users" variant="ghost" size="sm">
