@@ -1205,9 +1205,18 @@ function FormSettingsPanel({
     },
     {
       id: "filters",
-      label: "Submissions filters",
+      label: "Submissions table",
       node: (
         <>
+          <ToggleRow
+            label="Show action labels"
+            checked={settings.showActionLabels !== false}
+            onChange={(checked) => onChange({ showActionLabels: checked })}
+          />
+          <span className="-mt-1 text-xs text-neutral-400">
+            When off, the View/Edit row actions show icons only, saving table
+            width.
+          </span>
           <div className="flex flex-col gap-1">
             <label htmlFor="settings-filter-placement" className="label">
               Placement

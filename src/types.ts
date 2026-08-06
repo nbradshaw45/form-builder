@@ -222,6 +222,8 @@ export type FormSettings = {
   filterPlacement?: "top" | "header";
   /** Number of columns for the "top" filter grid (1-6). Defaults to 3. */
   filterColumns?: number;
+  /** Show text labels ("View", "Edit", …) on the submissions table row actions. Defaults to true; false shows icons only. */
+  showActionLabels?: boolean;
   /** Custom actions that run before/after a submission is stored. */
   actions?: FormAction[];
   /**

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { AuthUser } from "wasp/auth";
 import type { Submission } from "wasp/entities";
 import {
@@ -23,7 +23,7 @@ import { Button, ButtonLink } from "../shared/components/Button";
 import { Card, CardHead, DataFoot, DataToolbar } from "../shared/components/Card";
 import { ConfirmDialog } from "../components/Modal";
 import { inputClasses } from "../shared/styles";
-import { EyeIcon, PencilIcon, PlusIcon, ShareIcon, TrashIcon } from "../components/builder/icons";
+import { EllipsisIcon, EyeIcon, PencilIcon, PlusIcon, ShareIcon, TrashIcon } from "../components/builder/icons";
 import {
   filterInputForField,
   filterOperatorsForType,
@@ -111,6 +111,7 @@ export function FormSubmissionsPage({ user }: { user: AuthUser }) {
   );
   const headerMode = settings.filterPlacement === "header";
   const filterColumns = settings.filterColumns ?? 3;
+  const showActionLabels = settings.showActionLabels !== false;
 
   const FILTERABLE_TYPES = new Set([
     "text",
@@ -461,12 +462,13 @@ export function FormSubmissionsPage({ user }: { user: AuthUser }) {
             formId={id}
             submissionId={info.row.original.id}
             canEdit={canEdit}
+            showLabels={showActionLabels}
             onDelete={() => setDeleteTarget(info.row.original)}
           />
         ),
       }),
     ];
-  }, [fields, submissions, canEdit, id, selected, filteredSubmissions, toggleAll, toggleSelected, headerMode, filters, distinctValues, filterableFields, updateFilter]);
+  }, [fields, submissions, canEdit, id, selected, filteredSubmissions, toggleAll, toggleSelected, headerMode, showActionLabels, filters, distinctValues, filterableFields, updateFilter]);
 
   const table = useReactTable({
     data: filteredSubmissions,
@@ -724,14 +726,40 @@ function RowActions({
   formId,
   submissionId,
   canEdit,
+  showLabels,
   onDelete,
 }: {
   formId: string;
   submissionId: string;
   canEdit: boolean;
+  showLabels: boolean;
   onDelete: () => void;
 }) {
   const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!menuOpen) {
+      return;
+    }
+    function handlePointerDown(event: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [menuOpen]);
 
   async function downloadPdf() {
     setDownloadingPdf(true);
@@ -760,15 +788,17 @@ function RowActions({
   }
 
   return (
-    <div className="flex flex-wrap gap-1.5">
+    <div className="flex flex-wrap items-center gap-1.5">
       <ButtonLink
         to="/forms/:id/records/:submissionId"
         params={{ id: formId, submissionId }}
         size="xs"
         variant="ghost"
+        title="View"
+        aria-label="View"
       >
         <EyeIcon className="size-3.5" />
-        View
+        {showLabels && "View"}
       </ButtonLink>
       {canEdit && (
         <ButtonLink
@@ -776,31 +806,60 @@ function RowActions({
           params={{ id: formId, submissionId }}
           size="xs"
           variant="ghost"
+          title="Edit"
+          aria-label="Edit"
         >
           <PencilIcon className="size-3.5" />
-          Edit
+          {showLabels && "Edit"}
         </ButtonLink>
       )}
-      <Button
-        size="xs"
-        variant="ghost"
-        onClick={() => void downloadPdf()}
-        disabled={downloadingPdf}
-      >
-        <DownloadIcon className="size-3.5" />
-        {downloadingPdf ? "PDF..." : "PDF"}
-      </Button>
-      {canEdit && (
+      <div className="relative" ref={menuRef}>
         <Button
           size="xs"
           variant="ghost"
-          className="text-danger hover:border-danger hover:bg-danger-soft hover:text-danger"
-          onClick={onDelete}
+          title="More actions"
+          aria-label="More actions"
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
+          onClick={() => setMenuOpen((open) => !open)}
         >
-          <TrashIcon className="size-3.5" />
-          Delete
+          <EllipsisIcon className="size-3.5" />
         </Button>
-      )}
+        {menuOpen && (
+          <div
+            role="menu"
+            className="absolute right-0 z-30 mt-1 w-40 overflow-hidden rounded-lg border border-neutral-200 bg-white py-1 shadow-lg"
+          >
+            <button
+              type="button"
+              role="menuitem"
+              disabled={downloadingPdf}
+              onClick={() => {
+                setMenuOpen(false);
+                void downloadPdf();
+              }}
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs font-medium text-neutral-700 hover:bg-neutral-50 disabled:opacity-60"
+            >
+              <DownloadIcon className="size-3.5" />
+              {downloadingPdf ? "Downloading..." : "Download PDF"}
+            </button>
+            {canEdit && (
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setMenuOpen(false);
+                  onDelete();
+                }}
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs font-medium text-danger hover:bg-danger-soft"
+              >
+                <TrashIcon className="size-3.5" />
+                Delete
+              </button>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
