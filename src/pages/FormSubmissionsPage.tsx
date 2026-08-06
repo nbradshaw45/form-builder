@@ -25,6 +25,7 @@ import { inputClasses } from "../shared/styles";
 import { EyeIcon, PencilIcon, PlusIcon, ShareIcon, TrashIcon } from "../components/builder/icons";
 import {
   filterInputForField,
+  filterOperatorsForType,
   isFilterActive,
   matchesFilter,
   operatorForField,
@@ -848,6 +849,10 @@ function FilterControl({
   onChange: (filter: FilterEntry | undefined) => void;
 }) {
   const operator = operatorForField(field);
+  const operatorLabel =
+    filterOperatorsForType(field.type).find(
+      (option) => option.value === operator,
+    )?.label ?? null;
   const value = filter?.value ?? "";
   const value2 = filter?.value2 ?? "";
   const inputCls = `${inputClasses} text-xs`;
@@ -879,6 +884,11 @@ function FilterControl({
 
   return (
     <div className="flex flex-col gap-1.5">
+      {operatorLabel && (
+        <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-neutral-400">
+          {operatorLabel}
+        </span>
+      )}
       <FilterValueInput
         field={field}
         operator={operator}
