@@ -1,11 +1,12 @@
 import { type ReactNode, useState } from "react";
 import type {
+  Condition,
   FieldValidation,
   FormAction,
   FormField,
   FormSettings,
-  VisibilityOperator,
-  VisibilityRule,
+  LogicAction,
+  LogicCondition,
 } from "../../types";
 import type { FieldType } from "../../types";
 import { inputClasses } from "../../shared/styles";
@@ -16,6 +17,12 @@ import {
   filterOperatorsForType,
   supportsFilterInputChoice,
 } from "../../shared/filters";
+import {
+  ConditionEditor,
+  ConditionalLogicPanel,
+  JsOnLoadEditor,
+  defaultCondition,
+} from "./LogicEditors";
 import { getForms, useQuery } from "wasp/client/operations";
 import {
   ArrowLeftIcon,
@@ -37,13 +44,6 @@ interface FieldInspectorProps {
 }
 
 const labelClasses = "text-xs font-semibold tracking-[-0.005em] text-neutral-800";
-
-const OPERATORS: { value: VisibilityOperator; label: string }[] = [
-  { value: "equals", label: "equals" },
-  { value: "not_equals", label: "does not equal" },
-  { value: "is_set", label: "is set" },
-  { value: "is_not_set", label: "is not set" },
-];
 
 const WIDTH_OPTIONS = Array.from({ length: 12 }, (_, index) => {
   const columns = index + 1;
@@ -112,6 +112,7 @@ export function FieldInspector({
         <FormSettingsPanel
           settings={settings}
           fieldOptions={fieldOptions}
+          fields={allElements}
           onChange={onSettingsChange}
           onExpand={() => setSettingsExpanded(true)}
         />
@@ -130,6 +131,7 @@ export function FieldInspector({
               <FormSettingsPanel
                 settings={settings}
                 fieldOptions={fieldOptions}
+                fields={allElements}
                 onChange={onSettingsChange}
                 expanded
                 onExpand={() => setSettingsExpanded(false)}
@@ -845,12 +847,14 @@ function toDatetimeLocal(value?: string): string {
 function FormSettingsPanel({
   settings,
   fieldOptions,
+  fields,
   onChange,
   expanded = false,
   onExpand,
 }: {
   settings: FormSettings;
   fieldOptions: { key: string; label: string }[];
+  fields: FormField[];
   onChange: (patch: Partial<FormSettings>) => void;
   expanded?: boolean;
   onExpand?: () => void;
@@ -861,6 +865,10 @@ function FormSettingsPanel({
   const wantsMessage =
     settings.successMode === "message" || settings.successMode === "both";
   const [activeTab, setActiveTab] = useState("display");
+
+  const logicTargets = fields.filter(
+    (field) => !["section_header", "divider", "paragraph", "math"].includes(field.type),
+  );
 
   const sections: { id: string; label: string; node: ReactNode }[] = [
     {
@@ -1297,6 +1305,28 @@ function FormSettingsPanel({
             settings={settings}
             fieldOptions={fieldOptions}
             onChange={onChange}
+          />
+        </>
+      ),
+    },
+    {
+      id: "conditional",
+      label: "Conditional logic",
+      node: (
+        <>
+          <p className="text-xs leading-snug text-neutral-400">
+            Show or hide fields, change values, and run custom JavaScript based
+            on the value of other fields. Conditions are evaluated on page load
+            and whenever a value changes.
+          </p>
+          <ConditionalLogicPanel
+            conditions={settings.conditions ?? []}
+            targets={logicTargets}
+            onChange={(conditions) => onChange({ conditions })}
+          />
+          <JsOnLoadEditor
+            code={settings.jsOnLoad ?? ""}
+            onChange={(jsOnLoad) => onChange({ jsOnLoad })}
           />
         </>
       ),
@@ -1780,10 +1810,10 @@ function ActionWhenEditor({
 }: {
   action: FormAction;
   fieldOptions: { key: string; label: string }[];
-  onWhenChange: (when: VisibilityRule | undefined) => void;
+  onWhenChange: (when: Condition | undefined) => void;
 }) {
-  const rule = action.when;
-  const enabled = Boolean(rule);
+  const condition = action.when;
+  const enabled = Boolean(condition);
 
   return (
     <div className="flex flex-col gap-1.5 border-t border-neutral-100 pt-2">
@@ -1792,15 +1822,7 @@ function ActionWhenEditor({
           type="checkbox"
           checked={enabled}
           onChange={(event) =>
-            onWhenChange(
-              event.target.checked
-                ? {
-                    field: fieldOptions[0]?.key ?? "",
-                    operator: "equals",
-                    value: "",
-                  }
-                : undefined,
-            )
+            onWhenChange(event.target.checked ? defaultCondition() : undefined)
           }
           disabled={fieldOptions.length === 0}
           className="size-3.5 rounded border-neutral-300 text-primary-500 focus:ring-primary-500 disabled:cursor-not-allowed"
@@ -1808,50 +1830,17 @@ function ActionWhenEditor({
         Only run when...
       </label>
 
-      {enabled && rule && (
-        <div className="flex flex-col gap-1.5">
-          <div className="flex gap-1.5">
-            <select
-              value={rule.field}
-              onChange={(event) =>
-                onWhenChange({ ...rule, field: event.target.value })
-              }
-              className={`${inputClasses} min-w-0 flex-1 text-xs`}
-            >
-              {fieldOptions.map((option) => (
-                <option key={option.key} value={option.key}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-            <select
-              value={rule.operator}
-              onChange={(event) =>
-                onWhenChange({
-                  ...rule,
-                  operator: event.target.value as VisibilityOperator,
-                })
-              }
-              className={`${inputClasses} w-28 text-xs`}
-            >
-              {OPERATORS.map((op) => (
-                <option key={op.value} value={op.value}>
-                  {op.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          {(rule.operator === "equals" || rule.operator === "not_equals") && (
-            <input
-              value={rule.value ?? ""}
-              onChange={(event) =>
-                onWhenChange({ ...rule, value: event.target.value })
-              }
-              placeholder="Value"
-              className={`${inputClasses} text-xs`}
-            />
-          )}
-        </div>
+      {enabled && (
+        <ConditionEditor
+          condition={condition}
+          targets={fieldOptions.map((option) => ({
+            id: option.key,
+            key: option.key,
+            label: option.label,
+            type: "text" as const,
+          }))}
+          onChange={onWhenChange}
+        />
       )}
 
       {fieldOptions.length === 0 && (
@@ -1907,8 +1896,7 @@ function OptionsEditor({
   onPatch: (id: string, patch: Partial<FormField>) => void;
 }) {
   const options = element.options ?? [];
-  const optionRules: (VisibilityRule | undefined)[] =
-    element.optionRules ?? [];
+  const optionRules: (Condition | undefined)[] = element.optionRules ?? [];
 
   function setOption(index: number, value: string) {
     const next = [...options];
@@ -1920,7 +1908,7 @@ function OptionsEditor({
     const nextRules = [...optionRules];
     nextRules.splice(index, 1);
     const cleanRules = nextRules.filter(
-      (rule): rule is VisibilityRule => Boolean(rule),
+      (rule): rule is Condition => Boolean(rule),
     );
     onPatch(element.id, {
       options: options.filter((_, i) => i !== index),
@@ -1928,7 +1916,7 @@ function OptionsEditor({
     });
   }
 
-  function setOptionRule(index: number, rule: VisibilityRule | undefined) {
+  function setOptionRule(index: number, rule: Condition | undefined) {
     const nextRules = [...optionRules];
     if (rule) {
       nextRules[index] = rule;
@@ -1936,7 +1924,7 @@ function OptionsEditor({
       nextRules[index] = undefined;
     }
     const cleanRules = nextRules.filter(
-      (item): item is VisibilityRule => Boolean(item),
+      (item): item is Condition => Boolean(item),
     );
     onPatch(element.id, {
       optionRules: cleanRules.length > 0 ? cleanRules : undefined,
@@ -1982,11 +1970,7 @@ function OptionsEditor({
                       setOptionRule(
                         index,
                         event.target.checked
-                          ? {
-                              field: ruleTargets[0].key,
-                              operator: "equals",
-                              value: "",
-                            }
+                          ? defaultCondition(ruleTargets[0].key)
                           : undefined,
                       )
                     }
@@ -1996,57 +1980,11 @@ function OptionsEditor({
                 </label>
               )}
               {rule && (
-                <div className="flex flex-col gap-1.5">
-                  <div className="flex gap-1.5">
-                    <select
-                      value={rule.field}
-                      onChange={(event) =>
-                        setOptionRule(index, {
-                          ...rule,
-                          field: event.target.value,
-                        })
-                      }
-                      className={`${inputClasses} flex-1`}
-                    >
-                      {ruleTargets.map((target) => (
-                        <option key={target.id} value={target.key}>
-                          {target.label}
-                        </option>
-                      ))}
-                    </select>
-                    <select
-                      value={rule.operator}
-                      onChange={(event) =>
-                        setOptionRule(index, {
-                          ...rule,
-                          operator: event.target
-                            .value as VisibilityOperator,
-                        })
-                      }
-                      className={`${inputClasses} w-32`}
-                    >
-                      {OPERATORS.map((op) => (
-                        <option key={op.value} value={op.value}>
-                          {op.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  {(rule.operator === "equals" ||
-                    rule.operator === "not_equals") && (
-                    <input
-                      value={rule.value ?? ""}
-                      onChange={(event) =>
-                        setOptionRule(index, {
-                          ...rule,
-                          value: event.target.value,
-                        })
-                      }
-                      placeholder="Value"
-                      className={inputClasses}
-                    />
-                  )}
-                </div>
+                <ConditionEditor
+                  condition={rule}
+                  targets={ruleTargets}
+                  onChange={(next) => setOptionRule(index, next)}
+                />
               )}
             </li>
           );
@@ -2305,8 +2243,8 @@ function RequiredWhenEditor({
   ruleTargets: FormField[];
   onPatch: (id: string, patch: Partial<FormField>) => void;
 }) {
-  const rule = element.requiredWhen;
-  const enabled = Boolean(rule);
+  const condition = element.requiredWhen;
+  const enabled = Boolean(condition);
 
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-neutral-100 bg-muted p-3">
@@ -2319,13 +2257,7 @@ function RequiredWhenEditor({
             onPatch(
               element.id,
               event.target.checked
-                ? {
-                    requiredWhen: {
-                      field: ruleTargets[0]?.key ?? "",
-                      operator: "equals",
-                      value: "",
-                    },
-                  }
+                ? { requiredWhen: defaultCondition(ruleTargets[0]?.key) }
                 : { requiredWhen: undefined },
             )
           }
@@ -2335,58 +2267,12 @@ function RequiredWhenEditor({
         Required only when...
       </label>
 
-      {enabled && rule && (
-        <div className="flex flex-col gap-1.5">
-          <div className="flex gap-1.5">
-            <select
-              value={rule.field}
-              onChange={(event) =>
-                onPatch(element.id, {
-                  requiredWhen: { ...rule, field: event.target.value },
-                })
-              }
-              className={`${inputClasses} flex-1`}
-            >
-              {ruleTargets.length === 0 && <option value="">No fields</option>}
-              {ruleTargets.map((target) => (
-                <option key={target.id} value={target.key}>
-                  {target.label}
-                </option>
-              ))}
-            </select>
-            <select
-              value={rule.operator}
-              onChange={(event) =>
-                onPatch(element.id, {
-                  requiredWhen: {
-                    ...rule,
-                    operator: event.target.value as VisibilityOperator,
-                  },
-                })
-              }
-              className={`${inputClasses} w-32`}
-            >
-              {OPERATORS.map((op) => (
-                <option key={op.value} value={op.value}>
-                  {op.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          {(rule.operator === "equals" ||
-            rule.operator === "not_equals") && (
-            <input
-              value={rule.value ?? ""}
-              onChange={(event) =>
-                onPatch(element.id, {
-                  requiredWhen: { ...rule, value: event.target.value },
-                })
-              }
-              placeholder="Value"
-              className={inputClasses}
-            />
-          )}
-        </div>
+      {enabled && (
+        <ConditionEditor
+          condition={condition}
+          targets={ruleTargets}
+          onChange={(requiredWhen) => onPatch(element.id, { requiredWhen })}
+        />
       )}
 
       {ruleTargets.length === 0 && (
@@ -2407,17 +2293,13 @@ function RulesEditor({
   ruleTargets: FormField[];
   onPatch: (id: string, patch: Partial<FormField>) => void;
 }) {
-  const rule = element.visibleWhen;
-  const enabled = Boolean(rule);
+  const condition = element.visibleWhen;
+  const enabled = Boolean(condition);
 
   function setEnabled(next: boolean) {
     if (next) {
       onPatch(element.id, {
-        visibleWhen: {
-          field: ruleTargets[0]?.key ?? "",
-          operator: "equals",
-          value: "",
-        },
+        visibleWhen: defaultCondition(ruleTargets[0]?.key),
       });
     } else {
       onPatch(element.id, { visibleWhen: undefined });
@@ -2437,64 +2319,12 @@ function RulesEditor({
         Show conditionally
       </label>
 
-      {enabled && rule && (
-        <div className="flex flex-col gap-2.5 rounded-lg border border-neutral-100 bg-muted p-3">
-          <div className="flex flex-col gap-1">
-            <label className={labelClasses}>Field</label>
-            <select
-              value={rule.field}
-              onChange={(event) =>
-                onPatch(element.id, {
-                  visibleWhen: { ...rule, field: event.target.value },
-                })
-              }
-              className={inputClasses}
-            >
-              {ruleTargets.length === 0 && <option value="">No fields</option>}
-              {ruleTargets.map((target) => (
-                <option key={target.id} value={target.key}>
-                  {target.label} ({target.key})
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className={labelClasses}>Condition</label>
-            <select
-              value={rule.operator}
-              onChange={(event) =>
-                onPatch(element.id, {
-                  visibleWhen: {
-                    ...rule,
-                    operator: event.target.value as VisibilityOperator,
-                  },
-                })
-              }
-              className={inputClasses}
-            >
-              {OPERATORS.map((op) => (
-                <option key={op.value} value={op.value}>
-                  {op.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          {(rule.operator === "equals" ||
-            rule.operator === "not_equals") && (
-            <div className="flex flex-col gap-1">
-              <label className={labelClasses}>Value</label>
-              <input
-                value={rule.value}
-                onChange={(event) =>
-                  onPatch(element.id, {
-                    visibleWhen: { ...rule, value: event.target.value },
-                  })
-                }
-                className={inputClasses}
-              />
-            </div>
-          )}
-        </div>
+      {enabled && (
+        <ConditionEditor
+          condition={condition}
+          targets={ruleTargets}
+          onChange={(visibleWhen) => onPatch(element.id, { visibleWhen })}
+        />
       )}
 
       {ruleTargets.length === 0 && (

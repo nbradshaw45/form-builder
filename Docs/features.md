@@ -57,14 +57,16 @@ validation, Data table & filters, System field, Visibility):
 
 - **Label**, **Field key** (stored JSON key), **Column width**
 - **Placeholder**, **Help text**, **Required**, **Show in data table**
-- **Visibility rule** — show the field only when another field equals / does
-  not equal / is set / is not set a value
+- **Visibility rule** — show the field only when a condition on another field
+  is met. Conditions support multiple rules (AND within a group, OR between
+  groups) and type-aware operators: equals, not equals, contains, starts/ends
+  with, is set, is not set, greater/less than.
 - **Validation** (per-field):
   - Min/max length (text-ish types) and min/max value (number/slider/currency/rating)
   - Regex pattern with a custom error message
   - Must-match-another-field (confirm-password style)
   - Custom expression rule (e.g. `[quantity] <= [max_quantity]`) with a custom message
-- **Conditional required** — required only when a rule is satisfied
+- **Conditional required** — required only when a condition is satisfied
 - **Per-option "show when" rules** — options on select/radio/multi-select can
   appear conditionally based on another field's value (dependent dropdowns)
 - **Default value** — prefills the field on new submissions; URL params
@@ -171,6 +173,31 @@ into sections — in the sidebar they are **collapsible accordions**; the pop-ou
     if it looks like an email, and optionally the submitter's email. A custom
     subject can be set.
   - API calls are restricted to `http(s)` URLs and time out after 10s.
+
+**Conditional logic**
+- Add any number of **conditions**; each one has:
+  - **When** — a set of rules (rules within a group are AND, groups are OR)
+    with type-aware operators (equals, not equals, contains, starts/ends with,
+    is set, is not set, greater/less than).
+  - **Then do** — actions run when the rules match.
+  - **Otherwise (not met)** — optional actions run when they don't (great for
+    a default state on page load).
+- Conditions are evaluated **in order** on page load and whenever a value
+  changes; later conditions see values produced by earlier ones.
+- Actions:
+  - **Show field / Hide field** — fields hidden by logic are skipped on
+    submit.
+  - **Set value** — fixed value, copy another field, or a formula result.
+  - **Copy value from** — copy one field into another.
+  - **Select option / Deselect option** — select or clear an option on
+    dropdown/checkbox/radio fields.
+  - **Show option / Hide option** — reveal or hide a specific option.
+  - **Run custom JS** — executes whenever that branch is active with a `form`
+    API: `form.getValue(key)`, `form.setValue(key, value)`, `form.values()`,
+    `form.fields`.
+- **Custom JS on page load** — a script that runs once when the form loads,
+  using the same `form` API (e.g. prefill or compute values before the user
+  interacts).
 
 ---
 

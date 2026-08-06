@@ -360,6 +360,7 @@ export function FormPage() {
       formId={formId}
       submitterName={user?.identities.username?.id ?? undefined}
       initialValues={initialValues}
+      settings={settings}
     />
   );
 

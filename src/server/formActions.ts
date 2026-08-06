@@ -5,10 +5,11 @@ import type {
   FormSettings,
   FormField,
   SubmissionData,
-  VisibilityRule,
+  Condition,
 } from "../types";
 import { DEFAULT_FORM_SETTINGS } from "../types";
 import { evaluateFormula } from "../components/builder/formula";
+import { evaluateCondition } from "../shared/logic";
 import { buildEmailSummary, sendEmail } from "./notifications";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -25,24 +26,10 @@ function getFields(form: Pick<Form, "fields">): FormField[] {
 }
 
 export function isRuleSatisfied(
-  rule: VisibilityRule | undefined,
+  condition: Condition | undefined,
   data: unknown,
 ): boolean {
-  if (!rule) {
-    return true;
-  }
-  const values = (data ?? {}) as SubmissionData;
-  const target = values[rule.field];
-  switch (rule.operator) {
-    case "equals":
-      return String(target ?? "") === rule.value;
-    case "not_equals":
-      return String(target ?? "") !== rule.value;
-    case "is_set":
-      return target !== undefined && target !== null && target !== "";
-    case "is_not_set":
-      return target === undefined || target === null || target === "";
-  }
+  return evaluateCondition(condition, (data ?? {}) as SubmissionData);
 }
 
 function resolveValue(

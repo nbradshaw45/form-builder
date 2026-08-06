@@ -27,16 +27,63 @@ export type FieldType =
   | "modified_date"
   | "updated_by_user";
 
-export type VisibilityOperator =
+export type ConditionOperator =
   | "equals"
   | "not_equals"
+  | "contains"
+  | "not_contains"
+  | "starts_with"
+  | "ends_with"
   | "is_set"
-  | "is_not_set";
+  | "is_not_set"
+  | "gt"
+  | "lt"
+  | "gte"
+  | "lte";
 
-export type VisibilityRule = {
+export type ConditionRule = {
   field: string;
-  operator: VisibilityOperator;
+  operator: ConditionOperator;
   value?: string;
+};
+
+export type ConditionGroup = {
+  rules: ConditionRule[];
+};
+
+/**
+ * Rules within a group are AND-ed together; groups are OR-ed together.
+ * A condition with no groups (or only empty groups) is treated as always true.
+ */
+export type Condition = {
+  groups: ConditionGroup[];
+};
+
+export type LogicValueSource = "static" | "field" | "formula";
+
+export type LogicAction =
+  | { type: "show_field"; field: string }
+  | { type: "hide_field"; field: string }
+  | {
+      type: "set_value";
+      field: string;
+      valueSource: LogicValueSource;
+      value: string;
+      sourceField?: string;
+      formula?: string;
+    }
+  | { type: "copy_value"; from: string; to: string }
+  | { type: "select_option"; field: string; option: string }
+  | { type: "deselect_option"; field: string; option: string }
+  | { type: "show_option"; field: string; option: string }
+  | { type: "hide_option"; field: string; option: string }
+  | { type: "run_js"; code: string };
+
+export type LogicCondition = {
+  id: string;
+  when: Condition;
+  then: LogicAction[];
+  else?: LogicAction[];
 };
 
 export type FieldValidation = {
@@ -71,7 +118,7 @@ export type FormField = {
   options?: string[];
   formula?: string;
   description?: string;
-  visibleWhen?: VisibilityRule;
+  visibleWhen?: Condition;
   hidden?: boolean;
   readonly?: boolean;
   showInTable?: boolean;
@@ -103,10 +150,10 @@ export type FormField = {
   penWidth?: number;
   /** Advanced validation rules. */
   validation?: FieldValidation;
-  /** Field is required only when this rule is satisfied. */
-  requiredWhen?: VisibilityRule;
-  /** Per-option visibility rules, parallel to `options`. */
-  optionRules?: VisibilityRule[];
+  /** Field is required only when this condition is satisfied. */
+  requiredWhen?: Condition;
+  /** Per-option visibility conditions, parallel to `options`. */
+  optionRules?: (Condition | undefined)[];
   /** Math field display rounding (number of decimals). */
   mathDecimals?: number;
   /** Prefill value for new submissions (also overridable via ?key=value URL). */
@@ -177,6 +224,14 @@ export type FormSettings = {
   filterColumns?: number;
   /** Custom actions that run before/after a submission is stored. */
   actions?: FormAction[];
+  /**
+   * Conditional logic. Each condition is evaluated independently, in order:
+   * when its rules are met its `then` actions run, otherwise its `else` actions.
+   * Later conditions see values produced by earlier ones.
+   */
+  conditions?: LogicCondition[];
+  /** Custom JavaScript executed once when the form page loads. */
+  jsOnLoad?: string;
 };
 
 export type FormActionValueSource = "static" | "field" | "formula";
@@ -191,8 +246,8 @@ export type FormAction =
       staticValue?: string;
       sourceField?: string;
       formula?: string;
-      /** Only run when this rule is satisfied. */
-      when?: VisibilityRule;
+      /** Only run when this condition is satisfied. */
+      when?: Condition;
     }
   | {
       id: string;
@@ -202,8 +257,8 @@ export type FormAction =
       url: string;
       /** For before_submit: form field key written from the response's `value`. */
       responseField?: string;
-      /** Only run when this rule is satisfied. */
-      when?: VisibilityRule;
+      /** Only run when this condition is satisfied. */
+      when?: Condition;
     }
   | {
       id: string;
@@ -214,8 +269,8 @@ export type FormAction =
       staticValue?: string;
       sourceField?: string;
       formula?: string;
-      /** Only run when this rule is satisfied. */
-      when?: VisibilityRule;
+      /** Only run when this condition is satisfied. */
+      when?: Condition;
     }
   | {
       id: string;
@@ -223,8 +278,8 @@ export type FormAction =
       type: "create_submission";
       /** Target form id; matching field keys are copied across. */
       formId: string;
-      /** Only run when this rule is satisfied. */
-      when?: VisibilityRule;
+      /** Only run when this condition is satisfied. */
+      when?: Condition;
     }
   | {
       id: string;
@@ -238,8 +293,8 @@ export type FormAction =
       includeSubmitter?: boolean;
       /** Optional custom subject line. */
       subject?: string;
-      /** Only run when this rule is satisfied. */
-      when?: VisibilityRule;
+      /** Only run when this condition is satisfied. */
+      when?: Condition;
     };
 
 export const DEFAULT_FORM_SETTINGS: FormSettings = {

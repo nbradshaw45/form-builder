@@ -1,14 +1,19 @@
-import { type FormEvent, useMemo, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "../shared/components/Button";
 import { FieldControl } from "./FieldControl";
 import { isSystemField } from "./builder/elementFactory";
 import { gridColumnClasses, gridRowClasses, columnStyle } from "../shared/grid";
 import { getFormUsers, useQuery } from "wasp/client/operations";
 import { evaluateFormula } from "./builder/formula";
+import {
+  applyLogic,
+  evaluateCondition,
+} from "../shared/logic";
 import type {
+  Condition,
   FormField,
+  FormSettings,
   SubmissionData,
-  VisibilityRule,
 } from "../types";
 
 interface DynamicFormRendererProps {
@@ -26,6 +31,7 @@ interface DynamicFormRendererProps {
   formId?: string;
   multiStep?: boolean;
   honeypot?: boolean;
+  settings?: FormSettings;
 }
 
 const EDITTABLE_TYPES = new Set([
@@ -52,26 +58,6 @@ const EDITTABLE_TYPES = new Set([
 
 const LAYOUT_TYPES = new Set(["section_header", "divider", "paragraph"]);
 
-export function isFieldVisible(
-  rule: VisibilityRule | undefined,
-  values: SubmissionData,
-): boolean {
-  if (!rule) {
-    return true;
-  }
-  const target = values[rule.field];
-  switch (rule.operator) {
-    case "equals":
-      return String(target ?? "") === rule.value;
-    case "not_equals":
-      return String(target ?? "") !== rule.value;
-    case "is_set":
-      return target !== undefined && target !== null && target !== "";
-    case "is_not_set":
-      return target === undefined || target === null || target === "";
-  }
-}
-
 function isSubmittableField(field: FormField): boolean {
   if (field.type === "hidden") {
     return true;
@@ -85,18 +71,19 @@ function isSubmittableField(field: FormField): boolean {
 function applyOptionRules(
   field: FormField,
   values: SubmissionData,
+  hiddenOptions?: Set<string>,
 ): FormField {
   const rules = field.optionRules;
-  if (!rules || rules.length === 0) {
-    return field;
-  }
   const options = field.options ?? [];
   const labels = field.optionLabels;
   const kept: string[] = [];
   const keptLabels: string[] = [];
   options.forEach((option, index) => {
-    const rule = rules[index];
-    if (rule && !isFieldVisible(rule, values)) {
+    const rule = rules?.[index];
+    if (rule && !evaluateCondition(rule, values)) {
+      return;
+    }
+    if (hiddenOptions?.has(option)) {
       return;
     }
     kept.push(option);
@@ -104,6 +91,9 @@ function applyOptionRules(
       keptLabels.push(labels[index] ?? option);
     }
   });
+  if (kept.length === options.length && keptLabels.length === 0) {
+    return field;
+  }
   return {
     ...field,
     options: kept,
@@ -133,12 +123,16 @@ function buildSteps(fields: FormField[]): FormField[][] {
 function isStepVisible(
   step: FormField[],
   values: SubmissionData,
+  visibleOverride?: Record<string, boolean>,
 ): boolean {
   const header = step[0];
   if (!header || header.type !== "section_header") {
     return true;
   }
-  return isFieldVisible(header.visibleWhen, values);
+  return (
+    evaluateCondition(header.visibleWhen, values) &&
+    (visibleOverride?.[header.key] ?? true)
+  );
 }
 
 export function DynamicFormRenderer({
@@ -153,6 +147,7 @@ export function DynamicFormRenderer({
   formId,
   multiStep = false,
   honeypot = false,
+  settings,
 }: DynamicFormRendererProps) {
   const [values, setValues] = useState<SubmissionData>(
     () => initialValues ?? {},
@@ -181,6 +176,58 @@ export function DynamicFormRenderer({
     });
   }, [fields, userOptions]);
 
+  const logic = useMemo(
+    () => applyLogic(settings?.conditions ?? [], values, effectiveFields),
+    [settings?.conditions, values, effectiveFields],
+  );
+  const effectiveValues = logic.values;
+
+  const valuesRef = useRef(effectiveValues);
+  valuesRef.current = effectiveValues;
+  const setValueRef = useRef(setValue);
+  setValueRef.current = setValue;
+  const effectiveFieldsRef = useRef(effectiveFields);
+  effectiveFieldsRef.current = effectiveFields;
+
+  function runFormJs(code: string) {
+    try {
+      const api = {
+        getValue: (key: string) => valuesRef.current[key] ?? "",
+        setValue: (key: string, value: unknown) =>
+          setValueRef.current(key, value as never),
+        values: () => ({ ...valuesRef.current }),
+        fields: effectiveFieldsRef.current,
+      };
+      const runner = new Function("form", `with (window) { ${code} }`);
+      runner(api);
+    } catch (err) {
+      console.error("Conditional logic JS error:", err);
+    }
+  }
+
+  useEffect(() => {
+    if (settings?.jsOnLoad?.trim()) {
+      runFormJs(settings.jsOnLoad);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const jsKey = logic.js.join("\n/*--*/\n");
+  useEffect(() => {
+    if (jsKey) {
+      runFormJs(jsKey);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jsKey]);
+
+  function isFieldVisible(field: FormField): boolean {
+    return (
+      !field.hidden &&
+      evaluateCondition(field.visibleWhen, effectiveValues) &&
+      (logic.visible[field.key] ?? true)
+    );
+  }
+
   const steps = useMemo(
     () => (multiStep ? buildSteps(effectiveFields) : [effectiveFields]),
     [multiStep, effectiveFields],
@@ -188,9 +235,11 @@ export function DynamicFormRenderer({
   const visibleSteps = useMemo(
     () =>
       multiStep
-        ? steps.filter((step) => isStepVisible(step, values))
+        ? steps.filter((step) =>
+            isStepVisible(step, effectiveValues, logic.visible),
+          )
         : steps,
-    [steps, values, multiStep],
+    [steps, effectiveValues, logic.visible, multiStep],
   );
   const activeStepIndex = Math.min(
     currentStep,
@@ -297,7 +346,9 @@ export function DynamicFormRenderer({
 
     const required =
       field.required ||
-      (field.requiredWhen ? isFieldVisible(field.requiredWhen, values) : false);
+      (field.requiredWhen
+        ? evaluateCondition(field.requiredWhen, effectiveValues)
+        : false);
     const empty = isEmptyValue(field, value);
     if (required && empty) {
       return "This field is required";
@@ -372,17 +423,13 @@ export function DynamicFormRenderer({
   function validateFields(fieldsToCheck: FormField[]): Record<string, string> {
     const nextErrors: Record<string, string> = {};
     for (const field of fieldsToCheck) {
-      if (
-        !isSubmittableField(field) ||
-        !isFieldVisible(field.visibleWhen, values) ||
-        field.hidden
-      ) {
+      if (!isSubmittableField(field) || !isFieldVisible(field)) {
         continue;
       }
       const fieldError = validateField(
         field,
-        values[field.key],
-        values,
+        effectiveValues[field.key],
+        effectiveValues,
         effectiveFields,
       );
       if (fieldError) {
@@ -403,14 +450,10 @@ export function DynamicFormRenderer({
 
     const data: SubmissionData = {};
     for (const field of allVisibleFields) {
-      if (
-        !isSubmittableField(field) ||
-        !isFieldVisible(field.visibleWhen, values) ||
-        field.hidden
-      ) {
+      if (!isSubmittableField(field) || !isFieldVisible(field)) {
         continue;
       }
-      const rawValue = values[field.key];
+      const rawValue = effectiveValues[field.key];
       switch (field.type) {
         case "number":
         case "currency":
@@ -484,16 +527,12 @@ export function DynamicFormRenderer({
     setErrors({});
   }
 
-  const anyVisible = effectiveFields.some(
-    (field) => !field.hidden && isFieldVisible(field.visibleWhen, values),
-  );
+  const anyVisible = effectiveFields.some((field) => isFieldVisible(field));
   if (!anyVisible || visibleSteps.length === 0) {
     return <p className="text-neutral-500">This form has no visible fields.</p>;
   }
 
-  const visibleFields = activeStep.filter(
-    (field) => !field.hidden && isFieldVisible(field.visibleWhen, values),
-  );
+  const visibleFields = activeStep.filter((field) => isFieldVisible(field));
 
   const renderField = (field: FormField) => (
     <div
@@ -502,10 +541,14 @@ export function DynamicFormRenderer({
       style={columnStyle(field.width)}
     >
       <FieldControl
-        field={applyOptionRules(field, values)}
-        value={values[field.key] ?? null}
+        field={applyOptionRules(
+          field,
+          effectiveValues,
+          logic.hiddenOptions[field.key],
+        )}
+        value={effectiveValues[field.key] ?? null}
         onChange={(value) => setValue(field.key, value)}
-        allValues={values}
+        allValues={effectiveValues}
         error={errors[field.key]}
         disabled={readOnly}
         formId={formId}
@@ -526,9 +569,7 @@ export function DynamicFormRenderer({
             const subtext = hasHeader ? header.description : undefined;
       const visible = step.filter(
         (field) =>
-          !field.hidden &&
-          field.type !== "hidden" &&
-          isFieldVisible(field.visibleWhen, values),
+          field.type !== "hidden" && isFieldVisible(field),
       );
 
             return (
