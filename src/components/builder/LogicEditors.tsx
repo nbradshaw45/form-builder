@@ -146,22 +146,6 @@ export function RuleEditor({
             </option>
           ))}
         </select>
-        <select
-          value={rule.operator}
-          onChange={(event) =>
-            onChange({
-              ...rule,
-              operator: event.target.value as ConditionOperator,
-            })
-          }
-          className={`${inputClasses} w-32 text-xs`}
-        >
-          {operators.map((op) => (
-            <option key={op.value} value={op.value}>
-              {op.label}
-            </option>
-          ))}
-        </select>
         <button
           type="button"
           onClick={onRemove}
@@ -172,14 +156,36 @@ export function RuleEditor({
           <TrashIcon />
         </button>
       </div>
-      {needsValue && (
-        <RuleValueInput
-          target={target}
-          operator={rule.operator}
-          value={rule.value ?? ""}
-          onChange={(value) => onChange({ ...rule, value })}
-        />
-      )}
+      <div className="flex gap-1.5">
+        <div className="min-w-0 flex-1">
+          <select
+            value={rule.operator}
+            onChange={(event) =>
+              onChange({
+                ...rule,
+                operator: event.target.value as ConditionOperator,
+              })
+            }
+            className={`${inputClasses} text-xs`}
+          >
+            {operators.map((op) => (
+              <option key={op.value} value={op.value}>
+                {op.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        {needsValue && (
+          <div className="min-w-0 flex-1">
+            <RuleValueInput
+              target={target}
+              operator={rule.operator}
+              value={rule.value ?? ""}
+              onChange={(value) => onChange({ ...rule, value })}
+            />
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -512,19 +518,6 @@ function LogicActionRow({
             ))}
           </select>
         )}
-        <select
-          value={action.type}
-          onChange={(event) =>
-            onChange(buildActionPatch(action, event.target.value as LogicAction["type"]))
-          }
-          className={`${inputClasses} w-32 text-xs`}
-        >
-          {LOGIC_ACTION_TYPES.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
         <button
           type="button"
           onClick={onRemove}
@@ -535,6 +528,19 @@ function LogicActionRow({
           <TrashIcon />
         </button>
       </div>
+      <select
+        value={action.type}
+        onChange={(event) =>
+          onChange(buildActionPatch(action, event.target.value as LogicAction["type"]))
+        }
+        className={`${inputClasses} text-xs`}
+      >
+        {LOGIC_ACTION_TYPES.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
       {renderContextual()}
     </div>
   );
