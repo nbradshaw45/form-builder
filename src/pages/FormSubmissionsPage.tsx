@@ -19,6 +19,7 @@ import {
   useQuery,
 } from "wasp/client/operations";
 import { useParams } from "react-router";
+import { Link } from "wasp/client/router";
 import { Button, ButtonLink } from "../shared/components/Button";
 import { Card, CardHead, DataFoot, DataToolbar } from "../shared/components/Card";
 import { ConfirmDialog } from "../components/Modal";
@@ -31,8 +32,13 @@ import {
   matchesFilter,
   operatorForField,
 } from "../shared/filters";
-import type { FormField, FormSettings } from "../types";
-import { DEFAULT_FORM_SETTINGS } from "../types";
+import type {
+  FormField,
+  FormSettings,
+  SubmissionRowAction,
+  SubmissionRowActionPlacement,
+} from "../types";
+import { DEFAULT_FORM_SETTINGS, rowActionPlacement } from "../types";
 
 type FilterEntry = { value: string; value2: string };
 
@@ -112,12 +118,17 @@ export function FormSubmissionsPage({ user }: { user: AuthUser }) {
   const headerMode = settings.filterPlacement === "header";
   const filterColumns = settings.filterColumns ?? 3;
   const showActionLabels = settings.showActionLabels === true;
-  const rowActions = useMemo(
+  const rowActions = useMemo<
+    Record<SubmissionRowAction, SubmissionRowActionPlacement>
+  >(
     () => ({
-      view: settings.submissionRowActions?.view !== false,
-      edit: settings.submissionRowActions?.edit !== false,
-      delete: settings.submissionRowActions?.delete !== false,
-      pdf: settings.submissionRowActions?.pdf === true,
+      view: rowActionPlacement(settings.submissionRowActions?.view, "view"),
+      edit: rowActionPlacement(settings.submissionRowActions?.edit, "edit"),
+      delete: rowActionPlacement(
+        settings.submissionRowActions?.delete,
+        "delete",
+      ),
+      pdf: rowActionPlacement(settings.submissionRowActions?.pdf, "pdf"),
     }),
     [settings],
   );
@@ -744,7 +755,7 @@ function RowActions({
   submissionId: string;
   canEdit: boolean;
   showLabels: boolean;
-  actions: { view: boolean; edit: boolean; delete: boolean; pdf: boolean };
+  actions: Record<SubmissionRowAction, SubmissionRowActionPlacement>;
   onDelete: () => void;
 }) {
   const [downloadingPdf, setDownloadingPdf] = useState(false);
@@ -799,57 +810,165 @@ function RowActions({
     }
   }
 
-  const showView = actions.view;
-  const showEdit = actions.edit && canEdit;
-  const showPdf = actions.pdf;
-  const showDelete = actions.delete && canEdit;
+  // Edit and Delete additionally require edit access to the form.
+  const effective: Record<SubmissionRowAction, SubmissionRowActionPlacement> =
+    {
+      view: actions.view,
+      edit: canEdit ? actions.edit : "hidden",
+      delete: canEdit ? actions.delete : "hidden",
+      pdf: actions.pdf,
+    };
 
-  if (!showView && !showEdit && !showDelete && !showPdf) {
+  const ACTION_ORDER: SubmissionRowAction[] = ["view", "edit", "delete", "pdf"];
+  const inlineActions = ACTION_ORDER.filter(
+    (action) => effective[action] === "inline",
+  );
+  const menuActions = ACTION_ORDER.filter(
+    (action) => effective[action] === "dropdown",
+  );
+
+  if (inlineActions.length === 0 && menuActions.length === 0) {
     return <span className="text-neutral-300">—</span>;
+  }
+
+  const menuItemClasses =
+    "flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs font-medium text-neutral-700 hover:bg-neutral-50 disabled:opacity-60";
+
+  function renderInline(action: SubmissionRowAction) {
+    switch (action) {
+      case "view":
+        return (
+          <ButtonLink
+            key={action}
+            to="/forms/:id/records/:submissionId"
+            params={{ id: formId, submissionId }}
+            size="xs"
+            variant="ghost"
+            title="View"
+            aria-label="View"
+          >
+            <EyeIcon className="size-3.5" />
+            {showLabels && "View"}
+          </ButtonLink>
+        );
+      case "edit":
+        return (
+          <ButtonLink
+            key={action}
+            to="/forms/:id/records/:submissionId/edit"
+            params={{ id: formId, submissionId }}
+            size="xs"
+            variant="ghost"
+            title="Edit"
+            aria-label="Edit"
+          >
+            <PencilIcon className="size-3.5" />
+            {showLabels && "Edit"}
+          </ButtonLink>
+        );
+      case "delete":
+        return (
+          <Button
+            key={action}
+            size="xs"
+            variant="ghost"
+            title="Delete"
+            aria-label="Delete"
+            className="text-danger hover:border-danger hover:bg-danger-soft hover:text-danger"
+            onClick={onDelete}
+          >
+            <TrashIcon className="size-3.5" />
+            {showLabels && "Delete"}
+          </Button>
+        );
+      case "pdf":
+        return (
+          <Button
+            key={action}
+            size="xs"
+            variant="ghost"
+            title="Download PDF"
+            aria-label="Download PDF"
+            onClick={() => void downloadPdf()}
+            disabled={downloadingPdf}
+          >
+            <DownloadIcon className="size-3.5" />
+            {showLabels && (downloadingPdf ? "PDF..." : "PDF")}
+          </Button>
+        );
+    }
+  }
+
+  function renderMenuItem(action: SubmissionRowAction) {
+    switch (action) {
+      case "view":
+        return (
+          <Link
+            key={action}
+            to="/forms/:id/records/:submissionId"
+            params={{ id: formId, submissionId }}
+            role="menuitem"
+            className={menuItemClasses}
+            onClick={() => setMenuOpen(false)}
+          >
+            <EyeIcon className="size-3.5" />
+            View
+          </Link>
+        );
+      case "edit":
+        return (
+          <Link
+            key={action}
+            to="/forms/:id/records/:submissionId/edit"
+            params={{ id: formId, submissionId }}
+            role="menuitem"
+            className={menuItemClasses}
+            onClick={() => setMenuOpen(false)}
+          >
+            <PencilIcon className="size-3.5" />
+            Edit
+          </Link>
+        );
+      case "delete":
+        return (
+          <button
+            key={action}
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setMenuOpen(false);
+              onDelete();
+            }}
+            className={`${menuItemClasses} text-danger hover:bg-danger-soft`}
+          >
+            <TrashIcon className="size-3.5" />
+            Delete
+          </button>
+        );
+      case "pdf":
+        return (
+          <button
+            key={action}
+            type="button"
+            role="menuitem"
+            disabled={downloadingPdf}
+            onClick={() => {
+              setMenuOpen(false);
+              void downloadPdf();
+            }}
+            className={menuItemClasses}
+          >
+            <DownloadIcon className="size-3.5" />
+            {downloadingPdf ? "Downloading..." : "Download PDF"}
+          </button>
+        );
+    }
   }
 
   return (
     <div className="flex items-center gap-1.5 whitespace-nowrap">
-      {showView && (
-        <ButtonLink
-          to="/forms/:id/records/:submissionId"
-          params={{ id: formId, submissionId }}
-          size="xs"
-          variant="ghost"
-          title="View"
-          aria-label="View"
-        >
-          <EyeIcon className="size-3.5" />
-          {showLabels && "View"}
-        </ButtonLink>
-      )}
-      {showEdit && (
-        <ButtonLink
-          to="/forms/:id/records/:submissionId/edit"
-          params={{ id: formId, submissionId }}
-          size="xs"
-          variant="ghost"
-          title="Edit"
-          aria-label="Edit"
-        >
-          <PencilIcon className="size-3.5" />
-          {showLabels && "Edit"}
-        </ButtonLink>
-      )}
-      {showDelete && (
-        <Button
-          size="xs"
-          variant="ghost"
-          title="Delete"
-          aria-label="Delete"
-          className="text-danger hover:border-danger hover:bg-danger-soft hover:text-danger"
-          onClick={onDelete}
-        >
-          <TrashIcon className="size-3.5" />
-          {showLabels && "Delete"}
-        </Button>
-      )}
-      {showPdf && (
+      {inlineActions.map(renderInline)}
+      {menuActions.length > 0 && (
         <div className="relative" ref={menuRef}>
           <Button
             size="xs"
@@ -867,19 +986,7 @@ function RowActions({
               role="menu"
               className="absolute right-0 z-30 mt-1 w-40 overflow-hidden rounded-lg border border-neutral-200 bg-white py-1 shadow-lg"
             >
-              <button
-                type="button"
-                role="menuitem"
-                disabled={downloadingPdf}
-                onClick={() => {
-                  setMenuOpen(false);
-                  void downloadPdf();
-                }}
-                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs font-medium text-neutral-700 hover:bg-neutral-50 disabled:opacity-60"
-              >
-                <DownloadIcon className="size-3.5" />
-                {downloadingPdf ? "Downloading..." : "Download PDF"}
-              </button>
+              {menuActions.map(renderMenuItem)}
             </div>
           )}
         </div>

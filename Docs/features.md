@@ -295,13 +295,13 @@ The submissions table (`/forms/:id/submissions`):
     the top filter grid are form settings.
 - **Bulk actions** — checkboxes on each row (plus select-all); a bulk bar
   offers **Export CSV / Export Excel** and **Delete** for the selected rows.
-- **Row actions**: View, Edit and Delete (confirm) render inline — icon-only
-  by default, with tooltips; **Download PDF** (off by default) lives in a
-  per-row overflow (⋯) menu. Form settings under "Submissions table" control
-  this: a **Show action labels** toggle (default off) plus per-button toggles
-  for View / Edit / Delete / Download PDF
-  (`FormSettings.submissionRowActions`). Edit and Delete also require edit
-  access to the form.
+- **Row actions**: View, Edit and Delete (confirm) render inline by default —
+  icon-only, with tooltips; **Download PDF** is hidden by default. Each
+  action can independently be set to **inline**, **in the row's ⋯ dropdown**,
+  or **hidden** via form settings ("Submissions table" → "Row action
+  buttons", `FormSettings.submissionRowActions`); a **Show action labels**
+  toggle (default off) adds text labels to the inline buttons. Edit and
+  Delete also require edit access to the form.
 - Arrays render comma-joined; signatures show a label; file uploads show a
   **Download** button (fetches the stored file, auth-gated).
 - **Export CSV** and **Export Excel (.xlsx)** — download all rows (or the

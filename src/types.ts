@@ -225,15 +225,15 @@ export type FormSettings = {
   /** Show text labels ("View", "Edit") on the submissions table row actions. Defaults to false (icons only). */
   showActionLabels?: boolean;
   /**
-   * Which actions appear on submissions table rows. View, Edit and Delete
-   * default to shown; PDF defaults to hidden. (Edit/Delete also require the
-   * user to have edit access.)
+   * Placement for each submissions table row action. Defaults: View/Edit/
+   * Delete inline, PDF hidden. (Edit/Delete also require edit access.)
+   * Legacy boolean values are honored: true = default placement, false = hidden.
    */
   submissionRowActions?: {
-    view?: boolean;
-    edit?: boolean;
-    pdf?: boolean;
-    delete?: boolean;
+    view?: SubmissionRowActionPlacement | boolean;
+    edit?: SubmissionRowActionPlacement | boolean;
+    pdf?: SubmissionRowActionPlacement | boolean;
+    delete?: SubmissionRowActionPlacement | boolean;
   };
   /** Custom actions that run before/after a submission is stored. */
   actions?: FormAction[];
@@ -330,3 +330,35 @@ export const DEFAULT_FORM_SETTINGS: FormSettings = {
   showResetButton: false,
   multiStep: false,
 };
+
+export type SubmissionRowAction = "view" | "edit" | "delete" | "pdf";
+
+/** Where a submissions table row action is rendered. */
+export type SubmissionRowActionPlacement = "inline" | "dropdown" | "hidden";
+
+export const DEFAULT_ROW_ACTION_PLACEMENTS: Record<
+  SubmissionRowAction,
+  SubmissionRowActionPlacement
+> = {
+  view: "inline",
+  edit: "inline",
+  delete: "inline",
+  pdf: "hidden",
+};
+
+/**
+ * Resolves a stored row-action setting to a placement, tolerating legacy
+ * booleans (true = default visible placement, false = hidden).
+ */
+export function rowActionPlacement(
+  value: SubmissionRowActionPlacement | boolean | undefined,
+  action: SubmissionRowAction,
+): SubmissionRowActionPlacement {
+  if (value === true) {
+    return action === "pdf" ? "dropdown" : "inline";
+  }
+  if (value === false) {
+    return "hidden";
+  }
+  return value ?? DEFAULT_ROW_ACTION_PLACEMENTS[action];
+}

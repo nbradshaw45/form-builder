@@ -390,9 +390,9 @@ turn the form builder into a pipeline.
   client-side).
 - **Compact row actions**: the submissions table renders View/Edit/Delete as
   icon-only buttons by default (labels optional via the "Show action labels"
-  form setting) and keeps Download PDF in a per-row overflow menu. Each
-  button (View / Edit / Delete / PDF) can be toggled per form via
-  `FormSettings.submissionRowActions`; PDF is off by default.
+  form setting). Each action (View / Edit / Delete / PDF) can independently
+  be placed inline, in the row's ⋯ dropdown, or hidden via
+  `FormSettings.submissionRowActions`; PDF is hidden by default.
 
 ### Implementation notes
 

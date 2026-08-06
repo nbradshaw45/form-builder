@@ -1,4 +1,5 @@
 import { type ReactNode, useState } from "react";
+import { rowActionPlacement } from "../../types";
 import type {
   Condition,
   FieldValidation,
@@ -7,6 +8,8 @@ import type {
   FormSettings,
   LogicAction,
   LogicCondition,
+  SubmissionRowAction,
+  SubmissionRowActionPlacement,
 } from "../../types";
 import type { FieldType } from "../../types";
 import { inputClasses } from "../../shared/styles";
@@ -1221,99 +1224,97 @@ function FormSettingsPanel({
             <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-neutral-400">
               Row action buttons
             </span>
-            <ToggleRow
-              label="View"
-              checked={settings.submissionRowActions?.view !== false}
-              onChange={(checked) =>
-                onChange({
-                  submissionRowActions: {
-                    ...settings.submissionRowActions,
-                    view: checked,
-                  },
-                })
-              }
-            />
-            <ToggleRow
-              label="Edit"
-              checked={settings.submissionRowActions?.edit !== false}
-              onChange={(checked) =>
-                onChange({
-                  submissionRowActions: {
-                    ...settings.submissionRowActions,
-                    edit: checked,
-                  },
-                })
-              }
-            />
-            <ToggleRow
-              label="Delete"
-              checked={settings.submissionRowActions?.delete !== false}
-              onChange={(checked) =>
-                onChange({
-                  submissionRowActions: {
-                    ...settings.submissionRowActions,
-                    delete: checked,
-                  },
-                })
-              }
-            />
-            <ToggleRow
-              label="Download PDF"
-              checked={settings.submissionRowActions?.pdf === true}
-              onChange={(checked) =>
-                onChange({
-                  submissionRowActions: {
-                    ...settings.submissionRowActions,
-                    pdf: checked,
-                  },
-                })
-              }
-            />
+            {(
+              [
+                ["view", "View"],
+                ["edit", "Edit"],
+                ["delete", "Delete"],
+                ["pdf", "Download PDF"],
+              ] as [SubmissionRowAction, string][]
+            ).map(([action, label]) => (
+              <div
+                key={action}
+                className="flex items-center justify-between gap-3"
+              >
+                <label
+                  htmlFor={`settings-row-action-${action}`}
+                  className="text-[13px] font-medium text-neutral-800"
+                >
+                  {label}
+                </label>
+                <select
+                  id={`settings-row-action-${action}`}
+                  value={rowActionPlacement(
+                    settings.submissionRowActions?.[action],
+                    action,
+                  )}
+                  onChange={(event) =>
+                    onChange({
+                      submissionRowActions: {
+                        ...settings.submissionRowActions,
+                        [action]: event.target
+                          .value as SubmissionRowActionPlacement,
+                      },
+                    })
+                  }
+                  className={`${inputClasses} w-auto py-1 text-xs`}
+                >
+                  <option value="inline">Inline button</option>
+                  <option value="dropdown">In ⋯ dropdown</option>
+                  <option value="hidden">Hidden</option>
+                </select>
+              </div>
+            ))}
             <span className="text-xs text-neutral-400">
-              View, Edit and Delete stay inline; Download PDF appears in the
-              row's ⋯ menu. Edit and Delete also require edit access to the
-              form.
+              Inline buttons render in the Actions column; dropdown items go in
+              the row's ⋯ menu. Edit and Delete also require edit access to
+              the form.
             </span>
           </div>
-          <div className="flex flex-col gap-1">
-            <label htmlFor="settings-filter-placement" className="label">
-              Placement
-            </label>
-            <select
-              id="settings-filter-placement"
-              value={settings.filterPlacement ?? "top"}
-              onChange={(event) =>
-                onChange({
-                  filterPlacement: event.target.value as "top" | "header",
-                })
-              }
-              className={inputClasses}
-            >
-              <option value="top">On top of the table</option>
-              <option value="header">Under column headers</option>
-            </select>
-          </div>
-          <div className="flex flex-col gap-1">
-            <label htmlFor="settings-filter-columns" className="label">
-              Columns (top placement)
-            </label>
-            <select
-              id="settings-filter-columns"
-              value={settings.filterColumns ?? 3}
-              onChange={(event) =>
-                onChange({ filterColumns: Number(event.target.value) })
-              }
-              className={inputClasses}
-            >
-              {[1, 2, 3, 4, 6].map((count) => (
-                <option key={count} value={count}>
-                  {count} {count === 1 ? "column" : "columns"}
-                </option>
-              ))}
-            </select>
-            <span className="text-xs text-neutral-400">
-              Fewer filters per row means the table stays higher on the page.
+          <div className="flex flex-col gap-1.5 border-t border-neutral-100 pt-2">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-neutral-400">
+              Filtering
             </span>
+            <div className="flex flex-col gap-1">
+              <label htmlFor="settings-filter-placement" className="label">
+                Filter placement
+              </label>
+              <select
+                id="settings-filter-placement"
+                value={settings.filterPlacement ?? "top"}
+                onChange={(event) =>
+                  onChange({
+                    filterPlacement: event.target.value as "top" | "header",
+                  })
+                }
+                className={inputClasses}
+              >
+                <option value="top">On top of the table</option>
+                <option value="header">Under column headers</option>
+              </select>
+            </div>
+            <div className="flex flex-col gap-1">
+              <label htmlFor="settings-filter-columns" className="label">
+                Filter columns (top placement)
+              </label>
+              <select
+                id="settings-filter-columns"
+                value={settings.filterColumns ?? 3}
+                onChange={(event) =>
+                  onChange({ filterColumns: Number(event.target.value) })
+                }
+                className={inputClasses}
+              >
+                {[1, 2, 3, 4, 6].map((count) => (
+                  <option key={count} value={count}>
+                    {count} {count === 1 ? "column" : "columns"}
+                  </option>
+                ))}
+              </select>
+              <span className="text-xs text-neutral-400">
+                Fewer filters per row means the table stays higher on the page.
+              </span>
+            </div>
           </div>
         </>
       ),
