@@ -299,9 +299,9 @@ export function FieldInspector({
 
         {!isLayout && !isMath && !isCaptcha && !isSystemField(element.type) && (
           <div className="flex flex-col gap-1">
-            <label htmlFor="inspector-default" className={labelClasses}>
+            <FieldLabel htmlFor="inspector-default" help="default-values">
               Default value
-            </label>
+            </FieldLabel>
             <input
               id="inspector-default"
               value={element.defaultValue ?? ""}
@@ -631,9 +631,9 @@ export function FieldInspector({
         <SettingsAccordion key={`${element.id}-formula`} label="Formula">
           <div className="flex flex-col gap-2">
             <div className="flex flex-col gap-1">
-              <label htmlFor="inspector-formula" className={labelClasses}>
+              <FieldLabel htmlFor="inspector-formula" help="formula">
                 Formula
-              </label>
+              </FieldLabel>
               <textarea
                 id="inspector-formula"
                 value={element.formula ?? ""}
@@ -753,9 +753,9 @@ export function FieldInspector({
           element.type !== "file_upload" &&
           filterOperatorsForType(element.type).length > 1 && (
             <div className="flex flex-col gap-1">
-              <label htmlFor="inspector-filter-operator" className="label">
+              <FieldLabel htmlFor="inspector-filter-operator" help="filters">
                 Filter condition
-              </label>
+              </FieldLabel>
               <select
                 id="inspector-filter-operator"
                 value={
@@ -786,9 +786,9 @@ export function FieldInspector({
           !isCaptcha &&
           supportsFilterInputChoice(element.type) && (
             <div className="flex flex-col gap-1">
-              <label htmlFor="inspector-filter-input" className="label">
+              <FieldLabel htmlFor="inspector-filter-input" help="filters">
                 Filter input
-              </label>
+              </FieldLabel>
               <select
                 id="inspector-filter-input"
                 value={filterInputForField(element)}
@@ -824,9 +824,9 @@ export function FieldInspector({
           />
           {element.type === "updated_by_user" && (
             <div className="flex flex-col gap-1">
-              <label className={labelClasses} htmlFor="inspector-value-source">
+              <FieldLabel htmlFor="inspector-value-source" help="system-fields">
                 Value to record
-              </label>
+              </FieldLabel>
               <select
                 id="inspector-value-source"
                 value={element.valueSource ?? "email"}
@@ -1014,6 +1014,7 @@ function FormSettingsPanel({
             label="Multi-step wizard"
             checked={settings.multiStep === true}
             onChange={(checked) => onChange({ multiStep: checked })}
+            help="steps"
           />
           <p className="text-xs leading-snug text-neutral-400">
             Split the form into steps at each Section header. Add Section
@@ -1050,9 +1051,12 @@ function FormSettingsPanel({
 
           {wantsMessage && (
             <div className="flex flex-col gap-1">
-              <label htmlFor="settings-success-message" className={labelClasses}>
+              <FieldLabel
+                htmlFor="settings-success-message"
+                help="after-submit"
+              >
                 Success message
-              </label>
+              </FieldLabel>
               <textarea
                 id="settings-success-message"
                 value={settings.successMessage ?? ""}
@@ -1098,9 +1102,9 @@ function FormSettingsPanel({
               </div>
               {settings.redirectTarget === "custom" && (
                 <div className="flex flex-col gap-1">
-                  <label htmlFor="settings-redirect-url" className={labelClasses}>
+                  <FieldLabel htmlFor="settings-redirect-url" help="after-submit">
                     URL
-                  </label>
+                  </FieldLabel>
                   <input
                     id="settings-redirect-url"
                     value={settings.redirectUrl ?? ""}
@@ -1120,6 +1124,7 @@ function FormSettingsPanel({
                 label="Append response data to URL"
                 checked={settings.appendData === true}
                 onChange={(checked) => onChange({ appendData: checked })}
+                help="after-submit"
               />
             </div>
           )}
@@ -1272,14 +1277,16 @@ function FormSettingsPanel({
             label="Show action labels"
             checked={settings.showActionLabels === true}
             onChange={(checked) => onChange({ showActionLabels: checked })}
+            help="submissions-table"
           />
           <span className="-mt-1 text-xs text-neutral-400">
             When off, the row action buttons show icons only (with tooltips),
             saving table width.
           </span>
           <div className="flex flex-col gap-1.5 border-t border-neutral-100 pt-2">
-            <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-neutral-400">
+            <span className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-neutral-400">
               Row action buttons
+              <HelpBubble article="submissions-table" />
             </span>
             {(
               [
@@ -1333,9 +1340,9 @@ function FormSettingsPanel({
               Filtering
             </span>
             <div className="flex flex-col gap-1">
-              <label htmlFor="settings-filter-placement" className="label">
+              <FieldLabel htmlFor="settings-filter-placement" help="submissions-table">
                 Filter placement
-              </label>
+              </FieldLabel>
               <select
                 id="settings-filter-placement"
                 value={settings.filterPlacement ?? "top"}
@@ -1351,9 +1358,9 @@ function FormSettingsPanel({
               </select>
             </div>
             <div className="flex flex-col gap-1">
-              <label htmlFor="settings-filter-columns" className="label">
+              <FieldLabel htmlFor="settings-filter-columns" help="submissions-table">
                 Filter columns (top placement)
-              </label>
+              </FieldLabel>
               <select
                 id="settings-filter-columns"
                 value={settings.filterColumns ?? 3}
@@ -1382,9 +1389,9 @@ function FormSettingsPanel({
       node: (
         <>
           <div className="flex flex-col gap-1">
-            <label htmlFor="settings-webhook-url" className="label">
+            <FieldLabel htmlFor="settings-webhook-url" help="automation">
               Webhook URL
-            </label>
+            </FieldLabel>
             <input
               id="settings-webhook-url"
               value={settings.webhookUrl ?? ""}
@@ -1400,9 +1407,9 @@ function FormSettingsPanel({
             </span>
           </div>
           <div className="flex flex-col gap-1">
-            <label htmlFor="settings-webhook-secret" className="label">
+            <FieldLabel htmlFor="settings-webhook-secret" help="automation">
               Webhook secret
-            </label>
+            </FieldLabel>
             <div className="flex gap-1.5">
               <input
                 id="settings-webhook-secret"
@@ -1437,11 +1444,13 @@ function FormSettingsPanel({
             label="Show a receipt number"
             checked={settings.enableReceipt === true}
             onChange={(checked) => onChange({ enableReceipt: checked })}
+            help="automation"
           />
           <ToggleRow
             label="Let submitters edit their response"
             checked={settings.allowSelfEdit === true}
             onChange={(checked) => onChange({ allowSelfEdit: checked })}
+            help="automation"
           />
         </>
       ),
@@ -1473,11 +1482,14 @@ function FormSettingsPanel({
       label: "Conditional logic",
       node: (
         <>
-          <p className="text-xs leading-snug text-neutral-400">
-            Show or hide fields, change values, and run custom JavaScript based
-            on the value of other fields. Conditions are evaluated on page load
-            and whenever a value changes.
-          </p>
+          <div className="flex items-start justify-between gap-2">
+            <p className="text-xs leading-snug text-neutral-400">
+              Show or hide fields, change values, and run custom JavaScript based
+              on the value of other fields. Conditions are evaluated on page load
+              and whenever a value changes.
+            </p>
+            <HelpBubble article="conditions" align="right" />
+          </div>
           <ConditionalLogicPanel
             conditions={settings.conditions ?? []}
             targets={logicTargets}
@@ -2077,37 +2089,61 @@ function ActionWhenEditor({
   );
 }
 
+function FieldLabel({
+  htmlFor,
+  help,
+  children,
+}: {
+  htmlFor?: string;
+  help?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <label htmlFor={htmlFor} className={labelClasses}>
+        {children}
+      </label>
+      {help && <HelpBubble article={help} />}
+    </div>
+  );
+}
+
 function ToggleRow({
   label,
   checked,
   onChange,
+  help,
 }: {
   label: string;
   checked: boolean;
   onChange: (checked: boolean) => void;
+  help?: string;
 }) {
   return (
-    <label className="flex cursor-pointer items-center justify-between gap-3 text-[13px] font-medium text-neutral-800">
-      <span>{label}</span>
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(event) => onChange(event.target.checked)}
-        className="peer sr-only"
-      />
-      <span
-        aria-hidden="true"
-        className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-200 ${
-          checked ? "bg-primary-600" : "bg-neutral-300"
-        }`}
-      >
-        <span
-          className={`inline-block size-4 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${
-            checked ? "translate-x-[18px]" : "translate-x-0.5"
-          }`}
+    <div className="flex items-center justify-between gap-3">
+      <label className="flex cursor-pointer items-center gap-3 text-[13px] font-medium text-neutral-800">
+        <span>{label}</span>
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={(event) => onChange(event.target.checked)}
+          className="peer sr-only"
         />
-      </span>
-    </label>
+        <span
+          aria-hidden="true"
+          className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-200 ${
+            checked ? "bg-primary-600" : "bg-neutral-300"
+          }`}
+        >
+          <span
+            className={`inline-block size-4 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${
+              checked ? "translate-x-[18px]" : "translate-x-0.5"
+            }`}
+          />
+        </span>
+      </label>
+      {help && <HelpBubble article={help} align="right" />}
+    </div>
   );
 }
 
@@ -2162,7 +2198,10 @@ function OptionsEditor({
 
   return (
     <div className="flex flex-col gap-2">
-      <span className={labelClasses}>Options</span>
+      <div className="flex items-center gap-1.5">
+        <span className={labelClasses}>Options</span>
+        <HelpBubble article="options" />
+      </div>
       <ul className="flex flex-col gap-2">
         {options.map((option, index) => {
           const rule = optionRules[index];
@@ -2268,7 +2307,10 @@ function ValidationEditor({
 
   return (
     <div className="flex flex-col gap-2.5 rounded-lg border border-neutral-100 bg-muted p-3">
-      <span className={labelClasses}>Validation</span>
+      <div className="flex items-center gap-1.5">
+        <span className={labelClasses}>Validation</span>
+        <HelpBubble article="validation" />
+      </div>
 
       {isTextual && (
         <div className="grid grid-cols-2 gap-2">
@@ -2323,7 +2365,10 @@ function ValidationEditor({
       )}
 
       <div className="flex flex-col gap-1">
-        <label className="text-xs text-neutral-500">Pattern (regex)</label>
+        <div className="flex items-center gap-1.5">
+          <label className="text-xs text-neutral-500">Pattern (regex)</label>
+          <HelpBubble article="regex" />
+        </div>
         <input
           value={validation.pattern ?? ""}
           onChange={(event) =>
@@ -2372,7 +2417,10 @@ function ValidationEditor({
       </div>
 
       <div className="flex flex-col gap-1">
-        <label className="text-xs text-neutral-500">Custom rule</label>
+        <div className="flex items-center gap-1.5">
+          <label className="text-xs text-neutral-500">Custom rule</label>
+          <HelpBubble article="formulas" />
+        </div>
         <input
           value={validation.rule ?? ""}
           onChange={(event) =>
@@ -2424,7 +2472,10 @@ function MaskEditor({
 
   return (
     <div className="flex flex-col gap-1">
-      <span className={labelClasses}>Input mask</span>
+      <div className="flex items-center gap-1.5">
+        <span className={labelClasses}>Input mask</span>
+        <HelpBubble article="mask" />
+      </div>
       <select
         value={selectValue}
         onChange={(event) => handleSelect(event.target.value)}
@@ -2473,7 +2524,10 @@ function RequiredWhenEditor({
 
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-neutral-100 bg-muted p-3">
-      <span className={labelClasses}>Conditional required</span>
+      <div className="flex items-center gap-1.5">
+        <span className={labelClasses}>Conditional required</span>
+        <HelpBubble article="validation" />
+      </div>
       <label className="flex items-center gap-2 text-sm font-medium text-neutral-800">
         <input
           type="checkbox"
@@ -2533,16 +2587,19 @@ function RulesEditor({
 
   return (
     <div className="flex flex-col gap-2">
-      <label className="flex items-center gap-2 text-sm font-medium text-neutral-800">
-        <input
-          type="checkbox"
-          checked={enabled}
-          onChange={(event) => setEnabled(event.target.checked)}
-          disabled={ruleTargets.length === 0}
-          className="size-4 rounded border-neutral-300 text-primary-500 focus:ring-primary-500 disabled:cursor-not-allowed"
-        />
-        Show conditionally
-      </label>
+      <div className="flex items-center justify-between gap-2">
+        <label className="flex items-center gap-2 text-sm font-medium text-neutral-800">
+          <input
+            type="checkbox"
+            checked={enabled}
+            onChange={(event) => setEnabled(event.target.checked)}
+            disabled={ruleTargets.length === 0}
+            className="size-4 rounded border-neutral-300 text-primary-500 focus:ring-primary-500 disabled:cursor-not-allowed"
+          />
+          Show conditionally
+        </label>
+        <HelpBubble article="visibility" align="right" />
+      </div>
 
       {enabled && (
         <ConditionEditor

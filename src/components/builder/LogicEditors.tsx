@@ -17,6 +17,7 @@ import {
 } from "../../shared/logic";
 import { generateId } from "./elementFactory";
 import { ChevronDownIcon, ChevronUpIcon, PlusIcon, TrashIcon } from "./icons";
+import { HelpBubble } from "../../shared/components/HelpBubble";
 
 const labelClasses =
   "text-xs font-semibold tracking-[-0.005em] text-neutral-800";
@@ -771,7 +772,10 @@ export function JsOnLoadEditor({
 }) {
   return (
     <div className="flex flex-col gap-1">
-      <span className={labelClasses}>Custom JS on page load</span>
+      <div className="flex items-center gap-1.5">
+        <span className={labelClasses}>Custom JS on page load</span>
+        <HelpBubble article="js-on-load" />
+      </div>
       <textarea
         value={code}
         onChange={(event) => onChange(event.target.value)}
