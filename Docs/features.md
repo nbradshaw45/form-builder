@@ -201,9 +201,10 @@ The submissions table (`/forms/:id/submissions`):
     is chosen in the **element settings** of the edit form page — the options
     are aware of the field type (dates get date conditions, numbers get numeric
     ones, etc.).
-  - The submissions page shows only the matching **value input**: a text field,
-    a number field, date picker(s), or a dropdown of the field's existing
-    values (and a Has / No upload dropdown for file uploads).
+  - For text and dropdown-like fields you also pick the **filter input** style:
+    a dropdown of the field's existing values or a free text field. Dates use
+    date picker(s), numbers use number fields, file uploads use a Has / No
+    upload dropdown.
   - Placement (on top vs under column headers) and the number of columns for
     the top filter grid are form settings.
 - **Bulk actions** — checkboxes on each row (plus select-all); a bulk bar

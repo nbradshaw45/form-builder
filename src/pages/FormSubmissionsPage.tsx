@@ -24,6 +24,7 @@ import { ConfirmDialog } from "../components/Modal";
 import { inputClasses } from "../shared/styles";
 import { EyeIcon, PencilIcon, PlusIcon, ShareIcon, TrashIcon } from "../components/builder/icons";
 import {
+  filterInputForField,
   isFilterActive,
   matchesFilter,
   operatorForField,
@@ -786,13 +787,7 @@ function FilterValueInput({
   const isNumeric = ["number", "currency", "rating", "slider"].includes(
     field.type,
   );
-  const isCategorical = [
-    "select",
-    "radio",
-    "user",
-    "multi_select",
-    "checkbox",
-  ].includes(field.type);
+  const useDropdown = filterInputForField(field) === "dropdown";
 
   if (isDate) {
     return (
@@ -814,7 +809,7 @@ function FilterValueInput({
       />
     );
   }
-  if (isCategorical && operator !== "contains") {
+  if (useDropdown && operator !== "contains") {
     return (
       <select
         value={value}

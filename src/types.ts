@@ -119,6 +119,8 @@ export type FormField = {
   filterable?: boolean;
   /** Filter condition used on the submissions page (per field type). */
   filterOperator?: string;
+  /** Filter input style on the submissions page: dropdown of existing values or free text. */
+  filterInput?: "dropdown" | "text";
 };
 
 export type SubmissionData = Record<

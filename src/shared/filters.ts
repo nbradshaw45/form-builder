@@ -32,6 +32,29 @@ export function isFilterActive(
   return entry.value !== "";
 }
 
+const DROPDOWN_DEFAULT_TYPES = new Set<FieldType>([
+  "select",
+  "radio",
+  "user",
+  "multi_select",
+]);
+
+/** Types where the filter input style (dropdown vs text) is user-selectable. */
+export function supportsFilterInputChoice(type: FieldType): boolean {
+  return (
+    ["text", "textarea", "email", "url", "phone", "select", "radio", "user", "multi_select"].includes(
+      type,
+    )
+  );
+}
+
+export function filterInputForField(field: FormField): "dropdown" | "text" {
+  if (field.filterInput === "dropdown" || field.filterInput === "text") {
+    return field.filterInput;
+  }
+  return DROPDOWN_DEFAULT_TYPES.has(field.type) ? "dropdown" : "text";
+}
+
 export type FilterOperator = {
   value: string;
   label: string;

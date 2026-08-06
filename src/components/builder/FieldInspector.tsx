@@ -11,7 +11,11 @@ import type { FieldType } from "../../types";
 import { inputClasses } from "../../shared/styles";
 import { isSystemField } from "./elementFactory";
 import { MASK_PRESETS } from "../../shared/mask";
-import { filterOperatorsForType } from "../../shared/filters";
+import {
+  filterInputForField,
+  filterOperatorsForType,
+  supportsFilterInputChoice,
+} from "../../shared/filters";
 import { getForms, useQuery } from "wasp/client/operations";
 import {
   ChevronDownIcon,
@@ -709,6 +713,31 @@ export function FieldInspector({
               <span className="text-xs text-neutral-400">
                 The submissions page filter will use this condition; only the
                 value input is shown there.
+              </span>
+            </div>
+          )}
+        {element.filterable !== false &&
+          supportsFilterInputChoice(element.type) && (
+            <div className="flex flex-col gap-1">
+              <label htmlFor="inspector-filter-input" className="label">
+                Filter input
+              </label>
+              <select
+                id="inspector-filter-input"
+                value={filterInputForField(element)}
+                onChange={(event) =>
+                  onPatch(element.id, {
+                    filterInput: event.target.value as "dropdown" | "text",
+                  })
+                }
+                className={inputClasses}
+              >
+                <option value="dropdown">Dropdown</option>
+                <option value="text">Text field</option>
+              </select>
+              <span className="text-xs text-neutral-400">
+                Dropdown shows the existing values from submissions; a text
+                field lets you type any value.
               </span>
             </div>
           )}
