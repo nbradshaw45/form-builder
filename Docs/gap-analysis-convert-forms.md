@@ -46,7 +46,7 @@ high-impact gaps worth closing. Legend: ✅ = have, 🟡 = partial, ❌ = missin
 | Conditional show/hide of fields | ✅ | ✅ | Visibility rules + per-option "show when" |
 | Conditional required | ✅ | ✅ | `requiredWhen` |
 | Field **calculations** | ✅ | ✅ | Math fields + live recompute |
-| **Auto-populate** fields (defaults, **query string**, pre-selected options, logged-in user) | ✅ | ❌ | We prefill only when editing a record; no `?field=value` prefill for new submissions |
+| **Auto-populate** fields (defaults, **query string**, pre-selected options, logged-in user) | ✅ | 🟡 | Field defaults + `?key=value` prefill done; no pre-selected options / logged-in-user fill yet |
 | **Input masking** | ✅ | ❌ | See above |
 | Per-action **conditions** (emails, webhooks) | ✅ | ✅ | Each action has "Only run when..." |
 | Rule groups (**AND/OR**) | ✅ | ❌ | Single-rule conditions only |
@@ -91,9 +91,9 @@ high-impact gaps worth closing. Legend: ✅ = have, 🟡 = partial, ❌ = missin
 |---|---|---|---|
 | **Embed anywhere** (iframe/shortcode in pages, modules, popups, footer) | ✅ | ❌ | We only have a standalone URL (+ popup display mode) |
 | **QR code** for the form link | ✅ | ❌ | |
-| **Spam protection** (reCAPTCHA, hCaptcha, honeypot) | ✅ | ❌ | Nothing yet |
-| **Rate limiting** on submissions | ✅ | ❌ | |
-| **Availability window** (open/close dates) | ✅ | ❌ | |
+| **Spam protection** (reCAPTCHA, hCaptcha, honeypot) | ✅ | 🟡 | Honeypot done; no CAPTCHA yet |
+| **Rate limiting** on submissions | ✅ | ✅ | Per-form limit per rolling hour |
+| **Availability window** (open/close dates) | ✅ | ✅ | Open/close dates with client notice + server rejection |
 | Form **access control / sharing** (view vs edit) | ❌ | ✅ | Unique — per-user form sharing |
 | User roles & admin user management | ❌ | ✅ | |
 | **Self-edit link** (token) for submitters | ❌ | ✅ | |
@@ -108,17 +108,21 @@ high-impact gaps worth closing. Legend: ✅ = have, 🟡 = partial, ❌ = missin
 **High impact, missing entirely:**
 1. Pre-built **form templates** + save-as-template/duplicate
 2. **PDF generation** from submissions (+ email attachment / download link)
-3. **Spam protection & availability** — honeypot, rate limiting, open/close dates, reCAPTCHA
-4. **Embed & QR** — iframe embed code + QR code for the form link
+3. **Embed & QR** — iframe embed code + QR code for the form link
 
 **High impact, partial:**
-5. **Auto-populate** fields (query-string prefill, defaults, logged-in user info)
-6. **Input masks** and confirmation/hidden fields
-7. **Email templates** (HTML, attachments, smart tags)
-8. **Excel export**, submission **edit history**, deeper **analytics**
+4. **Email templates** (HTML, attachments, smart tags)
+5. **Input masks** and confirmation/hidden fields
+6. **Excel export**, submission **edit history**, deeper **analytics**
+
+**Done since this was written:**
+- **Spam protection & availability** — honeypot, per-form rate limiting, and
+  open/close date windows are implemented.
+- **Auto-populate** — field default values and query-string prefill
+  (`?key=value`) are implemented.
 
 **Nice-to-have:**
-9. CRM/email provider integrations, Google Analytics, multi-file uploads, image radios, rich text, rule groups (AND/OR), theming, undo/redo.
+7. CRM/email provider integrations, Google Analytics, multi-file uploads, image radios, rich text, rule groups (AND/OR), theming, undo/redo.
 
 ---
 
@@ -142,17 +146,17 @@ webhooks.
 - Optionally attach to the email action.
 - Effort: medium (a PDF library such as `pdfkit`/`pdfmake` + a small template).
 
-### 3. Spam protection & availability controls
-**Why:** Convert Forms leads with anti-spam (reCAPTCHA/hCaptcha/honeypot) and it
-protects real deployments; we currently have zero.
-- Honeypot field (invisible, auto-rejects bots) — trivial.
-- **Rate limiting** per form on `submitForm` (e.g. N submissions per window).
-- **Availability window** per form (open/close dates; show "closed" outside).
-- Optional **reCAPTCHA**/hCaptcha integration behind the existing auth-less
-  public submit path.
-- Effort: low–medium; no schema for honeypot/rate-limit (in-memory/DB counters),
-  a settings toggle + date fields for availability.
+### 3. Embed & QR
+**Why:** Convert Forms markets "easy to embed"; we only have a standalone URL
+(+ popup display mode).
+- **Embed code**: a copy-paste iframe snippet (`<iframe src="/forms/:id">`) from
+  the form settings or submissions page.
+- **QR code**: a rendered QR image for the form link (a tiny library or an
+  external image endpoint).
+- Effort: low.
 
 ### Runner-up
-- **Auto-populate via query string** (`?field=value`) + field defaults for new
-  records — very cheap (client reads URL params) and closes a common gap.
+- **Email templates** (HTML body, smart tags, file attachments) — extends the
+  existing email action.
+- **Input masks** and confirmation/hidden fields — moderate, closes several
+  field gaps at once.

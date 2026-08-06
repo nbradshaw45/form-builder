@@ -107,6 +107,8 @@ export type FormField = {
   optionRules?: VisibilityRule[];
   /** Math field display rounding (number of decimals). */
   mathDecimals?: number;
+  /** Prefill value for new submissions (also overridable via ?key=value URL). */
+  defaultValue?: string;
 };
 
 export type SubmissionData = Record<
@@ -149,6 +151,14 @@ export type FormSettings = {
   enableReceipt?: boolean;
   /** Let submitters edit their own response via a tokenized link. Defaults to false. */
   allowSelfEdit?: boolean;
+  /** Add an invisible honeypot field; bots that fill it are silently rejected. */
+  honeypot?: boolean;
+  /** Max submissions per rolling hour. Undefined = unlimited. */
+  rateLimitPerHour?: number;
+  /** ISO datetime before which submissions are rejected. */
+  openDate?: string;
+  /** ISO datetime after which submissions are rejected. */
+  closeDate?: string;
   /** Custom actions that run before/after a submission is stored. */
   actions?: FormAction[];
 };

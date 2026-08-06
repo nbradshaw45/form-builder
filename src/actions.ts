@@ -221,6 +221,42 @@ export const submitForm: SubmitForm<SubmitFormArgs, Submission> = async (
     ? randomBytes(24).toString("hex")
     : null;
 
+  const nowMs = new Date().getTime();
+  if (settings.openDate && nowMs < new Date(settings.openDate).getTime()) {
+    throw new HttpError(400, "This form is not open yet.");
+  }
+  if (settings.closeDate && nowMs > new Date(settings.closeDate).getTime()) {
+    throw new HttpError(400, "This form is now closed.");
+  }
+
+  const honeypotValue =
+    typeof data["_honeypot"] === "string" ? data["_honeypot"] : "";
+  delete data["_honeypot"];
+  if (settings.honeypot && honeypotValue) {
+    const timestamp = new Date();
+    return {
+      id: "spam-discarded",
+      formId,
+      data: serialize(data),
+      editToken: null,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    } as unknown as Submission;
+  }
+
+  if (settings.rateLimitPerHour) {
+    const since = new Date(Date.now() - 3600000);
+    const recentCount = await prisma.submission.count({
+      where: { formId, createdAt: { gte: since } },
+    });
+    if (recentCount >= settings.rateLimitPerHour) {
+      throw new HttpError(
+        429,
+        "Too many submissions. Please try again later.",
+      );
+    }
+  }
+
   const contextUser = (context as unknown as { user?: UserContext }).user;
 
   let actorUser = contextUser;

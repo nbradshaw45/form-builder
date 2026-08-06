@@ -63,6 +63,8 @@ Each element has settings in the right-hand inspector:
 - **Conditional required** — required only when a rule is satisfied
 - **Per-option "show when" rules** — options on select/radio/multi-select can
   appear conditionally based on another field's value (dependent dropdowns)
+- **Default value** — prefills the field on new submissions; URL params
+  (`?field=value`) override it for that visit.
 
 ### Math / calculations
 
@@ -117,6 +119,19 @@ Configured in the inspector when no element is selected:
 - Steps can be skipped with a visibility rule on the section header.
 - The canvas shows "Step N" badges on section headers.
 - Viewing a record shows the **full record across all steps** at once.
+
+**Spam & availability**
+- **Honeypot** — an invisible field bots tend to fill; those submissions are
+  silently discarded (the submitter still sees success).
+- **Rate limit (per hour)** — rejects submissions after the limit is reached in
+  a rolling hour (429 with a friendly message).
+- **Open from / Open until** — submissions outside the window are rejected
+  server-side and the form page shows a "closed" notice.
+
+**Auto-populate**
+- Field **default values** prefill new submissions.
+- URL params (`/forms/:id?field_key=value`) prefill fields and override
+  defaults (handy for tracking/campaign links).
 
 **Automation**
 - **Webhook URL** — POSTed on every submission create/update with

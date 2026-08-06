@@ -25,6 +25,7 @@ interface DynamicFormRendererProps {
   showReset?: boolean;
   formId?: string;
   multiStep?: boolean;
+  honeypot?: boolean;
 }
 
 const EDITTABLE_TYPES = new Set([
@@ -147,13 +148,16 @@ export function DynamicFormRenderer({
   showReset = false,
   formId,
   multiStep = false,
+  honeypot = false,
 }: DynamicFormRendererProps) {
   const [values, setValues] = useState<SubmissionData>(
     () => initialValues ?? {},
   );
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [currentStep, setCurrentStep] = useState(0);
+  const [honeypotValue, setHoneypotValue] = useState("");
 
   const { data: userOptions } = useQuery(getFormUsers);
 
@@ -406,10 +410,16 @@ export function DynamicFormRenderer({
           data[field.key] = (rawValue as string | undefined) ?? "";
       }
     }
+    if (honeypot) {
+      data["_honeypot"] = honeypotValue;
+    }
 
     setIsSubmitting(true);
+    setSubmitError(null);
     try {
       await onSubmit(data, submitterName);
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : String(err));
     } finally {
       setIsSubmitting(false);
     }
@@ -526,13 +536,25 @@ export function DynamicFormRenderer({
     const stepTitle =
       stepHeader?.type === "section_header" ? stepHeader.label : undefined;
 
-    return (
-      <form
-        onSubmit={handleWizardSubmit}
-        className="flex flex-col gap-5"
-        noValidate
-      >
-        <div className="flex flex-col gap-2">
+      return (
+        <form
+          onSubmit={handleWizardSubmit}
+          className="flex flex-col gap-5"
+          noValidate
+        >
+          {honeypot && (
+            <input
+              type="text"
+              name="website"
+              aria-hidden="true"
+              tabIndex={-1}
+              autoComplete="off"
+              value={honeypotValue}
+              onChange={(event) => setHoneypotValue(event.target.value)}
+              className="absolute -left-[9999px] h-px w-px"
+            />
+          )}
+          <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between gap-3 text-xs">
             <span className="font-mono font-semibold text-neutral-500">
               Step {activeStepIndex + 1} of {visibleSteps.length}
@@ -558,31 +580,38 @@ export function DynamicFormRenderer({
         </div>
 
         {(activeStepIndex > 0 || (!hideSubmit && !readOnly)) && (
-          <div className="mt-1 flex items-center justify-between gap-2">
-            <div>
-              {activeStepIndex > 0 && (
-                <Button type="button" variant="ghost" onClick={goBackStep}>
-                  ← Back
-                </Button>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              {!hideSubmit && !readOnly && isLastStep && showReset && (
-                <Button type="button" variant="ghost" onClick={handleReset}>
-                  Reset
-                </Button>
-              )}
-              {!hideSubmit && !readOnly && (
-                <Button
-                  type="button"
-                  disabled={isSubmitting}
-                  onClick={() =>
-                    isLastStep ? void submitForm() : goNext()
-                  }
-                >
-                  {isSubmitting ? "Saving..." : isLastStep ? submitLabel : "Next →"}
-                </Button>
-              )}
+          <div className="mt-1 flex flex-col gap-2">
+            {submitError && (
+              <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
+                {submitError}
+              </p>
+            )}
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                {activeStepIndex > 0 && (
+                  <Button type="button" variant="ghost" onClick={goBackStep}>
+                    ← Back
+                  </Button>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                {!hideSubmit && !readOnly && isLastStep && showReset && (
+                  <Button type="button" variant="ghost" onClick={handleReset}>
+                    Reset
+                  </Button>
+                )}
+                {!hideSubmit && !readOnly && (
+                  <Button
+                    type="button"
+                    disabled={isSubmitting}
+                    onClick={() =>
+                      isLastStep ? void submitForm() : goNext()
+                    }
+                  >
+                    {isSubmitting ? "Saving..." : isLastStep ? submitLabel : "Next →"}
+                  </Button>
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -592,9 +621,27 @@ export function DynamicFormRenderer({
 
   return (
     <form onSubmit={handleFormSubmit} className="flex flex-col gap-4" noValidate>
+      {honeypot && (
+        <input
+          type="text"
+          name="website"
+          aria-hidden="true"
+          tabIndex={-1}
+          autoComplete="off"
+          value={honeypotValue}
+          onChange={(event) => setHoneypotValue(event.target.value)}
+          className="absolute -left-[9999px] h-px w-px"
+        />
+      )}
       <div className={gridRowClasses}>
         {visibleFields.map((field) => renderField(field))}
       </div>
+
+      {submitError && (
+        <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
+          {submitError}
+        </p>
+      )}
 
       {!hideSubmit && !readOnly && (
         <div className="mt-2 flex items-center justify-end gap-2">

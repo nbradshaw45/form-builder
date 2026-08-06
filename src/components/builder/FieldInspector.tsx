@@ -236,6 +236,27 @@ export function FieldInspector({
         </div>
       )}
 
+      {!isLayout && !isMath && !isSystemField(element.type) && (
+        <div className="flex flex-col gap-1">
+          <label htmlFor="inspector-default" className={labelClasses}>
+            Default value
+          </label>
+          <input
+            id="inspector-default"
+            value={element.defaultValue ?? ""}
+            onChange={(event) =>
+              onPatch(element.id, { defaultValue: event.target.value })
+            }
+            placeholder="Prefilled on new submissions (or ?key=value)"
+            className={inputClasses}
+          />
+          <span className="text-xs text-neutral-400">
+            Prefills this field on new records. URL params like{" "}
+            <code className="font-mono">?key=value</code> override it.
+          </span>
+        </div>
+      )}
+
       {["select", "radio", "multi_select"].includes(element.type) && (
         <OptionsEditor
           element={element}
@@ -659,6 +680,20 @@ export function FieldInspector({
   );
 }
 
+function toDatetimeLocal(value?: string): string {
+  if (!value) {
+    return "";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(
+    date.getDate(),
+  )}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
 function FormSettingsPanel({
   settings,
   fieldOptions,
@@ -911,6 +946,85 @@ function FormSettingsPanel({
         <p className="text-xs leading-snug text-neutral-400">
           Back returns to the submissions page; Reset clears the form or
           restores the record&apos;s saved values.
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-2.5 border-t border-neutral-100 pt-3">
+        <span className={labelClasses}>Spam &amp; availability</span>
+        <ToggleRow
+          label="Honeypot"
+          checked={settings.honeypot === true}
+          onChange={(checked) => onChange({ honeypot: checked })}
+        />
+        <p className="text-xs leading-snug text-neutral-400">
+          Adds an invisible field that bots tend to fill; those submissions are
+          silently discarded.
+        </p>
+        <div className="flex flex-col gap-1">
+          <label htmlFor="settings-rate-limit" className="label">
+            Rate limit (per hour)
+          </label>
+          <input
+            id="settings-rate-limit"
+            type="number"
+            min={1}
+            value={settings.rateLimitPerHour ?? ""}
+            onChange={(event) =>
+              onChange({
+                rateLimitPerHour:
+                  event.target.value === ""
+                    ? undefined
+                    : Number(event.target.value),
+              })
+            }
+            placeholder="No limit"
+            className={inputClasses}
+          />
+          <span className="text-xs text-neutral-400">
+            Rejects submissions after the limit is reached in a rolling hour.
+          </span>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div className="flex flex-col gap-1">
+            <label htmlFor="settings-open-date" className="label">
+              Open from
+            </label>
+            <input
+              id="settings-open-date"
+              type="datetime-local"
+              value={toDatetimeLocal(settings.openDate)}
+              onChange={(event) =>
+                onChange({
+                  openDate: event.target.value
+                    ? new Date(event.target.value).toISOString()
+                    : undefined,
+                })
+              }
+              className={inputClasses}
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label htmlFor="settings-close-date" className="label">
+              Open until
+            </label>
+            <input
+              id="settings-close-date"
+              type="datetime-local"
+              value={toDatetimeLocal(settings.closeDate)}
+              onChange={(event) =>
+                onChange({
+                  closeDate: event.target.value
+                    ? new Date(event.target.value).toISOString()
+                    : undefined,
+                })
+              }
+              className={inputClasses}
+            />
+          </div>
+        </div>
+        <p className="text-xs text-neutral-400">
+          Submissions outside the window are rejected (the form page shows a
+          &ldquo;closed&rdquo; notice).
         </p>
       </div>
 

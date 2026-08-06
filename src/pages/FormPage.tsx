@@ -123,6 +123,34 @@ export function FormPage() {
   const isReadOnly =
     recordMode === "view" || (recordMode === "edit" && !canEdit);
 
+  const fieldDefaults: SubmissionData = {};
+  for (const field of fields) {
+    if (field.defaultValue !== undefined) {
+      fieldDefaults[field.key] = field.defaultValue;
+    }
+  }
+
+  const queryPrefill: SubmissionData = {};
+  const knownKeys = new Set(fields.map((field) => field.key));
+  for (const [key, value] of searchParams.entries()) {
+    if (key === "token" || !knownKeys.has(key)) {
+      continue;
+    }
+    queryPrefill[key] = value;
+  }
+
+  const initialValues: SubmissionData | undefined =
+    recordMode === "new"
+      ? { ...fieldDefaults, ...queryPrefill }
+      : { ...fieldDefaults, ...queryPrefill, ...(recordData ?? {}) };
+
+  const now = new Date().getTime();
+  const openTime = settings.openDate ? new Date(settings.openDate).getTime() : null;
+  const closeTime = settings.closeDate ? new Date(settings.closeDate).getTime() : null;
+  const isClosed =
+    (openTime !== null && now < openTime) ||
+    (closeTime !== null && now > closeTime);
+
   function buildRedirectUrl(data: SubmissionData): string {
     const base =
       settings.redirectTarget === "custom"
@@ -198,6 +226,13 @@ export function FormPage() {
 
   const wantsRedirect =
     settings.successMode === "redirect" || settings.successMode === "both";
+
+  const closedNotice =
+    recordMode === "new" && isClosed ? (
+      <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        This form is currently closed and not accepting submissions.
+      </div>
+    ) : null;
 
   const backButton = settings.showBackButton !== false ? (
     <div className="flex w-full items-center justify-between">
@@ -309,6 +344,8 @@ export function FormPage() {
         </>
       }
     />
+  ) : closedNotice ? (
+    closedNotice
   ) : (
     <DynamicFormRenderer
       key={`${recordMode}-${submissionId ?? "new"}-${formId}`}
@@ -319,9 +356,10 @@ export function FormPage() {
       readOnly={isReadOnly}
       showReset={settings.showResetButton}
       multiStep={settings.multiStep === true}
+      honeypot={settings.honeypot === true}
       formId={formId}
       submitterName={user?.identities.username?.id ?? undefined}
-      initialValues={recordData}
+      initialValues={initialValues}
     />
   );
 
