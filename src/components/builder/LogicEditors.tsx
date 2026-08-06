@@ -10,6 +10,7 @@ import type {
 } from "../../types";
 import { inputClasses } from "../../shared/styles";
 import {
+  conditionOperatorLabel,
   conditionOperatorsForType,
   normalizeCondition,
   RECORD_MODE_KEY,
@@ -592,6 +593,29 @@ export function LogicActionsEditor({
   );
 }
 
+function summarizeWhen(
+  condition: Condition | undefined,
+  targets: FormField[],
+): string {
+  const groups = normalizeCondition(condition).groups;
+  const rules = groups.flatMap((group) => group.rules);
+  if (rules.length === 0) {
+    return "No rules";
+  }
+  return rules
+    .slice(0, 2)
+    .map((rule) => {
+      const field = targets.find((target) => target.key === rule.field);
+      const fieldLabel = (field?.label ?? rule.field) || "field";
+      const value =
+        rule.value !== undefined && rule.value !== ""
+          ? ` "${rule.value}"`
+          : "";
+      return `${fieldLabel} ${conditionOperatorLabel(rule.operator)}${value}`;
+    })
+    .join(" · ");
+}
+
 export function LogicConditionCard({
   condition,
   targets,
@@ -617,8 +641,8 @@ export function LogicConditionCard({
           aria-expanded={open}
           className="flex min-w-0 flex-1 items-center gap-2 text-left text-[13px] font-semibold text-neutral-800"
         >
-          <span className="truncate">
-            Condition {condition.when.groups.length > 0 ? `(${condition.when.groups.flatMap((g) => g.rules).length} rule${condition.when.groups.flatMap((g) => g.rules).length === 1 ? "" : "s"})` : ""}
+          <span className="truncate" title={summarizeWhen(condition.when, targets)}>
+            When {summarizeWhen(condition.when, targets)}
           </span>
           {open ? (
             <ChevronUpIcon className="size-4 shrink-0 text-neutral-400" />
