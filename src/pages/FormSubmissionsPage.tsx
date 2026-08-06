@@ -111,7 +111,16 @@ export function FormSubmissionsPage({ user }: { user: AuthUser }) {
   );
   const headerMode = settings.filterPlacement === "header";
   const filterColumns = settings.filterColumns ?? 3;
-  const showActionLabels = settings.showActionLabels !== false;
+  const showActionLabels = settings.showActionLabels === true;
+  const rowActions = useMemo(
+    () => ({
+      view: settings.submissionRowActions?.view !== false,
+      edit: settings.submissionRowActions?.edit !== false,
+      delete: settings.submissionRowActions?.delete !== false,
+      pdf: settings.submissionRowActions?.pdf === true,
+    }),
+    [settings],
+  );
 
   const FILTERABLE_TYPES = new Set([
     "text",
@@ -463,12 +472,13 @@ export function FormSubmissionsPage({ user }: { user: AuthUser }) {
             submissionId={info.row.original.id}
             canEdit={canEdit}
             showLabels={showActionLabels}
+            actions={rowActions}
             onDelete={() => setDeleteTarget(info.row.original)}
           />
         ),
       }),
     ];
-  }, [fields, submissions, canEdit, id, selected, filteredSubmissions, toggleAll, toggleSelected, headerMode, showActionLabels, filters, distinctValues, filterableFields, updateFilter]);
+  }, [fields, submissions, canEdit, id, selected, filteredSubmissions, toggleAll, toggleSelected, headerMode, showActionLabels, rowActions, filters, distinctValues, filterableFields, updateFilter]);
 
   const table = useReactTable({
     data: filteredSubmissions,
@@ -727,12 +737,14 @@ function RowActions({
   submissionId,
   canEdit,
   showLabels,
+  actions,
   onDelete,
 }: {
   formId: string;
   submissionId: string;
   canEdit: boolean;
   showLabels: boolean;
+  actions: { view: boolean; edit: boolean; delete: boolean; pdf: boolean };
   onDelete: () => void;
 }) {
   const [downloadingPdf, setDownloadingPdf] = useState(false);
@@ -787,20 +799,31 @@ function RowActions({
     }
   }
 
+  const showView = actions.view;
+  const showEdit = actions.edit && canEdit;
+  const showPdf = actions.pdf;
+  const showDelete = actions.delete && canEdit;
+
+  if (!showView && !showEdit && !showDelete && !showPdf) {
+    return <span className="text-neutral-300">—</span>;
+  }
+
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
-      <ButtonLink
-        to="/forms/:id/records/:submissionId"
-        params={{ id: formId, submissionId }}
-        size="xs"
-        variant="ghost"
-        title="View"
-        aria-label="View"
-      >
-        <EyeIcon className="size-3.5" />
-        {showLabels && "View"}
-      </ButtonLink>
-      {canEdit && (
+    <div className="flex items-center gap-1.5 whitespace-nowrap">
+      {showView && (
+        <ButtonLink
+          to="/forms/:id/records/:submissionId"
+          params={{ id: formId, submissionId }}
+          size="xs"
+          variant="ghost"
+          title="View"
+          aria-label="View"
+        >
+          <EyeIcon className="size-3.5" />
+          {showLabels && "View"}
+        </ButtonLink>
+      )}
+      {showEdit && (
         <ButtonLink
           to="/forms/:id/records/:submissionId/edit"
           params={{ id: formId, submissionId }}
@@ -813,53 +836,54 @@ function RowActions({
           {showLabels && "Edit"}
         </ButtonLink>
       )}
-      <div className="relative" ref={menuRef}>
+      {showDelete && (
         <Button
           size="xs"
           variant="ghost"
-          title="More actions"
-          aria-label="More actions"
-          aria-haspopup="menu"
-          aria-expanded={menuOpen}
-          onClick={() => setMenuOpen((open) => !open)}
+          title="Delete"
+          aria-label="Delete"
+          className="text-danger hover:border-danger hover:bg-danger-soft hover:text-danger"
+          onClick={onDelete}
         >
-          <EllipsisIcon className="size-3.5" />
+          <TrashIcon className="size-3.5" />
+          {showLabels && "Delete"}
         </Button>
-        {menuOpen && (
-          <div
-            role="menu"
-            className="absolute right-0 z-30 mt-1 w-40 overflow-hidden rounded-lg border border-neutral-200 bg-white py-1 shadow-lg"
+      )}
+      {showPdf && (
+        <div className="relative" ref={menuRef}>
+          <Button
+            size="xs"
+            variant="ghost"
+            title="More actions"
+            aria-label="More actions"
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((open) => !open)}
           >
-            <button
-              type="button"
-              role="menuitem"
-              disabled={downloadingPdf}
-              onClick={() => {
-                setMenuOpen(false);
-                void downloadPdf();
-              }}
-              className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs font-medium text-neutral-700 hover:bg-neutral-50 disabled:opacity-60"
+            <EllipsisIcon className="size-3.5" />
+          </Button>
+          {menuOpen && (
+            <div
+              role="menu"
+              className="absolute right-0 z-30 mt-1 w-40 overflow-hidden rounded-lg border border-neutral-200 bg-white py-1 shadow-lg"
             >
-              <DownloadIcon className="size-3.5" />
-              {downloadingPdf ? "Downloading..." : "Download PDF"}
-            </button>
-            {canEdit && (
               <button
                 type="button"
                 role="menuitem"
+                disabled={downloadingPdf}
                 onClick={() => {
                   setMenuOpen(false);
-                  onDelete();
+                  void downloadPdf();
                 }}
-                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs font-medium text-danger hover:bg-danger-soft"
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs font-medium text-neutral-700 hover:bg-neutral-50 disabled:opacity-60"
               >
-                <TrashIcon className="size-3.5" />
-                Delete
+                <DownloadIcon className="size-3.5" />
+                {downloadingPdf ? "Downloading..." : "Download PDF"}
               </button>
-            )}
-          </div>
-        )}
-      </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

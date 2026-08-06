@@ -1210,13 +1210,71 @@ function FormSettingsPanel({
         <>
           <ToggleRow
             label="Show action labels"
-            checked={settings.showActionLabels !== false}
+            checked={settings.showActionLabels === true}
             onChange={(checked) => onChange({ showActionLabels: checked })}
           />
           <span className="-mt-1 text-xs text-neutral-400">
-            When off, the View/Edit row actions show icons only, saving table
-            width.
+            When off, the row action buttons show icons only (with tooltips),
+            saving table width.
           </span>
+          <div className="flex flex-col gap-1.5 border-t border-neutral-100 pt-2">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-neutral-400">
+              Row action buttons
+            </span>
+            <ToggleRow
+              label="View"
+              checked={settings.submissionRowActions?.view !== false}
+              onChange={(checked) =>
+                onChange({
+                  submissionRowActions: {
+                    ...settings.submissionRowActions,
+                    view: checked,
+                  },
+                })
+              }
+            />
+            <ToggleRow
+              label="Edit"
+              checked={settings.submissionRowActions?.edit !== false}
+              onChange={(checked) =>
+                onChange({
+                  submissionRowActions: {
+                    ...settings.submissionRowActions,
+                    edit: checked,
+                  },
+                })
+              }
+            />
+            <ToggleRow
+              label="Delete"
+              checked={settings.submissionRowActions?.delete !== false}
+              onChange={(checked) =>
+                onChange({
+                  submissionRowActions: {
+                    ...settings.submissionRowActions,
+                    delete: checked,
+                  },
+                })
+              }
+            />
+            <ToggleRow
+              label="Download PDF"
+              checked={settings.submissionRowActions?.pdf === true}
+              onChange={(checked) =>
+                onChange({
+                  submissionRowActions: {
+                    ...settings.submissionRowActions,
+                    pdf: checked,
+                  },
+                })
+              }
+            />
+            <span className="text-xs text-neutral-400">
+              View, Edit and Delete stay inline; Download PDF appears in the
+              row's ⋯ menu. Edit and Delete also require edit access to the
+              form.
+            </span>
+          </div>
           <div className="flex flex-col gap-1">
             <label htmlFor="settings-filter-placement" className="label">
               Placement

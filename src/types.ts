@@ -222,8 +222,19 @@ export type FormSettings = {
   filterPlacement?: "top" | "header";
   /** Number of columns for the "top" filter grid (1-6). Defaults to 3. */
   filterColumns?: number;
-  /** Show text labels ("View", "Edit", …) on the submissions table row actions. Defaults to true; false shows icons only. */
+  /** Show text labels ("View", "Edit") on the submissions table row actions. Defaults to false (icons only). */
   showActionLabels?: boolean;
+  /**
+   * Which actions appear on submissions table rows. View, Edit and Delete
+   * default to shown; PDF defaults to hidden. (Edit/Delete also require the
+   * user to have edit access.)
+   */
+  submissionRowActions?: {
+    view?: boolean;
+    edit?: boolean;
+    pdf?: boolean;
+    delete?: boolean;
+  };
   /** Custom actions that run before/after a submission is stored. */
   actions?: FormAction[];
   /**

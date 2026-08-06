@@ -388,11 +388,11 @@ turn the form builder into a pipeline.
 - **Basic analytics**: a stats row on the submissions page shows total
   responses, this week, avg/day, and the top field fill rate (computed
   client-side).
-- **Compact row actions**: the submissions table keeps View/Edit as inline
-  buttons and moves the rest (Download PDF, Delete) into a per-row overflow
-  menu to save column width. A form setting, "Show action labels"
-  (`FormSettings.showActionLabels`, default on), switches the inline buttons
-  to icon-only with tooltips.
+- **Compact row actions**: the submissions table renders View/Edit/Delete as
+  icon-only buttons by default (labels optional via the "Show action labels"
+  form setting) and keeps Download PDF in a per-row overflow menu. Each
+  button (View / Edit / Delete / PDF) can be toggled per form via
+  `FormSettings.submissionRowActions`; PDF is off by default.
 
 ### Implementation notes
 
