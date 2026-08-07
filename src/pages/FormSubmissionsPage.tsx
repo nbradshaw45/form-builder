@@ -57,9 +57,21 @@ function formatValue(value: unknown): string {
   return String(value);
 }
 
-function formatCellValue(key: string, value: unknown): string {
+function formatCellValue(
+  key: string,
+  value: unknown,
+  field?: FormField,
+): string {
   if (Array.isArray(value)) {
     return value.join(", ");
+  }
+  if (typeof value === "boolean") {
+    if (field?.type === "yes_no") {
+      return value
+        ? (field.yesLabel?.trim() || "Yes")
+        : (field.noLabel?.trim() || "No");
+    }
+    return value ? "Yes" : "No";
   }
   if (
     typeof value === "string" &&
@@ -69,7 +81,10 @@ function formatCellValue(key: string, value: unknown): string {
     return "Signature";
   }
   if (
-    (key === "created_date" || key === "modified_date") &&
+    (key === "created_date" ||
+      key === "modified_date" ||
+      field?.type === "created_date" ||
+      field?.type === "modified_date") &&
     typeof value === "string" &&
     value !== ""
   ) {
@@ -160,6 +175,7 @@ export function FormSubmissionsPage({ user }: { user: AuthUser }) {
     "number",
     "select",
     "checkbox",
+    "yes_no",
     "date",
     "time",
     "email",
@@ -173,6 +189,7 @@ export function FormSubmissionsPage({ user }: { user: AuthUser }) {
     "signature",
     "file_upload",
     "user",
+    "sequence",
     "created_date",
     "modified_date",
     "updated_by_user",
@@ -397,10 +414,22 @@ export function FormSubmissionsPage({ user }: { user: AuthUser }) {
       "select",
       "textarea",
       "checkbox",
+      "yes_no",
       "date",
       "created_date",
       "modified_date",
       "updated_by_user",
+      "sequence",
+      "email",
+      "url",
+      "phone",
+      "radio",
+      "multi_select",
+      "rating",
+      "slider",
+      "currency",
+      "user",
+      "time",
     ]);
 
     const dataFieldKeys = fields
@@ -488,7 +517,7 @@ export function FormSubmissionsPage({ user }: { user: AuthUser }) {
                 const fileId = typeof value === "string" ? value : "";
                 return fileId ? <FileCell fileId={fileId} /> : "—";
               }
-              return formatCellValue(key, value);
+              return formatCellValue(key, value, keyToField.get(key));
             },
           },
         ),
@@ -1053,10 +1082,28 @@ function FilterValueInput({
   const isDate = ["date", "created_date", "modified_date"].includes(
     field.type,
   );
-  const isNumeric = ["number", "currency", "rating", "slider"].includes(
+  const isNumeric = ["number", "currency", "rating", "slider", "sequence"].includes(
     field.type,
   );
   const useDropdown = filterInputForField(field) === "dropdown";
+
+  if (field.type === "yes_no" || field.type === "checkbox") {
+    const yesLabel =
+      field.type === "yes_no" ? field.yesLabel?.trim() || "Yes" : "Yes";
+    const noLabel =
+      field.type === "yes_no" ? field.noLabel?.trim() || "No" : "No";
+    return (
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className={inputCls}
+      >
+        <option value="">Any</option>
+        <option value="true">{yesLabel}</option>
+        <option value="false">{noLabel}</option>
+      </select>
+    );
+  }
 
   if (isDate) {
     return (

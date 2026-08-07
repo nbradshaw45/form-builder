@@ -37,6 +37,8 @@ const DROPDOWN_DEFAULT_TYPES = new Set<FieldType>([
   "radio",
   "user",
   "multi_select",
+  "yes_no",
+  "checkbox",
 ]);
 
 /** Types where the filter input style (dropdown vs text) is user-selectable. */
@@ -80,6 +82,7 @@ export function filterOperatorsForType(type: FieldType): FilterOperator[] {
     case "currency":
     case "rating":
     case "slider":
+    case "sequence":
       return [
         { value: "equals", label: "Equals" },
         { value: "gt", label: "Greater than" },
@@ -101,6 +104,7 @@ export function filterOperatorsForType(type: FieldType): FilterOperator[] {
         { value: "no_file", label: "No upload" },
       ];
     case "checkbox":
+    case "yes_no":
       return [{ value: "equals", label: "Equals" }];
     default:
       return [{ value: "equals", label: "Equals" }];
@@ -112,6 +116,14 @@ export function filterStringify(value: unknown): string {
     return "";
   }
   return Array.isArray(value) ? value.join(", ") : String(value);
+}
+
+function filterNumeric(value: unknown): number {
+  if (typeof value === "number") {
+    return value;
+  }
+  const match = String(value ?? "").match(/-?\d+(\.\d+)?/);
+  return match ? Number(match[0]) : Number.NaN;
 }
 
 /** Extracts the YYYY-MM-DD portion of a stored value (timestamps become dates). */
@@ -140,13 +152,13 @@ export function matchesFilter(
     case "contains":
       return lower.includes(needle);
     case "gt":
-      return Number(value) > Number(filter.value);
+      return filterNumeric(value) > filterNumeric(filter.value);
     case "lt":
-      return Number(value) < Number(filter.value);
+      return filterNumeric(value) < filterNumeric(filter.value);
     case "between": {
-      const numeric = Number(value);
-      const a = Number(filter.value);
-      const b = Number(filter.value2);
+      const numeric = filterNumeric(value);
+      const a = filterNumeric(filter.value);
+      const b = filterNumeric(filter.value2);
       if (Number.isFinite(numeric) && Number.isFinite(a) && Number.isFinite(b)) {
         const [lo, hi] = a <= b ? [a, b] : [b, a];
         return numeric >= lo && numeric <= hi;

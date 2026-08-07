@@ -17,6 +17,7 @@ export const FIELD_DEFINITIONS: FieldDefinition[] = [
   { type: "radio", name: "Radio group", description: "Single choice buttons", category: "input" },
   { type: "multi_select", name: "Multi-select", description: "Pick several options", category: "input" },
   { type: "checkbox", name: "Checkbox", description: "Boolean toggle", category: "input" },
+  { type: "yes_no", name: "Yes / No", description: "Explicit Yes or No choice", category: "input" },
   { type: "email", name: "Email", description: "Email with validation", category: "input" },
   { type: "url", name: "URL", description: "Web link with validation", category: "input" },
   { type: "phone", name: "Phone", description: "Phone number input", category: "input" },
@@ -32,6 +33,7 @@ export const FIELD_DEFINITIONS: FieldDefinition[] = [
   { type: "signature", name: "Signature", description: "Draw a signature", category: "advanced" },
   { type: "file_upload", name: "File upload", description: "Attach a file", category: "advanced" },
   { type: "captcha", name: "Captcha", description: "Cloudflare Turnstile spam check", category: "advanced" },
+  { type: "sequence", name: "Sequence", description: "Auto-increment number per form", category: "advanced" },
   { type: "section_header", name: "Section Header", description: "Title and subtext", category: "layout" },
   { type: "divider", name: "Divider", description: "Horizontal rule", category: "layout" },
   { type: "paragraph", name: "Paragraph", description: "Rich help text", category: "layout" },
@@ -52,6 +54,7 @@ const DEFAULT_LABELS: Record<FieldType, string> = {
   select: "Select",
   textarea: "Textarea",
   checkbox: "Checkbox",
+  yes_no: "Yes / No",
   date: "Date",
   time: "Time",
   email: "Email",
@@ -69,6 +72,7 @@ const DEFAULT_LABELS: Record<FieldType, string> = {
   hidden: "Hidden field",
   user: "User",
   math: "Calculated field",
+  sequence: "Sequence",
   section_header: "Section header",
   divider: "Divider",
   paragraph: "Paragraph",
@@ -154,6 +158,18 @@ export function createElement(
         filterable: false,
         label: "Verification",
       };
+    case "sequence":
+      return {
+        ...base,
+        readonly: true,
+        showInTable: true,
+        sequenceStart: 1,
+        sequenceDigits: 0,
+        sequencePrefix: "",
+        sequenceSuffix: "",
+      };
+    case "yes_no":
+      return { ...base, yesLabel: "Yes", noLabel: "No" };
     case "confirm":
       return { ...base, confirmField: "" };
     case "hidden":

@@ -3,8 +3,12 @@ import { Button } from "../shared/components/Button";
 import { FieldControl } from "./FieldControl";
 import { isSystemField } from "./builder/elementFactory";
 import { gridColumnClasses, gridRowClasses, columnStyle } from "../shared/grid";
-import { getFormUsers, useQuery } from "wasp/client/operations";
-import { evaluateFormula } from "./builder/formula";
+import {
+  checkFieldValueUnique,
+  checkUserExists,
+  getFormUsers,
+  useQuery,
+} from "wasp/client/operations";
 import {
   applyLogic,
   evaluateCondition,
@@ -12,8 +16,11 @@ import {
   RECORD_MODE_NEW,
   RECORD_MODE_UPDATE,
 } from "../shared/logic";
+import {
+  isEmptyValue,
+  validateFieldSync,
+} from "../shared/fieldValidation";
 import type {
-  Condition,
   FormField,
   FormSettings,
   SubmissionData,
@@ -34,6 +41,8 @@ interface DynamicFormRendererProps {
   readonlyFieldKeys?: string[];
   showReset?: boolean;
   formId?: string;
+  /** When editing, exclude this submission from unique-value checks. */
+  excludeSubmissionId?: string;
   multiStep?: boolean;
   honeypot?: boolean;
   settings?: FormSettings;
@@ -47,6 +56,7 @@ const EDITTABLE_TYPES = new Set([
   "select",
   "textarea",
   "checkbox",
+  "yes_no",
   "date",
   "time",
   "email",
@@ -154,6 +164,7 @@ export function DynamicFormRenderer({
   readonlyFieldKeys,
   showReset = false,
   formId,
+  excludeSubmissionId,
   multiStep = false,
   honeypot = false,
   settings,
@@ -280,174 +291,13 @@ export function DynamicFormRenderer({
     setErrors((prev) => ({ ...prev, [fieldKey]: "" }));
   }
 
-  function isEmptyValue(field: FormField, value: unknown): boolean {
-    if (value === undefined || value === null) {
-      return true;
-    }
-    if (Array.isArray(value)) {
-      return value.length === 0;
-    }
-    if (typeof value === "string") {
-      return value.trim() === "";
-    }
-    if (field.type === "rating" && typeof value === "number") {
-      return value < 1;
-    }
-    return false;
-  }
-
-  function validateFieldFormat(
-    field: FormField,
-    value: unknown,
-  ): string | null {
-    if (value === undefined || value === null || value === "") {
-      return null;
-    }
-    const str = String(value);
-    switch (field.type) {
-      case "email":
-        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(str)
-          ? null
-          : "Enter a valid email address";
-      case "url":
-        try {
-          new URL(str);
-          return null;
-        } catch {
-          return "Enter a valid URL";
-        }
-      case "phone":
-        return /^\+?[\d\s().-]{7,20}$/.test(str)
-          ? null
-          : "Enter a valid phone number";
-      case "multi_select":
-        return Array.isArray(value) && value.length > 0
-          ? null
-          : "Select at least one option";
-      case "rating": {
-        const num = Number(value);
-        const count = field.starCount ?? 5;
-        return num >= 1 && num <= count
-          ? null
-          : `Choose a rating between 1 and ${count}`;
-      }
-      case "signature":
-        return value ? null : "Please add your signature";
-      case "file_upload":
-        return value ? null : "Please upload a file";
-      default:
-        return null;
-    }
-  }
-
   function validateField(
     field: FormField,
     value: unknown,
     values: SubmissionData,
     fields: FormField[],
   ): string | null {
-    if (field.type === "hidden") {
-      return null;
-    }
-    if (field.type === "captcha") {
-      if (isEmptyValue(field, value)) {
-        return "Please complete the captcha";
-      }
-      return null;
-    }
-    if (field.type === "confirm") {
-      const targetValue = field.confirmField
-        ? values[field.confirmField]
-        : undefined;
-      if (
-        targetValue !== undefined &&
-        targetValue !== null &&
-        targetValue !== ""
-      ) {
-        if (String(value ?? "") !== String(targetValue)) {
-          const targetLabel =
-            fields.find((f) => f.key === field.confirmField)?.label ??
-            field.confirmField;
-          return `Does not match ${targetLabel}`;
-        }
-      }
-      return null;
-    }
-
-    const required =
-      field.required ||
-      (field.requiredWhen
-        ? evaluateCondition(field.requiredWhen, effectiveValues)
-        : false);
-    const empty = isEmptyValue(field, value);
-    if (required && empty) {
-      return "This field is required";
-    }
-    if (empty) {
-      return null;
-    }
-
-    const formatError = validateFieldFormat(field, value);
-    if (formatError) {
-      return formatError;
-    }
-
-    const validation = field.validation;
-    if (!validation) {
-      return null;
-    }
-    if (typeof value === "string") {
-      if (
-        validation.minLength !== undefined &&
-        value.length < validation.minLength
-      ) {
-        return `Must be at least ${validation.minLength} characters`;
-      }
-      if (
-        validation.maxLength !== undefined &&
-        value.length > validation.maxLength
-      ) {
-        return `Must be at most ${validation.maxLength} characters`;
-      }
-      if (validation.pattern) {
-        try {
-          const pattern = new RegExp(validation.pattern);
-          if (!pattern.test(value)) {
-            return (
-              validation.patternMessage ||
-              "Value does not match the required pattern"
-            );
-          }
-        } catch {
-          // Ignore invalid regex so it doesn't block submissions.
-        }
-      }
-    }
-    const numeric = Number(value);
-    if (Number.isFinite(numeric)) {
-      if (validation.min !== undefined && numeric < validation.min) {
-        return `Must be at least ${validation.min}`;
-      }
-      if (validation.max !== undefined && numeric > validation.max) {
-        return `Must be at most ${validation.max}`;
-      }
-    }
-    if (validation.mustMatch) {
-      const otherValue = values[validation.mustMatch];
-      const otherLabel =
-        fields.find((field) => field.key === validation.mustMatch)?.label ??
-        validation.mustMatch;
-      if (String(value) !== String(otherValue ?? "")) {
-        return `Does not match ${otherLabel}`;
-      }
-    }
-    if (validation.rule) {
-      const ruleResult = evaluateFormula(validation.rule, values, fields);
-      if (ruleResult === null || ruleResult === 0) {
-        return validation.ruleMessage || "Value does not satisfy the rule";
-      }
-    }
-    return null;
+    return validateFieldSync(field, value, values, fields);
   }
 
   function validateFields(fieldsToCheck: FormField[]): Record<string, string> {
@@ -469,12 +319,73 @@ export function DynamicFormRenderer({
     return nextErrors;
   }
 
+  async function validateAsyncRules(
+    fieldsToCheck: FormField[],
+  ): Promise<Record<string, string>> {
+    const nextErrors: Record<string, string> = {};
+    if (!formId) {
+      return nextErrors;
+    }
+    for (const field of fieldsToCheck) {
+      if (!isSubmittableField(field) || !isFieldVisible(field)) {
+        continue;
+      }
+      const value = effectiveValues[field.key];
+      if (isEmptyValue(field, value)) {
+        continue;
+      }
+      const validation = field.validation;
+      if (!validation) {
+        continue;
+      }
+      if (validation.unique) {
+        try {
+          const result = await checkFieldValueUnique({
+            formId,
+            fieldKey: field.key,
+            value: String(value),
+            excludeSubmissionId,
+          });
+          if (!result.unique) {
+            nextErrors[field.key] =
+              validation.uniqueMessage ||
+              "This value has already been submitted";
+          }
+        } catch (err) {
+          nextErrors[field.key] =
+            err instanceof Error ? err.message : String(err);
+        }
+      }
+      if (
+        (validation.userExists || validation.emailExists) &&
+        !nextErrors[field.key]
+      ) {
+        try {
+          const result = await checkUserExists({ email: String(value) });
+          if (!result.exists) {
+            nextErrors[field.key] = validation.emailExists
+              ? validation.emailExistsMessage ||
+                "No account with that email exists"
+              : validation.userExistsMessage ||
+                "No user with that email exists";
+          }
+        } catch (err) {
+          nextErrors[field.key] =
+            err instanceof Error ? err.message : String(err);
+        }
+      }
+    }
+    return nextErrors;
+  }
+
   const allVisibleFields = visibleSteps.flatMap((step) => step);
 
   async function submitForm() {
     const nextErrors = validateFields(allVisibleFields);
-    setErrors(nextErrors);
-    if (Object.keys(nextErrors).length > 0) {
+    const asyncErrors = await validateAsyncRules(allVisibleFields);
+    const mergedErrors = { ...nextErrors, ...asyncErrors };
+    setErrors(mergedErrors);
+    if (Object.keys(mergedErrors).length > 0) {
       return;
     }
 
@@ -501,6 +412,10 @@ export function DynamicFormRenderer({
           break;
         case "checkbox":
           data[field.key] = Boolean(rawValue);
+          break;
+        case "yes_no":
+          data[field.key] =
+            rawValue === true || rawValue === false ? rawValue : null;
           break;
         case "multi_select":
           data[field.key] = Array.isArray(rawValue) ? rawValue : [];
@@ -537,14 +452,16 @@ export function DynamicFormRenderer({
     if (isLastStep) {
       void submitForm();
     } else {
-      goNext();
+      void goNext();
     }
   }
 
-  function goNext() {
+  async function goNext() {
     const nextErrors = validateFields(activeStep);
-    setErrors(nextErrors);
-    if (Object.keys(nextErrors).length > 0) {
+    const asyncErrors = await validateAsyncRules(activeStep);
+    const mergedErrors = { ...nextErrors, ...asyncErrors };
+    setErrors(mergedErrors);
+    if (Object.keys(mergedErrors).length > 0) {
       return;
     }
     setCurrentStep((prev) => Math.min(prev + 1, visibleSteps.length - 1));

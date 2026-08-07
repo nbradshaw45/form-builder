@@ -35,6 +35,10 @@ import {
 import type { FormField, FormSettings, SubmissionData } from "./types";
 import { DEFAULT_FORM_SETTINGS } from "./types";
 import {
+  formatSequenceValue,
+  stripSequenceCounters,
+} from "./shared/sequence";
+import {
   assertCanDeleteSubmission,
   assertCanEditSubmission,
   assertIsAdmin,
@@ -43,6 +47,7 @@ import {
   getRolesFromSettings,
   resolveFieldRestrictions,
 } from "./server/access";
+import { assertSubmissionDataValid } from "./server/fieldValidation";
 import { mergeSubmissionDataWithFieldRestrictions } from "./shared/formRoles";
 import {
   actorFromEmail,
@@ -116,9 +121,72 @@ function buildSystemValues(
       systemValues[field.key] = now;
     } else if (field.type === "updated_by_user") {
       systemValues[field.key] = resolveUpdatedBy(user, field);
+    } else if (field.type === "sequence" && previousData) {
+      // Preserve existing sequence on edit; never accept client-supplied values.
+      systemValues[field.key] = previousData[field.key] ?? "";
     }
   }
   return systemValues;
+}
+
+/**
+ * Atomically allocate the next sequence number(s) for a form and persist the
+ * counters on Form.settings.sequenceCounters.
+ */
+async function allocateSequenceValues(
+  formId: string,
+  fields: FormField[],
+): Promise<SubmissionData> {
+  const sequenceFields = fields.filter((field) => field.type === "sequence");
+  if (sequenceFields.length === 0) {
+    return {};
+  }
+
+  return prisma.$transaction(async (tx) => {
+    const rows = await tx.$queryRaw<
+      Array<{ settings: FormSettings | null }>
+    >`
+      SELECT settings FROM "Form" WHERE id = ${formId} FOR UPDATE
+    `;
+    const current = rows[0];
+    if (!current) {
+      throw new HttpError(404, "Form not found");
+    }
+    const settings: FormSettings = {
+      ...DEFAULT_FORM_SETTINGS,
+      ...((current.settings as FormSettings | null) ?? {}),
+    };
+    const counters = { ...(settings.sequenceCounters ?? {}) };
+    const values: SubmissionData = {};
+
+    for (const field of sequenceFields) {
+      const start = field.sequenceStart ?? 1;
+      const next = counters[field.key] ?? start;
+      values[field.key] = formatSequenceValue(next, field);
+      counters[field.key] = next + 1;
+    }
+
+    await tx.form.update({
+      where: { id: formId },
+      data: {
+        settings: serialize({
+          ...settings,
+          sequenceCounters: counters,
+        }),
+      },
+    });
+
+    return values;
+  });
+}
+
+function copyFormSettings(
+  settings: unknown,
+): FormSettings | undefined {
+  if (!settings || typeof settings !== "object") {
+    return undefined;
+  }
+  return stripSequenceCounters(settings as FormSettings);
 }
 
 type CreateFormArgs = {
@@ -215,11 +283,15 @@ export const updateForm: UpdateForm<UpdateFormArgs, Form> = async (
     throw new HttpError(404, "Form not found");
   }
 
+  const existingSettings =
+    (existing.settings as unknown as FormSettings | null) ?? {};
   const mergedSettings = settings
     ? {
         ...DEFAULT_FORM_SETTINGS,
         ...settings,
         roles: normalizeFormRoles(settings.roles),
+        // Keep live counters; the builder does not manage them.
+        sequenceCounters: existingSettings.sequenceCounters,
       }
     : undefined;
 
@@ -334,7 +406,10 @@ export const saveFormAsTemplate: SaveFormAsTemplate<
     data: {
       title: form.title,
       fields: serialize(form.fields),
-      settings: form.settings ? serialize(form.settings) : undefined,
+      settings: (() => {
+        const copied = copyFormSettings(form.settings);
+        return copied ? serialize(copied) : undefined;
+      })(),
       isTemplate: true,
       user: {
         connect: {
@@ -386,7 +461,10 @@ export const duplicateForm: DuplicateForm<DuplicateFormArgs, Form> = async (
       title: `${form.title} (copy)`,
       description: form.description,
       fields: serialize(form.fields),
-      settings: form.settings ? serialize(form.settings) : undefined,
+      settings: (() => {
+        const copied = copyFormSettings(form.settings);
+        return copied ? serialize(copied) : undefined;
+      })(),
       user: {
         connect: {
           id: context.user.id,
@@ -439,7 +517,10 @@ export const createFormFromTemplate: CreateFormFromTemplate<
     data: {
       title: finalTitle,
       fields: serialize(template.fields),
-      settings: template.settings ? serialize(template.settings) : undefined,
+      settings: (() => {
+        const copied = copyFormSettings(template.settings);
+        return copied ? serialize(copied) : undefined;
+      })(),
       user: {
         connect: {
           id: context.user.id,
@@ -490,7 +571,7 @@ export const importForm: ImportForm<ImportFormArgs, Form> = async (
       settings:
         settings && typeof settings === "object"
           ? serialize({
-              ...settings,
+              ...stripSequenceCounters(settings),
               roles: normalizeFormRoles(settings.roles),
             })
           : undefined,
@@ -613,6 +694,18 @@ export const submitForm: SubmitForm<SubmitFormArgs, Submission> = async (
     }
   }
 
+  for (const field of fields) {
+    if (field.type === "sequence") {
+      delete data[field.key];
+    }
+  }
+
+  await assertSubmissionDataValid({
+    fields,
+    data,
+    formId,
+  });
+
   if (settings.rateLimitPerHour) {
     const since = new Date(Date.now() - 3600000);
     const recentCount = await prisma.submission.count({
@@ -650,6 +743,7 @@ export const submitForm: SubmitForm<SubmitFormArgs, Submission> = async (
   }
 
   const systemValues = buildSystemValues(form.fields, actorUser);
+  const sequenceValues = await allocateSequenceValues(formId, fields);
 
   const adjustedData = await applyBeforeSubmitActions(form, data);
 
@@ -675,7 +769,11 @@ export const submitForm: SubmitForm<SubmitFormArgs, Submission> = async (
           id: formId,
         },
       },
-      data: serialize({ ...adjustedData, ...systemValues }),
+      data: serialize({
+        ...adjustedData,
+        ...systemValues,
+        ...sequenceValues,
+      }),
       context: serialize(submissionContext),
       editToken,
     },
@@ -753,6 +851,13 @@ export const updateSubmission: UpdateSubmission<
     ),
     ...systemValues,
   };
+
+  await assertSubmissionDataValid({
+    fields,
+    data: mergedData,
+    formId: submission.form.id,
+    excludeSubmissionId: submissionId,
+  });
 
   const updated = await context.entities.Submission.update({
     where: { id: submissionId },
@@ -832,6 +937,13 @@ export const updateSubmissionByToken: UpdateSubmissionByToken<
     ...data,
     ...systemValues,
   };
+
+  await assertSubmissionDataValid({
+    fields,
+    data: mergedData,
+    formId: submission.form.id,
+    excludeSubmissionId: submissionId,
+  });
 
   const updated = await context.entities.Submission.update({
     where: { id: submissionId },

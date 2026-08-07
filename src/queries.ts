@@ -35,6 +35,8 @@ import type {
   GetForms,
   GetFormTemplates,
   GetFormUsers,
+  CheckFieldValueUnique,
+  CheckUserExists,
   GetSubmission,
   GetSubmissionByToken,
   GetSubmissionPdf,
@@ -42,6 +44,10 @@ import type {
   GetSubmissionsExcel,
   GetUsers,
 } from "wasp/server/operations";
+import {
+  doesUserExist,
+  isFieldValueUnique,
+} from "./server/fieldValidation";
 
 export type FormWithSubmissionsCount = Form & {
   _count: { submissions: number };
@@ -719,6 +725,39 @@ export const getFormUsers: GetFormUsers<void, UserOption[]> = async (
       email: usernameIdentity?.providerUserId ?? "",
     };
   });
+};
+
+export const checkFieldValueUnique: CheckFieldValueUnique<
+  {
+    formId: string;
+    fieldKey: string;
+    value: string;
+    excludeSubmissionId?: string;
+  },
+  { unique: boolean }
+> = async ({ formId, fieldKey, value, excludeSubmissionId }) => {
+  const form = await prisma.form.findUnique({
+    where: { id: formId },
+    select: { id: true },
+  });
+  if (!form) {
+    throw new HttpError(404, "Form not found");
+  }
+  const unique = await isFieldValueUnique({
+    formId,
+    fieldKey,
+    value,
+    excludeSubmissionId,
+  });
+  return { unique };
+};
+
+export const checkUserExists: CheckUserExists<
+  { email: string },
+  { exists: boolean }
+> = async ({ email }) => {
+  const exists = await doesUserExist(email);
+  return { exists };
 };
 
 export const getFormAccess: GetFormAccess<

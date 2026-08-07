@@ -4,6 +4,7 @@ export type FieldType =
   | "select"
   | "textarea"
   | "checkbox"
+  | "yes_no"
   | "date"
   | "time"
   | "email"
@@ -21,6 +22,7 @@ export type FieldType =
   | "hidden"
   | "math"
   | "user"
+  | "sequence"
   | "section_header"
   | "divider"
   | "paragraph"
@@ -123,6 +125,13 @@ export type FieldRestrictions = {
   cannotEdit: string[];
 };
 
+export type FieldCharSet =
+  | "alpha"
+  | "alphanumeric"
+  | "alphanumeric_space";
+
+export type FieldCompareOp = "gt" | "gte" | "lt" | "lte";
+
 export type FieldValidation = {
   /** Text length minimum (text, textarea, email, url, phone). */
   minLength?: number;
@@ -142,6 +151,48 @@ export type FieldValidation = {
   rule?: string;
   /** Custom message shown when the expression fails. */
   ruleMessage?: string;
+  /** Value must not equal this string (trimmed; case-sensitive). */
+  isNot?: string;
+  /** Custom message when isNot fails. */
+  isNotMessage?: string;
+  /** Value must be a finite number (string form after trim). */
+  isNumeric?: boolean;
+  /** Value must look like an email address (any field type). */
+  isEmail?: boolean;
+  /** Value must be letters and numbers only. */
+  isAlphanumeric?: boolean;
+  /** Value must be unique among this form's submissions for this field. */
+  unique?: boolean;
+  /** Custom message when unique fails. */
+  uniqueMessage?: string;
+  /**
+   * Other field keys: this value + those must all be distinct within the
+   * same submission ("Are Unique Values").
+   */
+  uniqueAmong?: string[];
+  /** Custom message when uniqueAmong fails. */
+  uniqueAmongMessage?: string;
+  /** Restrict allowed characters (Special Characters validation). */
+  charSet?: FieldCharSet;
+  /** Value must match an existing app user's email/username. */
+  userExists?: boolean;
+  /** Custom message when userExists fails. */
+  userExistsMessage?: string;
+  /**
+   * Email must be valid format and match an existing app user
+   * ("Email Exists").
+   */
+  emailExists?: boolean;
+  /** Custom message when emailExists fails. */
+  emailExistsMessage?: string;
+  /** Compare against a fixed number or another field (greater/less than). */
+  compareOp?: FieldCompareOp;
+  /** Fixed number to compare against (used when compareField is unset). */
+  compareValue?: number;
+  /** Field key whose numeric value to compare against. */
+  compareField?: string;
+  /** Custom message when compare fails. */
+  compareMessage?: string;
 };
 
 export type FormField = {
@@ -199,6 +250,18 @@ export type FormField = {
   mask?: string;
   /** For confirm fields: key of the field this value must match. */
   confirmField?: string;
+  /** Yes/No element: label for the Yes option. Defaults to "Yes". */
+  yesLabel?: string;
+  /** Yes/No element: label for the No option. Defaults to "No". */
+  noLabel?: string;
+  /** Sequence element: first number issued (default 1). */
+  sequenceStart?: number;
+  /** Sequence element: pad with leading zeros to this many digits (0 = none). */
+  sequenceDigits?: number;
+  /** Sequence element: text prepended to the number. */
+  sequencePrefix?: string;
+  /** Sequence element: text appended to the number. */
+  sequenceSuffix?: string;
   /** Whether this field appears in the submissions filter UI. Defaults to true. */
   filterable?: boolean;
   /** Filter condition used on the submissions page (per field type). */
@@ -292,6 +355,11 @@ export type FormSettings = {
    * Defaults to Viewer / Editor / Manager when omitted.
    */
   roles?: FormRoleDef[];
+  /**
+   * Next sequence number per sequence field key. Updated server-side on each
+   * new submission; not copied when duplicating/importing forms.
+   */
+  sequenceCounters?: Record<string, number>;
 };
 
 export type FormActionValueSource = "static" | "field" | "formula";

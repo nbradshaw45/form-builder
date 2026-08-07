@@ -61,6 +61,11 @@ function formatValue(field: FormField, value: unknown): string {
     return value.length > 0 ? value.join(", ") : "";
   }
   if (typeof value === "boolean") {
+    if (field.type === "yes_no") {
+      return value
+        ? (field.yesLabel?.trim() || "Yes")
+        : (field.noLabel?.trim() || "No");
+    }
     return value ? "yes" : "no";
   }
   if (

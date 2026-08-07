@@ -157,6 +157,83 @@ export function FieldControl({
     );
   }
 
+  if (type === "yes_no") {
+    const yesLabel = field.yesLabel?.trim() || "Yes";
+    const noLabel = field.noLabel?.trim() || "No";
+    const selected =
+      value === true ? true : value === false ? false : null;
+    return (
+      <div className={fieldClasses}>
+        <span className={labelClasses}>
+          {label}
+          {required && <span className="text-danger"> *</span>}
+        </span>
+        <div
+          role="group"
+          aria-label={label}
+          className="inline-flex overflow-hidden rounded-lg border border-neutral-200 bg-white"
+        >
+          <button
+            type="button"
+            disabled={disabled}
+            aria-pressed={selected === true}
+            onClick={() => onChange(true)}
+            className={`min-w-20 px-4 py-2 text-[13px] font-medium transition-colors ${
+              selected === true
+                ? "bg-primary-600 text-white"
+                : "text-neutral-700 hover:bg-neutral-50"
+            } ${disabled ? "cursor-not-allowed opacity-60" : ""}`}
+          >
+            {yesLabel}
+          </button>
+          <button
+            type="button"
+            disabled={disabled}
+            aria-pressed={selected === false}
+            onClick={() => onChange(false)}
+            className={`min-w-20 border-l border-neutral-200 px-4 py-2 text-[13px] font-medium transition-colors ${
+              selected === false
+                ? "bg-neutral-800 text-white"
+                : "text-neutral-700 hover:bg-neutral-50"
+            } ${disabled ? "cursor-not-allowed opacity-60" : ""}`}
+          >
+            {noLabel}
+          </button>
+        </div>
+        {helpText && <span className={helpTextClasses}>{helpText}</span>}
+        {error && <span className={errorTextClasses}>{error}</span>}
+      </div>
+    );
+  }
+
+  if (type === "sequence") {
+    const display =
+      value === null || value === undefined || value === ""
+        ? ""
+        : String(value);
+    return (
+      <div className={fieldClasses}>
+        <div className="flex items-center gap-2">
+          <label htmlFor={field.key} className={labelClasses}>
+            {label}
+          </label>
+          <span className="rounded-full bg-info-soft px-2 py-0.5 font-mono text-[9.5px] font-medium uppercase tracking-[0.08em] text-info">
+            sequence
+          </span>
+        </div>
+        <input
+          id={field.key}
+          value={display}
+          readOnly
+          disabled={disabled}
+          placeholder={display ? undefined : "Assigned on submit"}
+          className={`${inputClasses} font-mono`}
+        />
+        {helpText && <span className={helpTextClasses}>{helpText}</span>}
+      </div>
+    );
+  }
+
   if (type === "radio") {
     const options = field.options ?? [];
     const inline = field.layout === "inline";

@@ -38,6 +38,8 @@ import {
   getUsers,
   getAuditEvents,
   getFormAuditEvents,
+  checkFieldValueUnique,
+  checkUserExists,
 } from "./src/queries" with { type: "ref" };
 import { LoginPage } from "./src/auth/LoginPage" with { type: "ref" };
 import { SignupPage } from "./src/auth/SignupPage" with { type: "ref" };
@@ -118,6 +120,8 @@ export default app({
     query(getFormTemplates, { entities: ["Form"] }),
     query(exportForm, { entities: ["Form", "FormAccess", "User"] }),
     query(getFormUsers, { entities: ["User"], auth: false }),
+    query(checkFieldValueUnique, { entities: ["Form", "Submission"], auth: false }),
+    query(checkUserExists, { entities: ["User"], auth: false }),
     query(getFile, { entities: ["UploadedFile", "Form", "FormAccess", "User"] }),
     query(getFormSubmissions, { entities: ["Form", "FormAccess", "Submission"] }),
     query(getSubmission, { entities: ["Submission", "Form", "FormAccess", "User"] }),

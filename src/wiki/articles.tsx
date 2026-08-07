@@ -960,7 +960,7 @@ form.setValue("due_date", due.toISOString().slice(0, 10));`}
     title: "Required & validation",
     category: "element-settings",
     summary:
-      "Required, conditional required, length/value bounds, regex patterns, must-match, and custom expression rules.",
+      "Required, conditional required, length/value bounds, regex, is-not, numeric, unique, character set, user-exists, must-match, and custom expression rules.",
     content: (
       <>
         <P>
@@ -999,6 +999,56 @@ form.setValue("due_date", due.toISOString().slice(0, 10));`}
               "A “confirm email” field matching the email field.",
             ],
             [
+              <strong key="isNot">Is not</strong>,
+              "Any field",
+              'Reject a forbidden value such as “N/A”.',
+            ],
+            [
+              <strong key="num">Is numeric</strong>,
+              "Any field",
+              "Value must be a number (including decimals).",
+            ],
+            [
+              <strong key="email">Is email</strong>,
+              "Any field",
+              "Value must look like an email address.",
+            ],
+            [
+              <strong key="alnum">Is alphanumeric</strong>,
+              "Any field",
+              "Letters and numbers only.",
+            ],
+            [
+              <strong key="cmp">Greater / less than</strong>,
+              "Any field",
+              "Compare to a fixed number or another field (gt / gte / lt / lte).",
+            ],
+            [
+              <strong key="chars">Special characters</strong>,
+              "Any field",
+              "Letters only; letters + numbers; or letters, numbers, and spaces.",
+            ],
+            [
+              <strong key="among">Are unique values</strong>,
+              "Any field",
+              "This value must differ from other selected fields on the same submission.",
+            ],
+            [
+              <strong key="uniq">Unique value</strong>,
+              "Text-like / email / user",
+              "No other submission on this form may use the same value.",
+            ],
+            [
+              <strong key="user">User exists</strong>,
+              "Text-like / email / user",
+              "Value must match an existing app user’s email.",
+            ],
+            [
+              <strong key="emailex">Email exists</strong>,
+              "Text-like / email / user",
+              "Valid email format and matches a registered user.",
+            ],
+            [
               <strong key="e">Custom rule</strong>,
               "Any field",
               <span key="y">
@@ -1015,13 +1065,27 @@ form.setValue("due_date", due.toISOString().slice(0, 10));`}
             shown. Invalid regexes are ignored rather than blocking the form.
           </Li>
           <Li>
+            <strong>Unique</strong>, <strong>User exists</strong>, and{" "}
+            <strong>Email exists</strong> are checked on the server (and again
+            in the browser before submit). Editing a record does not treat its
+            own previous value as a duplicate.
+          </Li>
+          <Li>
+            <strong>Are unique values</strong> is within one submission (pick
+            sibling fields). <strong>Unique value</strong> is across all
+            submissions for this form.
+          </Li>
+          <Li>
             <strong>Custom rule</strong> is an expression using{" "}
             <Code>[field_key]</Code> references; it must evaluate to a non-zero
-            value. A custom message can accompany it.
+            value. A custom message can accompany it. Use this instead of
+            Convert Forms–style PHP validation scripts.
           </Li>
           <Li>
             Format checks are built in: email/URL/phone formats, rating range,
-            signature/file presence.
+            signature/file presence. <strong>Required</strong> covers “not
+            empty”. Email fields already validate format; use{" "}
+            <strong>Is email</strong> to apply the same check to a text field.
           </Li>
         </Ul>
         <P>
@@ -1300,6 +1364,99 @@ Typing "11234567890" becomes "(11) 2345-6789"`}
   },
 
   {
+    id: "yes-no",
+    title: "Yes / No",
+    category: "element-settings",
+    summary:
+      "Explicit Yes/No choice as a button pair — clearer than a checkbox when both answers matter.",
+    content: (
+      <>
+        <P>
+          The <strong>Yes / No</strong> element (Input palette) shows two
+          buttons so submitters must pick Yes or No. Unlike a checkbox, there
+          is no ambiguous “unchecked” default unless you leave the default
+          unset.
+        </P>
+        <Ul>
+          <Li>
+            Stores a <code className="font-mono">boolean</code> (
+            <code className="font-mono">true</code> = Yes,{" "}
+            <code className="font-mono">false</code> = No).
+          </Li>
+          <Li>
+            Labels are customizable (e.g. Agree / Disagree). The submissions
+            table, filters, PDFs, and smart tags use those labels.
+          </Li>
+          <Li>
+            Optional default: Yes, No, or none. URL prefills accept{" "}
+            <code className="font-mono">yes</code>/<code className="font-mono">no</code>,{" "}
+            <code className="font-mono">true</code>/<code className="font-mono">false</code>,
+            or <code className="font-mono">1</code>/<code className="font-mono">0</code>.
+          </Li>
+          <Li>
+            Required works as expected — the submitter must choose one option.
+          </Li>
+        </Ul>
+        <Tip>
+          Prefer Yes / No for survey-style questions; use Checkbox for
+          opt-in toggles (“I agree to the terms”).
+        </Tip>
+      </>
+    ),
+  },
+
+  {
+    id: "sequence",
+    title: "Sequence",
+    category: "element-settings",
+    summary:
+      "Auto-incrementing per-form number for ticket IDs, order numbers, and reference codes.",
+    content: (
+      <>
+        <P>
+          The <strong>Sequence</strong> element (Advanced palette) assigns the
+          next number for this form when a response is submitted. Numbers only
+          increase — deleting a submission does not reuse a value.
+        </P>
+        <Setting name={<>Start at</>}>
+          First number issued (default <code className="font-mono">1</code>).
+          Used until the form has issued its first sequence value; after that
+          the server keeps a per-field counter.
+        </Setting>
+        <Setting name={<>Min digits</>}>
+          Pad with leading zeros (e.g. 5 digits →{" "}
+          <code className="font-mono">00001</code>). Use{" "}
+          <code className="font-mono">0</code> for no padding.
+        </Setting>
+        <Setting name={<>Prefix / Suffix</>}>
+          Text wrapped around the number, e.g. prefix{" "}
+          <code className="font-mono">ORD-</code> →{" "}
+          <code className="font-mono">ORD-00001</code>.
+        </Setting>
+        <Ul>
+          <Li>
+            Read-only on the form (“Assigned on submit”). The stored value is a
+            string so padding and prefix/suffix are preserved in emails and
+            exports.
+          </Li>
+          <Li>Preserved when a record is edited — never reassigned.</Li>
+          <Li>
+            Counters live on the form and are{" "}
+            <strong>not</strong> copied when you duplicate, import, or save as
+            a template — each new form starts fresh.
+          </Li>
+        </Ul>
+        <Tip>
+          Use a smart tag like{" "}
+          <code className="font-mono">{"{field.order_number}"}</code> in email
+          templates or the success message to show the reference to the
+          submitter.
+        </Tip>
+      </>
+    ),
+  },
+
+  {
     id: "field-types",
     title: "Element type reference",
     category: "element-settings",
@@ -1322,6 +1479,17 @@ Typing "11234567890" becomes "(11) 2345-6789"`}
             ["Radio group", "string", "Single choice; stacked or inline."],
             ["Multi-select", "string[]", "Pick several; stacked or inline."],
             ["Checkbox", "boolean", "On/off toggle."],
+            [
+              "Yes / No",
+              "boolean",
+              <>
+                Explicit Yes/No buttons; see{" "}
+                <ArtLink key="yn" to="yes-no">
+                  Yes / No
+                </ArtLink>
+                .
+              </>,
+            ],
             ["Email", "string", "Validated email format."],
             ["URL", "string", "Validated web address."],
             ["Phone", "string", "Lenient phone format; supports input masks."],
@@ -1361,6 +1529,17 @@ Typing "11234567890" becomes "(11) 2345-6789"`}
                 Cloudflare Turnstile; see{" "}
                 <ArtLink key="c" to="captcha">
                   Captcha
+                </ArtLink>
+                .
+              </>,
+            ],
+            [
+              "Sequence",
+              "string",
+              <>
+                Per-form auto-increment; see{" "}
+                <ArtLink key="seq" to="sequence">
+                  Sequence
                 </ArtLink>
                 .
               </>,

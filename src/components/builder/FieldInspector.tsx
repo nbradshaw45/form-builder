@@ -76,6 +76,7 @@ const TYPE_NAMES: Record<FieldType, string> = {
   select: "Select",
   textarea: "Textarea",
   checkbox: "Checkbox",
+  yes_no: "Yes / No",
   date: "Date",
   time: "Time",
   email: "Email",
@@ -93,6 +94,7 @@ const TYPE_NAMES: Record<FieldType, string> = {
   hidden: "Hidden field",
   user: "User",
   math: "Math / Calculated",
+  sequence: "Sequence",
   section_header: "Section header",
   divider: "Divider",
   paragraph: "Paragraph",
@@ -159,12 +161,14 @@ export function FieldInspector({
     element.type === "paragraph";
   const isMath = element.type === "math";
   const isCaptcha = element.type === "captcha";
+  const isSequence = element.type === "sequence";
+  const isYesNo = element.type === "yes_no";
   const isSystem = isSystemField(element.type);
 
   const ruleTargets = allElements.filter(
     (candidate) =>
       candidate.id !== element.id &&
-      !["section_header", "divider", "paragraph", "math", "captcha"].includes(
+      !["section_header", "divider", "paragraph", "math", "captcha", "sequence"].includes(
         candidate.type,
       ),
   );
@@ -278,9 +282,19 @@ export function FieldInspector({
           </p>
         )}
 
+        {isSequence && (
+          <p className="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-xs leading-snug text-neutral-500">
+            Assigned automatically on each new submission for this form. The
+            counter only increases (deleting a submission does not reuse a
+            number).{" "}
+            <HelpBubble article="sequence" className="ml-1 align-middle" />
+          </p>
+        )}
+
         {!isLayout &&
           !isCaptcha &&
-          !["checkbox", "date", "time", "user", "radio", "multi_select", "rating", "slider", "signature", "file_upload"].includes(
+          !isSequence &&
+          !["checkbox", "yes_no", "date", "time", "user", "radio", "multi_select", "rating", "slider", "signature", "file_upload"].includes(
             element.type,
           ) && (
           <div className="flex flex-col gap-1">
@@ -298,7 +312,12 @@ export function FieldInspector({
           </div>
         )}
 
-        {!isLayout && !isMath && !isCaptcha && !isSystemField(element.type) && (
+        {!isLayout &&
+          !isMath &&
+          !isCaptcha &&
+          !isSequence &&
+          !isSystemField(element.type) &&
+          !isYesNo && (
           <div className="flex flex-col gap-1">
             <FieldLabel htmlFor="inspector-default" help="default-values">
               Default value
@@ -319,10 +338,147 @@ export function FieldInspector({
           </div>
         )}
 
+        {isYesNo && (
+          <>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="flex flex-col gap-1">
+                <label htmlFor="inspector-yes-label" className={labelClasses}>
+                  Yes label
+                </label>
+                <input
+                  id="inspector-yes-label"
+                  value={element.yesLabel ?? "Yes"}
+                  onChange={(event) =>
+                    onPatch(element.id, { yesLabel: event.target.value })
+                  }
+                  className={inputClasses}
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label htmlFor="inspector-no-label" className={labelClasses}>
+                  No label
+                </label>
+                <input
+                  id="inspector-no-label"
+                  value={element.noLabel ?? "No"}
+                  onChange={(event) =>
+                    onPatch(element.id, { noLabel: event.target.value })
+                  }
+                  className={inputClasses}
+                />
+              </div>
+            </div>
+            <div className="flex flex-col gap-1">
+              <FieldLabel htmlFor="inspector-yesno-default" help="yes-no">
+                Default value
+              </FieldLabel>
+              <select
+                id="inspector-yesno-default"
+                value={element.defaultValue ?? ""}
+                onChange={(event) =>
+                  onPatch(element.id, {
+                    defaultValue: event.target.value || undefined,
+                  })
+                }
+                className={inputClasses}
+              >
+                <option value="">None</option>
+                <option value="yes">{element.yesLabel?.trim() || "Yes"}</option>
+                <option value="no">{element.noLabel?.trim() || "No"}</option>
+              </select>
+            </div>
+          </>
+        )}
+
+        {isSequence && (
+          <div className="flex flex-col gap-3">
+            <div className="grid grid-cols-2 gap-2">
+              <div className="flex flex-col gap-1">
+                <label htmlFor="inspector-seq-start" className={labelClasses}>
+                  Start at
+                </label>
+                <input
+                  id="inspector-seq-start"
+                  type="number"
+                  min={0}
+                  value={element.sequenceStart ?? 1}
+                  onChange={(event) =>
+                    onPatch(element.id, {
+                      sequenceStart: Number(event.target.value) || 1,
+                    })
+                  }
+                  className={inputClasses}
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label htmlFor="inspector-seq-digits" className={labelClasses}>
+                  Min digits
+                </label>
+                <input
+                  id="inspector-seq-digits"
+                  type="number"
+                  min={0}
+                  max={12}
+                  value={element.sequenceDigits ?? 0}
+                  onChange={(event) =>
+                    onPatch(element.id, {
+                      sequenceDigits: Math.max(
+                        0,
+                        Math.min(12, Number(event.target.value) || 0),
+                      ),
+                    })
+                  }
+                  className={inputClasses}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="flex flex-col gap-1">
+                <label htmlFor="inspector-seq-prefix" className={labelClasses}>
+                  Prefix
+                </label>
+                <input
+                  id="inspector-seq-prefix"
+                  value={element.sequencePrefix ?? ""}
+                  onChange={(event) =>
+                    onPatch(element.id, { sequencePrefix: event.target.value })
+                  }
+                  placeholder="e.g. ORD-"
+                  className={inputClasses}
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label htmlFor="inspector-seq-suffix" className={labelClasses}>
+                  Suffix
+                </label>
+                <input
+                  id="inspector-seq-suffix"
+                  value={element.sequenceSuffix ?? ""}
+                  onChange={(event) =>
+                    onPatch(element.id, { sequenceSuffix: event.target.value })
+                  }
+                  className={inputClasses}
+                />
+              </div>
+            </div>
+            <span className="text-xs text-neutral-400">
+              Example:{" "}
+              <code className="font-mono">
+                {(element.sequencePrefix ?? "") +
+                  String(element.sequenceStart ?? 1).padStart(
+                    element.sequenceDigits ?? 0,
+                    "0",
+                  ) +
+                  (element.sequenceSuffix ?? "")}
+              </code>
+              . Min digits pads with leading zeros (e.g. 5 → 00001).
+            </span>
+          </div>
+        )}
+
         {["text", "phone"].includes(element.type) && (
           <MaskEditor element={element} onPatch={onPatch} />
         )}
-
         {element.type === "confirm" && (
           <div className="flex flex-col gap-1">
             <label htmlFor="inspector-confirm-field" className={labelClasses}>
@@ -696,7 +852,7 @@ export function FieldInspector({
         </SettingsAccordion>
       )}
 
-      {!isLayout && !isMath && !isCaptcha && (
+      {!isLayout && !isMath && !isCaptcha && !isSequence && (
         <SettingsAccordion
           key={`${element.id}-validation`}
           label="Required & validation"
@@ -908,7 +1064,7 @@ function FormSettingsPanel({
     ...fields
       .filter(
         (field) =>
-          !["section_header", "divider", "paragraph", "math", "captcha"].includes(
+          !["section_header", "divider", "paragraph", "math", "captcha", "sequence"].includes(
             field.type,
           ),
       )
@@ -2427,6 +2583,328 @@ function ValidationEditor({
           ))}
         </select>
       </div>
+
+      <div className="flex flex-col gap-1">
+        <label className="text-xs text-neutral-500">Is not (forbidden value)</label>
+        <input
+          value={validation.isNot ?? ""}
+          onChange={(event) =>
+            event.target.value === ""
+              ? clearValidation("isNot")
+              : setValidation({ isNot: event.target.value })
+          }
+          placeholder="e.g. N/A"
+          className={inputClasses}
+        />
+      </div>
+      {validation.isNot != null && validation.isNot !== "" && (
+        <div className="flex flex-col gap-1">
+          <label className="text-xs text-neutral-500">Is not error message</label>
+          <input
+            value={validation.isNotMessage ?? ""}
+            onChange={(event) =>
+              setValidation({ isNotMessage: event.target.value })
+            }
+            placeholder="This value is not allowed"
+            className={inputClasses}
+          />
+        </div>
+      )}
+
+      <label className="flex items-center gap-2 text-sm text-neutral-700">
+        <input
+          type="checkbox"
+          checked={Boolean(validation.isNumeric)}
+          onChange={(event) =>
+            event.target.checked
+              ? setValidation({ isNumeric: true })
+              : clearValidation("isNumeric")
+          }
+          className="size-4 rounded border-neutral-300 text-primary-500 focus:ring-primary-500"
+        />
+        Is numeric
+      </label>
+
+      <label className="flex items-center gap-2 text-sm text-neutral-700">
+        <input
+          type="checkbox"
+          checked={Boolean(validation.isEmail)}
+          onChange={(event) =>
+            event.target.checked
+              ? setValidation({ isEmail: true })
+              : clearValidation("isEmail")
+          }
+          className="size-4 rounded border-neutral-300 text-primary-500 focus:ring-primary-500"
+        />
+        Is email
+      </label>
+
+      <label className="flex items-center gap-2 text-sm text-neutral-700">
+        <input
+          type="checkbox"
+          checked={Boolean(validation.isAlphanumeric)}
+          onChange={(event) =>
+            event.target.checked
+              ? setValidation({ isAlphanumeric: true })
+              : clearValidation("isAlphanumeric")
+          }
+          className="size-4 rounded border-neutral-300 text-primary-500 focus:ring-primary-500"
+        />
+        Is alphanumeric
+      </label>
+
+      <div className="flex flex-col gap-1">
+        <label className="text-xs text-neutral-500">
+          Greater / less than
+        </label>
+        <div className="grid grid-cols-2 gap-2">
+          <select
+            value={validation.compareOp ?? ""}
+            onChange={(event) => {
+              if (event.target.value === "") {
+                const next = { ...validation };
+                delete next.compareOp;
+                delete next.compareValue;
+                delete next.compareField;
+                delete next.compareMessage;
+                onPatch(element.id, {
+                  validation:
+                    Object.keys(next).length > 0 ? next : undefined,
+                });
+              } else {
+                setValidation({
+                  compareOp: event.target.value as
+                    | "gt"
+                    | "gte"
+                    | "lt"
+                    | "lte",
+                });
+              }
+            }}
+            className={inputClasses}
+          >
+            <option value="">No comparison</option>
+            <option value="gt">Greater than</option>
+            <option value="gte">Greater than or equal</option>
+            <option value="lt">Less than</option>
+            <option value="lte">Less than or equal</option>
+          </select>
+          {validation.compareOp && (
+            <select
+              value={
+                validation.compareField
+                  ? `field:${validation.compareField}`
+                  : "value"
+              }
+              onChange={(event) => {
+                if (event.target.value === "value") {
+                  const next = { ...validation, compareOp: validation.compareOp };
+                  delete next.compareField;
+                  onPatch(element.id, { validation: next });
+                } else {
+                  const key = event.target.value.replace(/^field:/, "");
+                  const next = { ...validation, compareField: key };
+                  delete next.compareValue;
+                  onPatch(element.id, { validation: next });
+                }
+              }}
+              className={inputClasses}
+            >
+              <option value="value">Fixed number…</option>
+              {ruleTargets.map((target) => (
+                <option key={target.id} value={`field:${target.key}`}>
+                  Field: {target.label}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+        {validation.compareOp && !validation.compareField && (
+          <input
+            type="number"
+            value={validation.compareValue ?? ""}
+            onChange={(event) =>
+              event.target.value === ""
+                ? clearValidation("compareValue")
+                : setValidation({ compareValue: Number(event.target.value) })
+            }
+            placeholder="Compare to"
+            className={inputClasses}
+          />
+        )}
+        {validation.compareOp && (
+          <input
+            value={validation.compareMessage ?? ""}
+            onChange={(event) =>
+              setValidation({ compareMessage: event.target.value })
+            }
+            placeholder="Custom comparison error message"
+            className={inputClasses}
+          />
+        )}
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label className="text-xs text-neutral-500">Special characters</label>
+        <select
+          value={validation.charSet ?? ""}
+          onChange={(event) =>
+            event.target.value === ""
+              ? clearValidation("charSet")
+              : setValidation({
+                  charSet: event.target.value as
+                    | "alpha"
+                    | "alphanumeric"
+                    | "alphanumeric_space",
+                })
+          }
+          className={inputClasses}
+        >
+          <option value="">Any characters</option>
+          <option value="alpha">Letters only</option>
+          <option value="alphanumeric">Letters and numbers</option>
+          <option value="alphanumeric_space">
+            Letters, numbers, and spaces
+          </option>
+        </select>
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label className="text-xs text-neutral-500">
+          Are unique values (vs other fields)
+        </label>
+        <select
+          multiple
+          value={validation.uniqueAmong ?? []}
+          onChange={(event) => {
+            const selected = Array.from(
+              event.target.selectedOptions,
+              (option) => option.value,
+            );
+            if (selected.length === 0) {
+              clearValidation("uniqueAmong");
+            } else {
+              setValidation({ uniqueAmong: selected });
+            }
+          }}
+          className={`${inputClasses} min-h-[5.5rem]`}
+        >
+          {ruleTargets.map((target) => (
+            <option key={target.id} value={target.key}>
+              {target.label}
+            </option>
+          ))}
+        </select>
+        <span className="text-xs text-neutral-400">
+          Hold Ctrl/Cmd to select fields that must not share this value.
+        </span>
+      </div>
+      {validation.uniqueAmong && validation.uniqueAmong.length > 0 && (
+        <div className="flex flex-col gap-1">
+          <label className="text-xs text-neutral-500">
+            Unique-among error message
+          </label>
+          <input
+            value={validation.uniqueAmongMessage ?? ""}
+            onChange={(event) =>
+              setValidation({ uniqueAmongMessage: event.target.value })
+            }
+            placeholder="Values must be unique across these fields"
+            className={inputClasses}
+          />
+        </div>
+      )}
+
+      {(isTextual || element.type === "user") && (
+        <>
+          <label className="flex items-center gap-2 text-sm text-neutral-700">
+            <input
+              type="checkbox"
+              checked={Boolean(validation.unique)}
+              onChange={(event) =>
+                event.target.checked
+                  ? setValidation({ unique: true })
+                  : clearValidation("unique")
+              }
+              className="size-4 rounded border-neutral-300 text-primary-500 focus:ring-primary-500"
+            />
+            Unique value (among submissions)
+          </label>
+          {validation.unique && (
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-neutral-500">
+                Unique error message
+              </label>
+              <input
+                value={validation.uniqueMessage ?? ""}
+                onChange={(event) =>
+                  setValidation({ uniqueMessage: event.target.value })
+                }
+                placeholder="This value has already been submitted"
+                className={inputClasses}
+              />
+            </div>
+          )}
+
+          <label className="flex items-center gap-2 text-sm text-neutral-700">
+            <input
+              type="checkbox"
+              checked={Boolean(validation.userExists)}
+              onChange={(event) =>
+                event.target.checked
+                  ? setValidation({ userExists: true })
+                  : clearValidation("userExists")
+              }
+              className="size-4 rounded border-neutral-300 text-primary-500 focus:ring-primary-500"
+            />
+            User exists (email / username)
+          </label>
+          {validation.userExists && (
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-neutral-500">
+                User exists error message
+              </label>
+              <input
+                value={validation.userExistsMessage ?? ""}
+                onChange={(event) =>
+                  setValidation({ userExistsMessage: event.target.value })
+                }
+                placeholder="No user with that email exists"
+                className={inputClasses}
+              />
+            </div>
+          )}
+
+          <label className="flex items-center gap-2 text-sm text-neutral-700">
+            <input
+              type="checkbox"
+              checked={Boolean(validation.emailExists)}
+              onChange={(event) =>
+                event.target.checked
+                  ? setValidation({ emailExists: true })
+                  : clearValidation("emailExists")
+              }
+              className="size-4 rounded border-neutral-300 text-primary-500 focus:ring-primary-500"
+            />
+            Email exists (valid email + registered user)
+          </label>
+          {validation.emailExists && (
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-neutral-500">
+                Email exists error message
+              </label>
+              <input
+                value={validation.emailExistsMessage ?? ""}
+                onChange={(event) =>
+                  setValidation({ emailExistsMessage: event.target.value })
+                }
+                placeholder="No account with that email exists"
+                className={inputClasses}
+              />
+            </div>
+          )}
+        </>
+      )}
 
       <div className="flex flex-col gap-1">
         <div className="flex items-center gap-1.5">

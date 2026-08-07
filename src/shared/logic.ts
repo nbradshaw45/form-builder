@@ -62,10 +62,10 @@ export function permissionConditionFields(
     recordModeField(),
     ...formFields.filter(
       (field) =>
-        !["section_header", "divider", "paragraph", "math", "captcha"].includes(
+        !["section_header", "divider", "paragraph", "math", "captcha", "sequence"].includes(
           field.type,
         ),
-    ),
+      ),
   ];
 }
 
@@ -90,6 +90,7 @@ const NUMERIC_TYPES = new Set<FieldType>([
   "rating",
   "slider",
   "math",
+  "sequence",
 ]);
 
 const DATE_TYPES = new Set<FieldType>([

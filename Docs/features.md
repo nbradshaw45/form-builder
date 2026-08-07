@@ -24,6 +24,7 @@ canvas, or drag it onto the canvas at a specific position.
 | Radio group | `string` | Single-choice buttons, stacked or inline |
 | Multi-select | `string[]` | Checkbox list, stores an array |
 | Checkbox | `boolean` | Toggle |
+| Yes / No | `boolean` | Explicit Yes/No button pair; customizable Yes/No labels and optional default |
 | Email | `string` | `type=email`, format-validated |
 | URL | `string` | `type=url`, format-validated |
 | Phone | `string` | `type=tel`, lenient phone validation |
@@ -44,6 +45,7 @@ canvas, or drag it onto the canvas at a specific position.
 | Signature | PNG data URL | Canvas draw pad with pen color/width |
 | File upload | file id | Uploads to server storage (max size/type configurable) |
 | Captcha | (not stored) | Cloudflare Turnstile widget; verified server-side on submit |
+| Sequence | `string` | Per-form auto-increment (ticket/order numbers). Settings: start at, min digits (leading zeros), prefix, suffix. Assigned on submit, preserved on edit; counters are not copied with templates/duplicates |
 
 **Layout elements**: Section header, Divider, Paragraph.
 
@@ -66,7 +68,18 @@ validation, Data table & filters, System field, Visibility):
   - Min/max length (text-ish types) and min/max value (number/slider/currency/rating)
   - Regex pattern with a custom error message
   - Must-match-another-field (confirm-password style)
+  - **Is not** — reject a forbidden fixed value
+  - **Is numeric** — value must parse as a number
+  - **Is email** — email-format check on any field type
+  - **Is alphanumeric** — letters and numbers only
+  - **Greater / less than** — compare to a fixed number or another field (gt/gte/lt/lte)
+  - **Special characters** — letters only / alphanumeric / alphanumeric + spaces
+  - **Are unique values** — must differ from selected sibling fields on the same submission
+  - **Unique value** — unique among this form’s submissions (server-enforced; edit excludes self)
+  - **User exists** / **Email exists** — match a registered app user (email exists also requires email format)
   - Custom expression rule (e.g. `[quantity] <= [max_quantity]`) with a custom message
+    (use this instead of Convert Forms PHP validation scripts)
+  - Sync rules run in the browser and again on `submitForm` / submission updates
 - **Conditional required** — required only when a condition is satisfied
 - **Per-option "show when" rules** — options on select/radio/multi-select can
   appear conditionally based on another field's value (dependent dropdowns)

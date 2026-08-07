@@ -58,6 +58,11 @@ function formatFieldValue(
     return value.join(", ");
   }
   if (typeof value === "boolean") {
+    if (field?.type === "yes_no") {
+      return value
+        ? (field.yesLabel?.trim() || "Yes")
+        : (field.noLabel?.trim() || "No");
+    }
     return value ? "yes" : "no";
   }
   return String(value);

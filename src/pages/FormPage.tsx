@@ -22,6 +22,7 @@ import { Button, ButtonLink } from "../shared/components/Button";
 import { ArrowLeftIcon, DownloadIcon } from "../components/builder/icons";
 import type { FormField, FormSettings, SubmissionData } from "../types";
 import { DEFAULT_FORM_SETTINGS } from "../types";
+import { parseYesNoValue } from "../shared/sequence";
 import {
   renderSmartTags,
   type SmartTagContext,
@@ -154,15 +155,37 @@ export function FormPage() {
 
   const fieldDefaults: SubmissionData = {};
   for (const field of fields) {
-    if (field.defaultValue !== undefined) {
-      fieldDefaults[field.key] = field.defaultValue;
+    if (field.defaultValue === undefined) {
+      continue;
     }
+    if (field.type === "yes_no") {
+      const parsed = parseYesNoValue(field.defaultValue);
+      if (parsed !== null) {
+        fieldDefaults[field.key] = parsed;
+      }
+      continue;
+    }
+    if (field.type === "sequence") {
+      continue;
+    }
+    fieldDefaults[field.key] = field.defaultValue;
   }
 
   const queryPrefill: SubmissionData = {};
   const knownKeys = new Set(fields.map((field) => field.key));
   for (const [key, value] of searchParams.entries()) {
     if (key === "token" || !knownKeys.has(key)) {
+      continue;
+    }
+    const field = fields.find((item) => item.key === key);
+    if (field?.type === "yes_no") {
+      const parsed = parseYesNoValue(value);
+      if (parsed !== null) {
+        queryPrefill[key] = parsed;
+      }
+      continue;
+    }
+    if (field?.type === "sequence") {
       continue;
     }
     queryPrefill[key] = value;
@@ -462,6 +485,9 @@ export function FormPage() {
       multiStep={settings.multiStep === true}
       honeypot={settings.honeypot === true}
       formId={formId}
+      excludeSubmissionId={
+        recordMode === "edit" ? submissionId ?? undefined : undefined
+      }
       submitterName={user?.identities.username?.id ?? undefined}
       initialValues={initialValues}
       settings={settings}
