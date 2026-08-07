@@ -1222,6 +1222,12 @@ City (select field):
             <Code>form</Code> API that must <Code>return</Code> a value. See{" "}
             <ArtLink to="calc-scripts">Calc scripts (custom JavaScript)</ArtLink>.
           </Li>
+          <Li>
+            <strong>DB query</strong> — a server-side script that can also
+            count/sum/look up other submissions via a read-only{" "}
+            <Code>db</Code> API. See{" "}
+            <ArtLink to="db-calc">Database query calculations</ArtLink>.
+          </Li>
         </Ul>
         <H3 id="timing">When it calculates</H3>
         <P>
@@ -2036,17 +2042,130 @@ return days;`}
             the console — they never block a submission.
           </Li>
         </Ul>
-        <H3 id="no-db">No database access from calc scripts</H3>
+        <H3 id="no-db">Need data from other records?</H3>
         <P>
-          Calc scripts can only see the current record — they cannot query
-          other forms or count rows in another table. To keep a derived value
-          (like a running count) in sync, use an <strong>after-submit form
-          action</strong> (<Code>update_submission</Code> with a formula) or an{" "}
+          JavaScript-mode scripts run in the browser and can only see the
+          current record. To count, sum, or look up <em>other submissions</em>{" "}
+          (e.g. &quot;how many members does this estate have?&quot;), switch the
+          field to <strong>DB query</strong> mode — see{" "}
+          <ArtLink to="db-calc">Database query calculations</ArtLink>. For side
+          effects (writing to other records), use an{" "}
+          <strong>after-submit form action</strong> or an{" "}
           <strong>outgoing webhook</strong> — see{" "}
-          <ArtLink to="actions">Form actions</ArtLink>. (At-rest field
-          encryption is not supported, so encrypted-field workarounds don&apos;t
-          apply here.)
+          <ArtLink to="actions">Form actions</ArtLink>.
         </P>
+      </>
+    ),
+  },
+
+  {
+    id: "db-calc",
+    title: "Database query calculations",
+    category: "advanced",
+    summary:
+      "Calculated fields that query other submissions — count, sum, average, min/max, or look up records on any form you own — recalculated live as you type and saved with each submission.",
+    keywords: [
+      "database",
+      "query",
+      "count",
+      "aggregate",
+      "sql",
+      "fabrik",
+      "lookup",
+      "sum",
+      "calculate",
+    ],
+    content: (
+      <>
+        <P>
+          A <strong>Math / Calculated</strong> field set to{" "}
+          <strong>DB query</strong> mode runs its script{" "}
+          <strong>on the server</strong> and, in addition to the read-only{" "}
+          <Code>form</Code> API from{" "}
+          <ArtLink to="calc-scripts">calc scripts</ArtLink>, receives a
+          read-only <Code>db</Code> API that can query submissions. The script
+          must <Code>return</Code> the value to store.
+        </P>
+        <H3 id="db-api">The db API</H3>
+        <Table
+          head={["Helper", "Description"]}
+          rows={[
+            [
+              <Code key="a">db.count(formId, where?)</Code>,
+              "Number of submissions matching the filter.",
+            ],
+            [
+              <Code key="b">db.sum(formId, fieldKey, where?)</Code>,
+              "Sum of a numeric field over matches (scans up to 1000 rows).",
+            ],
+            [
+              <Code key="c">db.avg(formId, fieldKey, where?)</Code>,
+              "Average of a numeric field over matches.",
+            ],
+            [
+              <Code key="d">db.min(formId, fieldKey, where?)</Code>,
+              "Smallest numeric value over matches.",
+            ],
+            [
+              <Code key="e">db.max(formId, fieldKey, where?)</Code>,
+              "Largest numeric value over matches.",
+            ],
+            [
+              <Code key="f">db.find(formId, where?, limit?)</Code>,
+              "Matching submission data objects, newest first (max 50 rows).",
+            ],
+          ]}
+        />
+        <H3 id="where">Filters (where)</H3>
+        <P>
+          Filters match against submission data, AND-ed per key:
+        </P>
+        <CodeBlock title="Where-clause shapes">
+          {`{ estate_id: "abc" }              // shorthand for equals
+{ status: { equals: "active" } }  // explicit equals
+{ score: { gte: 90 } }            // numeric: lt, lte, gt, gte
+{ estate_id: "abc", score: { lt: 50 } }`}
+        </CodeBlock>
+        <H3 id="example">Example: count related records</H3>
+        <CodeBlock title="Members on this estate">
+          {`return db.count("<members-form-id>", {
+  estate_id: form.getValue("estate_id"),
+});`}
+        </CodeBlock>
+        <P>
+          A form&apos;s id is in its URL when you manage it, e.g.{" "}
+          <Code>/forms/&lt;form-id&gt;/submissions</Code>. Because the helpers
+          are async, you can also <Code>await</Code> several of them and
+          combine the results.
+        </P>
+        <H3 id="rules">Rules &amp; caveats</H3>
+        <Ul>
+          <Li>
+            <strong>Same-owner only:</strong> queries can only read forms owned
+            by the same account as the form the calc belongs to. Any other form
+            id makes the script fail (stored as an empty value).
+          </Li>
+          <Li>
+            <Code>db.find</Code> returns at most <strong>50 rows</strong>;
+            numeric aggregates scan at most <strong>1000</strong> matching
+            rows. Scripts time out after ~5 seconds.
+          </Li>
+          <Li>
+            <strong>Staleness:</strong> the stored value reflects other records
+            as of the last recalc or save — records created afterwards are only
+            counted the next time this record is recalculated or saved.
+          </Li>
+          <Li>
+            <strong>Performance:</strong> submission data is stored as JSON, so
+            filters scan rows rather than using indexes. Prefer save-time
+            computation and avoid db calcs on very large forms.
+          </Li>
+        </Ul>
+        <Note>
+          DB query scripts never run in the browser — while filling in a form,
+          the value is recalculated by the server as you type (debounced) and
+          again on every save, and the stored value is always the server&apos;s.
+        </Note>
       </>
     ),
   },

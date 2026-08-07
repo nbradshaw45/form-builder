@@ -43,11 +43,15 @@ import type {
   GetSubmissionsCsv,
   GetSubmissionsExcel,
   GetUsers,
+  RecalcCalcField,
 } from "wasp/server/operations";
 import {
   doesUserExist,
   isFieldValueUnique,
 } from "./server/fieldValidation";
+import { computeCalcFieldValue } from "./server/calc";
+import { buildCalcDbApi } from "./server/calcDb";
+import { getRequestIp } from "./server/requestContext";
 
 export type FormWithSubmissionsCount = Form & {
   _count: { submissions: number };
@@ -412,6 +416,78 @@ export const getSubmissionByToken: GetSubmissionByToken<
 export type SubmissionsCsvResult = {
   fileName: string;
   content: string;
+};
+
+const RECALC_RATE_LIMIT = 60;
+const RECALC_RATE_WINDOW_MS = 60_000;
+
+const recalcRateLimit = new Map<string, { count: number; resetAt: number }>();
+
+/** Simple in-memory per-IP rate limit for the public recalc endpoint. */
+function assertRecalcRateLimit(): void {
+  const ip = getRequestIp() ?? "unknown";
+  const now = Date.now();
+  const entry = recalcRateLimit.get(ip);
+  if (!entry || now > entry.resetAt) {
+    if (recalcRateLimit.size > 1000) {
+      for (const [key, value] of recalcRateLimit) {
+        if (now > value.resetAt) {
+          recalcRateLimit.delete(key);
+        }
+      }
+    }
+    recalcRateLimit.set(ip, { count: 1, resetAt: now + RECALC_RATE_WINDOW_MS });
+    return;
+  }
+  entry.count += 1;
+  if (entry.count > RECALC_RATE_LIMIT) {
+    throw new HttpError(429, "Too many requests. Please slow down.");
+  }
+}
+
+export type RecalcCalcFieldResult = {
+  value: string | number;
+};
+
+/**
+ * Public AJAX recalc for calc (math) fields. Runs ONLY the field's stored
+ * formula/script server-side — any code text in the args is ignored.
+ * auth: false, so context.user is always null; do not rely on it.
+ */
+export const recalcCalcField: RecalcCalcField<
+  { formId: string; fieldKey: string; values: SubmissionData },
+  RecalcCalcFieldResult
+> = async ({ formId, fieldKey, values }, context) => {
+  assertRecalcRateLimit();
+
+  const form = await context.entities.Form.findUnique({
+    where: { id: formId },
+    select: { fields: true, userId: true },
+  });
+  if (!form) {
+    throw new HttpError(404, "Form not found");
+  }
+  const fields = Array.isArray(form.fields)
+    ? (form.fields as unknown as FormField[])
+    : [];
+  const field = fields.find(
+    (candidate) => candidate.type === "math" && candidate.key === fieldKey,
+  );
+  if (!field) {
+    throw new HttpError(404, "Calc field not found");
+  }
+
+  const safeValues: SubmissionData =
+    values && typeof values === "object" && !Array.isArray(values)
+      ? values
+      : {};
+  const value = await computeCalcFieldValue(
+    field,
+    safeValues,
+    fields,
+    buildCalcDbApi(form.userId, prisma),
+  );
+  return { value };
 };
 
 function csvEscape(value: unknown): string {

@@ -103,6 +103,14 @@ export function computeCalcValue(
   values: SubmissionData,
   fields: FormField[],
 ): string | number {
+  if (field.calcMode === "query") {
+    // Query mode runs server-side only; the client shows the stored value
+    // (or the value returned by the recalc endpoint).
+    const stored = values[field.key];
+    return typeof stored === "string" || typeof stored === "number"
+      ? stored
+      : "";
+  }
   if (field.calcMode === "script") {
     const script = field.calcScript ?? "";
     if (!script.trim()) {

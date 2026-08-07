@@ -811,6 +811,7 @@ export function FieldInspector({
                   [
                     { value: "formula", label: "Formula" },
                     { value: "script", label: "JavaScript" },
+                    { value: "query", label: "DB query" },
                   ] as const
                 ).map((mode, index) => (
                   <button
@@ -834,10 +835,13 @@ export function FieldInspector({
               </div>
             </div>
 
-            {(element.calcMode ?? "formula") === "script" ? (
+            {(element.calcMode ?? "formula") !== "formula" ? (
               <>
                 <div className="flex flex-col gap-1">
-                  <FieldLabel htmlFor="inspector-calc-script" help="calc-scripts">
+                  <FieldLabel
+                    htmlFor="inspector-calc-script"
+                    help={element.calcMode === "query" ? "db-calc" : "calc-scripts"}
+                  >
                     JavaScript
                   </FieldLabel>
                   <textarea
@@ -849,12 +853,15 @@ export function FieldInspector({
                     rows={6}
                     className={`${inputClasses} font-mono`}
                     placeholder={
-                      'return form.getNumber("quantity") * form.getNumber("unit_price");'
+                      element.calcMode === "query"
+                        ? 'return db.count("form_id", { status: "active" });'
+                        : 'return form.getNumber("quantity") * form.getNumber("unit_price");'
                     }
                   />
                   <span className="text-xs text-neutral-400">
-                    Return a value. Scripts are read-only and re-run on every
-                    change and on save.
+                    {element.calcMode === "query"
+                      ? "Runs on the server with a read-only db API; recalculates as you type and on save."
+                      : "Return a value. Scripts are read-only and re-run on every change and on save."}
                   </span>
                 </div>
                 {ruleTargets.length > 0 && (

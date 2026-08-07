@@ -244,9 +244,9 @@ export type FormField = {
   optionRules?: (Condition | undefined)[];
   /** Math field display rounding (number of decimals). */
   mathDecimals?: number;
-  /** Calc engine: bracket formula (default) or custom JavaScript. */
-  calcMode?: "formula" | "script";
-  /** JavaScript body for calcMode "script"; must `return` the value. */
+  /** Calc engine: bracket formula (default), custom JavaScript, or server-side db query. */
+  calcMode?: "formula" | "script" | "query";
+  /** JavaScript body for calcMode "script"/"query"; must `return` the value. */
   calcScript?: string;
   /** Prefill value for new submissions (also overridable via ?key=value URL). */
   defaultValue?: string;

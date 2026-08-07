@@ -41,6 +41,7 @@ import {
   getFormAuditEvents,
   checkFieldValueUnique,
   checkUserExists,
+  recalcCalcField,
 } from "./src/queries" with { type: "ref" };
 import { LoginPage } from "./src/auth/LoginPage" with { type: "ref" };
 import { SignupPage } from "./src/auth/SignupPage" with { type: "ref" };
@@ -123,6 +124,7 @@ export default app({
     query(getFormUsers, { entities: ["User"], auth: false }),
     query(checkFieldValueUnique, { entities: ["Form", "Submission"], auth: false }),
     query(checkUserExists, { entities: ["User"], auth: false }),
+    query(recalcCalcField, { entities: ["Form"], auth: false }),
     query(getFile, { entities: ["UploadedFile", "Form", "FormAccess", "User"] }),
     query(getFormSubmissions, { entities: ["Form", "FormAccess", "Submission"] }),
     query(getSubmission, { entities: ["Submission", "Form", "FormAccess", "User"] }),

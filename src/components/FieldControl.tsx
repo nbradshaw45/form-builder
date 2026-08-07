@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { getFile, uploadFile, useQuery } from "wasp/client/operations";
+import { getFile, recalcCalcField, uploadFile, useQuery } from "wasp/client/operations";
 import type { FormField, SubmissionData } from "../types";
 import { computeCalcValue } from "../shared/calcScript";
 import { maskInput } from "../shared/mask";
@@ -69,34 +69,14 @@ export function FieldControl({
   }
 
   if (type === "math") {
-    const computed = computeCalcValue(field, allValues, allFields ?? []);
-    const isScript = field.calcMode === "script";
     return (
-      <div className={fieldClasses}>
-        <div className="flex items-center gap-2">
-          <label htmlFor={field.key} className={labelClasses}>
-            {label}
-          </label>
-          <span className="rounded-full bg-primary-50 px-2 py-0.5 font-mono text-[9.5px] font-medium uppercase tracking-[0.08em] text-primary-600">
-            calculated
-          </span>
-        </div>
-        <input
-          id={field.key}
-          value={computed}
-          readOnly
-          disabled={disabled}
-          placeholder={
-            isScript
-              ? field.calcScript || "Enter a script"
-              : field.formula || "Enter a formula"
-          }
-          className={`${inputClasses} font-mono`}
-        />
-        {helpText && (
-          <span className={helpTextClasses}>{helpText}</span>
-        )}
-      </div>
+      <MathControl
+        field={field}
+        allValues={allValues}
+        allFields={allFields ?? []}
+        disabled={disabled}
+        formId={formId}
+      />
     );
   }
 
@@ -555,6 +535,84 @@ export function FieldControl({
       {renderControl()}
       {helpText && <span className={helpTextClasses}>{helpText}</span>}
       {error && <span className={errorTextClasses}>{error}</span>}
+    </div>
+  );
+}
+
+function MathControl({
+  field,
+  allValues,
+  allFields,
+  disabled,
+  formId,
+}: {
+  field: FormField;
+  allValues: SubmissionData;
+  allFields: FormField[];
+  disabled: boolean;
+  formId?: string;
+}) {
+  const isQuery = field.calcMode === "query";
+  const localValue = computeCalcValue(field, allValues, allFields);
+  const [queryValue, setQueryValue] = useState<string | number | null>(null);
+  const valuesJson = JSON.stringify(allValues);
+
+  // Query mode runs server-side only: recalc via the endpoint, debounced,
+  // falling back to the stored value on error.
+  useEffect(() => {
+    if (!isQuery || !formId) {
+      return;
+    }
+    let cancelled = false;
+    const values = JSON.parse(valuesJson) as SubmissionData;
+    const handle = setTimeout(() => {
+      recalcCalcField({ formId, fieldKey: field.key, values })
+        .then((result) => {
+          if (!cancelled) {
+            setQueryValue(result.value);
+          }
+        })
+        .catch((err) => {
+          console.error("Calc recalc error:", err);
+          if (!cancelled) {
+            setQueryValue(null);
+          }
+        });
+    }, 500);
+    return () => {
+      cancelled = true;
+      clearTimeout(handle);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isQuery, formId, field.key, valuesJson]);
+
+  const computed = isQuery ? (queryValue ?? localValue) : localValue;
+  const placeholder =
+    field.calcMode === "formula"
+      ? field.formula || "Enter a formula"
+      : field.calcScript || "Enter a script";
+
+  return (
+    <div className={fieldClasses}>
+      <div className="flex items-center gap-2">
+        <label htmlFor={field.key} className={labelClasses}>
+          {field.label}
+        </label>
+        <span className="rounded-full bg-primary-50 px-2 py-0.5 font-mono text-[9.5px] font-medium uppercase tracking-[0.08em] text-primary-600">
+          calculated
+        </span>
+      </div>
+      <input
+        id={field.key}
+        value={computed}
+        readOnly
+        disabled={disabled}
+        placeholder={placeholder}
+        className={`${inputClasses} font-mono`}
+      />
+      {field.helpText && (
+        <span className={helpTextClasses}>{field.helpText}</span>
+      )}
     </div>
   );
 }

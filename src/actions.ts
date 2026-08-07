@@ -50,6 +50,7 @@ import {
 } from "./server/access";
 import { assertSubmissionDataValid } from "./server/fieldValidation";
 import { buildCalcValues } from "./server/calc";
+import { buildCalcDbApi } from "./server/calcDb";
 import { mergeSubmissionDataWithFieldRestrictions } from "./shared/formRoles";
 import {
   actorFromEmail,
@@ -659,7 +660,7 @@ export const submitForm: SubmitForm<SubmitFormArgs, Submission> = async (
 ) => {
   const form = await context.entities.Form.findUnique({
     where: { id: formId },
-    select: { id: true, title: true, fields: true, settings: true },
+    select: { id: true, title: true, fields: true, settings: true, userId: true },
   });
 
   if (!form) {
@@ -800,11 +801,15 @@ export const submitForm: SubmitForm<SubmitFormArgs, Submission> = async (
   const adjustedData = await applyBeforeSubmitActions(form, data);
 
   // Calc values are authoritative: recomputed server-side, never client-sent.
-  const calcValues = await buildCalcValues(fields, {
-    ...adjustedData,
-    ...systemValues,
-    ...sequenceValues,
-  });
+  const calcValues = await buildCalcValues(
+    fields,
+    {
+      ...adjustedData,
+      ...systemValues,
+      ...sequenceValues,
+    },
+    buildCalcDbApi(form.userId, prisma),
+  );
 
   const submissionContext: SubmissionContext = {
     ...(clientContext && typeof clientContext === "object"
@@ -877,7 +882,7 @@ export const updateSubmission: UpdateSubmission<
   const submission = await context.entities.Submission.findUnique({
     where: { id: submissionId },
     select: {
-      form: { select: { id: true, title: true, fields: true, settings: true } },
+      form: { select: { id: true, title: true, fields: true, settings: true, userId: true } },
       data: true,
     },
   });
@@ -914,7 +919,11 @@ export const updateSubmission: UpdateSubmission<
   // Calc values are authoritative: recomputed server-side on every save.
   const finalData = {
     ...mergedData,
-    ...(await buildCalcValues(fields, mergedData)),
+    ...(await buildCalcValues(
+      fields,
+      mergedData,
+      buildCalcDbApi(submission.form.userId, prisma),
+    )),
   };
 
   const updateSettings: FormSettings = {
@@ -982,7 +991,7 @@ export const updateSubmissionByToken: UpdateSubmissionByToken<
       id: true,
       editToken: true,
       data: true,
-      form: { select: { id: true, title: true, fields: true, settings: true } },
+      form: { select: { id: true, title: true, fields: true, settings: true, userId: true } },
     },
   });
   if (!submission) {
@@ -1012,7 +1021,11 @@ export const updateSubmissionByToken: UpdateSubmissionByToken<
   // Calc values are authoritative: recomputed server-side on every save.
   const finalData = {
     ...mergedData,
-    ...(await buildCalcValues(fields, mergedData)),
+    ...(await buildCalcValues(
+      fields,
+      mergedData,
+      buildCalcDbApi(submission.form.userId, prisma),
+    )),
   };
 
   const tokenUpdateSettings: FormSettings = {
