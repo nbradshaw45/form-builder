@@ -13,11 +13,6 @@ enum UserRole {
   VIEWER
 }
 
-enum FormAccessLevel {
-  VIEW
-  EDIT
-}
-
 model User {
   id           String       @id @default(uuid())
   name         String?
@@ -56,13 +51,13 @@ model UploadedFile {
 }
 
 model FormAccess {
-  id        String          @id @default(uuid())
+  id        String   @id @default(uuid())
   formId    String
-  form      Form            @relation(fields: [formId], references: [id], onDelete: Cascade)
+  form      Form     @relation(fields: [formId], references: [id], onDelete: Cascade)
   userId    String
-  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  level     FormAccessLevel @default(VIEW)
-  createdAt DateTime        @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roleId    String   @default("viewer")
+  createdAt DateTime @default(now())
 
   @@unique([formId, userId])
 }

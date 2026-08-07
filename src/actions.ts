@@ -35,10 +35,12 @@ import {
 import type { FormField, FormSettings, SubmissionData } from "./types";
 import { DEFAULT_FORM_SETTINGS } from "./types";
 import {
-  assertCanEdit,
+  assertCanDeleteSubmission,
+  assertCanEditSubmission,
   assertIsAdmin,
   assertIsOwnerOrAdmin,
   getFormAccessForUser,
+  getRolesFromSettings,
 } from "./server/access";
 import { sendWebhook } from "./server/notifications";
 import {
@@ -51,6 +53,11 @@ import {
   verifyTurnstileToken,
 } from "./server/turnstile";
 import type { SubmissionContext } from "./shared/submissionContext";
+import {
+  BUILTIN_ROLE_VIEWER,
+  defaultFormRoles,
+  normalizeFormRoles,
+} from "./shared/formRoles";
 
 function serialize(value: unknown) {
   return JSON.parse(JSON.stringify(value));
@@ -128,12 +135,18 @@ export const createForm: CreateForm<CreateFormArgs, Form> = async (
     throw new HttpError(400, "fields must be an array of field definitions");
   }
 
+  const mergedSettings: FormSettings = {
+    ...DEFAULT_FORM_SETTINGS,
+    ...(settings ?? {}),
+    roles: normalizeFormRoles(settings?.roles ?? defaultFormRoles()),
+  };
+
   return context.entities.Form.create({
     data: {
       title: title.trim(),
       description: description?.trim() || null,
       fields: serialize(fields),
-      settings: settings ? serialize(settings) : undefined,
+      settings: serialize(mergedSettings),
       user: {
         connect: {
           id: context.user.id,
@@ -170,13 +183,21 @@ export const updateForm: UpdateForm<UpdateFormArgs, Form> = async (
   const access = await getFormAccessForUser(formId, context.user);
   assertIsOwnerOrAdmin(access);
 
+  const mergedSettings = settings
+    ? {
+        ...DEFAULT_FORM_SETTINGS,
+        ...settings,
+        roles: normalizeFormRoles(settings.roles),
+      }
+    : undefined;
+
   return context.entities.Form.update({
     where: { id: formId },
     data: {
       title: title.trim(),
       description: description?.trim() || null,
       fields: serialize(fields),
-      settings: settings ? serialize(settings) : undefined,
+      settings: mergedSettings ? serialize(mergedSettings) : undefined,
     },
   });
 };
@@ -559,12 +580,11 @@ export const updateSubmission: UpdateSubmission<
     submission.form.id,
     context.user,
   );
-  assertCanEdit(access);
-
   const previousData =
     submission.data && typeof submission.data === "object"
       ? (submission.data as SubmissionData)
       : {};
+  assertCanEditSubmission(access, previousData, context.user);
   const systemValues = buildSystemValues(
     submission.form.fields,
     undefined,
@@ -661,7 +681,7 @@ export const deleteSubmission: DeleteSubmission<
 
   const submission = await context.entities.Submission.findUnique({
     where: { id: submissionId },
-    select: { form: { select: { id: true } } },
+    select: { form: { select: { id: true } }, data: true },
   });
   if (!submission) {
     throw new HttpError(404, "Submission not found");
@@ -671,7 +691,11 @@ export const deleteSubmission: DeleteSubmission<
     submission.form.id,
     context.user,
   );
-  assertCanEdit(access);
+  const data =
+    submission.data && typeof submission.data === "object"
+      ? (submission.data as SubmissionData)
+      : {};
+  assertCanDeleteSubmission(access, data, context.user);
 
   await context.entities.Submission.delete({
     where: { id: submissionId },
@@ -695,14 +719,18 @@ export const deleteSubmissions: DeleteSubmissions<
 
   const submissions = await context.entities.Submission.findMany({
     where: { id: { in: submissionIds } },
-    select: { form: { select: { id: true } } },
+    select: { id: true, form: { select: { id: true } }, data: true },
   });
   for (const submission of submissions) {
     const access = await getFormAccessForUser(
       submission.form.id,
       context.user,
     );
-    assertCanEdit(access);
+    const data =
+      submission.data && typeof submission.data === "object"
+        ? (submission.data as SubmissionData)
+        : {};
+    assertCanDeleteSubmission(access, data, context.user);
   }
 
   await context.entities.Submission.deleteMany({
@@ -920,29 +948,39 @@ export const uploadFile: UploadFile<UploadFileArgs, UploadFileResult> = async (
 type SetFormAccessArgs = {
   formId: string;
   email: string;
-  level: "VIEW" | "EDIT";
+  roleId: string;
 };
 
 type SetFormAccessResult = {
   id: string;
-  level: "VIEW" | "EDIT";
+  roleId: string;
   user: { id: string; name: string | null; role: string };
 };
 
 export const setFormAccess: SetFormAccess<
   SetFormAccessArgs,
   SetFormAccessResult
-> = async ({ formId, email, level }, context) => {
+> = async ({ formId, email, roleId }, context) => {
   if (!context.user) {
     throw new HttpError(401);
   }
 
-  if (level !== "VIEW" && level !== "EDIT") {
-    throw new HttpError(400, "Invalid access level");
-  }
-
   const access = await getFormAccessForUser(formId, context.user);
   assertIsOwnerOrAdmin(access);
+
+  const form = await context.entities.Form.findUnique({
+    where: { id: formId },
+    select: { userId: true, settings: true },
+  });
+  if (!form) {
+    throw new HttpError(404, "Form not found");
+  }
+
+  const roles = getRolesFromSettings(form.settings);
+  const role = roles.find((r) => r.id === roleId);
+  if (!role) {
+    throw new HttpError(400, "Invalid form role");
+  }
 
   const identity = await prisma.authIdentity.findUnique({
     where: {
@@ -958,11 +996,7 @@ export const setFormAccess: SetFormAccess<
     throw new HttpError(404, "No user found with that email");
   }
 
-  const form = await context.entities.Form.findUnique({
-    where: { id: formId },
-    select: { userId: true },
-  });
-  if (form?.userId === targetUser.id) {
+  if (form.userId === targetUser.id) {
     throw new HttpError(400, "That user already owns this form");
   }
 
@@ -973,15 +1007,15 @@ export const setFormAccess: SetFormAccess<
     create: {
       formId,
       userId: targetUser.id,
-      level,
+      roleId: role.id,
     },
-    update: { level },
+    update: { roleId: role.id },
     include: { user: { select: { id: true, name: true, role: true } } },
   });
 
   return {
     id: entry.id,
-    level: entry.level,
+    roleId: entry.roleId,
     user: entry.user,
   };
 };

@@ -160,6 +160,12 @@ into sections — in the sidebar they are **collapsible accordions**; the pop-ou
 - **Show a receipt number** — the success panel shows `RES-XXXXXXXX`.
 - **Let submitters edit their response** — the success panel shows an
   "Edit this response" link backed by a one-time token.
+- **Record roles** — per-form roles (Viewer / Editor / Manager + custom)
+  that control submission view / edit / delete. Each capability can be
+  always-on, off, or **only when** a condition matches (same condition
+  builder as visibility/actions; includes `_user_email` / `_user_id`
+  pseudo-fields). Assigned to people on the Access page. Owners/admins
+  bypass conditions.
 - **Actions** — ordered steps that run before or after a submission is stored.
   Actions run in order; each action can have its own **"Only run when..."**
   condition (a rule against the submission data). Multiple actions are
@@ -246,8 +252,10 @@ Public form routes:
 - `/forms/:id/records/:submissionId/edit` — **edit a record**
   (also works for anonymous submitters when the URL carries `?token=...`)
 
-Record access follows the form's sharing model: view requires view access,
-edit requires owner/admin/edit access (or a valid self-edit token).
+Record access is evaluated per submission from the assignee's **record role**
+(view / edit / delete, optionally conditioned on field values). Owners and
+global admins always have full record access. Anonymous self-edit still works
+via a valid `?token=...`.
 
 All three modes honor the form's **display mode** (page vs popup with configured
 window size) and the after-submit settings.
@@ -313,7 +321,8 @@ The submissions table (`/forms/:id/submissions`):
   or **hidden** via form settings ("Submissions table" → "Row action
   buttons", `FormSettings.submissionRowActions`); a **Show action labels**
   toggle (default off) adds text labels to the inline buttons. Edit and
-  Delete also require edit access to the form.
+  Delete are gated by per-row `permissions` from the server (record role +
+  optional conditions), not only form-level access.
 - Arrays render comma-joined; signatures show a label; file uploads show a
   **Download** button (fetches the stored file, auth-gated).
 - **Export CSV** and **Export Excel (.xlsx)** — download all rows (or the
@@ -327,9 +336,12 @@ The submissions table (`/forms/:id/submissions`):
   - Add users (email, password, name, role), delete users (cascades their
     forms/submissions/access), edit name/role.
   - Self-demotion / self-deletion are blocked.
-- **Form sharing** (`/forms/:id/access`): share a form with users at
-  **View** (see submissions) or **Edit** (also edit/delete submissions) level.
-  Form structure edits require the owner or an admin.
+- **Form sharing** (`/forms/:id/access`): assign a per-form **record role**
+  (Viewer / Editor / Manager / custom) to each user by email. Role
+  capabilities (view / edit / delete, each optionally "only when…" a
+  condition matches) are configured under form settings → **Record roles**.
+  Form structure edits still require the owner or an admin. Owners/admins
+  bypass capability conditions so they cannot lock themselves out.
 
 ---
 

@@ -22,11 +22,17 @@ import type {
 } from "wasp/server/operations";
 import {
   assertCanView,
+  assertCanViewSubmission,
   assertIsAdmin,
   assertIsOwnerOrAdmin,
+  accessKindForClient,
   getFormAccessForUser,
+  getRolesFromSettings,
+  resolveRecordPermissions,
 } from "./server/access";
 import { buildSubmissionPdf, collectFileUploadIds } from "./server/pdf";
+import type { RecordPermissions } from "./types";
+import { BUILTIN_ROLE_VIEWER } from "./shared/formRoles";
 
 export type FormWithSubmissionsCount = Form & {
   _count: { submissions: number };
@@ -54,23 +60,32 @@ export type UserOption = {
 
 export type FormAccessEntry = {
   id: string;
-  level: "VIEW" | "EDIT";
+  roleId: string;
+  roleLabel: string;
   user: { id: string; name: string | null; role: string };
 };
 
 export type FormAccessInfo = {
   formId: string;
   owner: { id: string; name: string | null; role: string };
+  roles: { id: string; label: string }[];
   entries: FormAccessEntry[];
+};
+
+export type SubmissionWithPermissions = Submission & {
+  permissions: RecordPermissions;
 };
 
 export type SubmissionsResult = {
   access: "owner" | "admin" | "edit" | "view";
-  submissions: Submission[];
+  roleId: string | null;
+  submissions: SubmissionWithPermissions[];
 };
 
 export type SubmissionResult = {
   access: "owner" | "admin" | "edit" | "view";
+  roleId: string | null;
+  permissions: RecordPermissions;
   submission: Submission;
 };
 
@@ -107,10 +122,19 @@ export const getForms: GetForms<void, FormWithAccess[]> = async (
 
   const sharedForms: FormWithAccess[] = sharedAccess
     .filter((a) => a.form.userId !== user.id)
-    .map((a) => ({
-      ...a.form,
-      access: a.level === "EDIT" ? "edit" : "view",
-    }));
+    .map((a) => {
+      const roles = getRolesFromSettings(a.form.settings);
+      const role =
+        roles.find((r) => r.id === a.roleId) ??
+        roles.find((r) => r.id === BUILTIN_ROLE_VIEWER) ??
+        roles[0];
+      const canMutate =
+        role.edit.allowed === true || role.delete.allowed === true;
+      return {
+        ...a.form,
+        access: (canMutate ? "edit" : "view") as FormAccessLevelValue,
+      };
+    });
 
   let adminForms: FormWithAccess[] = [];
   if (isAdmin) {
@@ -229,16 +253,24 @@ export const getFormSubmissions: GetFormSubmissions<
     orderBy: { createdAt: "desc" },
   });
 
-  const kind: SubmissionsResult["access"] =
-    access.kind === "admin"
-      ? "admin"
-      : access.kind === "owner"
-        ? "owner"
-        : access.level === "EDIT"
-          ? "edit"
-          : "view";
+  const withPermissions: SubmissionWithPermissions[] = [];
+  for (const submission of submissions) {
+    const data =
+      submission.data && typeof submission.data === "object"
+        ? (submission.data as SubmissionData)
+        : {};
+    const permissions = resolveRecordPermissions(access, data, context.user);
+    if (!permissions.view) {
+      continue;
+    }
+    withPermissions.push({ ...submission, permissions });
+  }
 
-  return { access: kind, submissions };
+  return {
+    access: accessKindForClient(access),
+    roleId: access.kind === "shared" ? access.roleId : null,
+    submissions: withPermissions,
+  };
 };
 
 export const getSubmission: GetSubmission<
@@ -259,16 +291,19 @@ export const getSubmission: GetSubmission<
   const access = await getFormAccessForUser(submission.formId, context.user);
   assertCanView(access);
 
-  const kind: SubmissionResult["access"] =
-    access.kind === "admin"
-      ? "admin"
-      : access.kind === "owner"
-        ? "owner"
-        : access.level === "EDIT"
-          ? "edit"
-          : "view";
+  const data =
+    submission.data && typeof submission.data === "object"
+      ? (submission.data as SubmissionData)
+      : {};
+  assertCanViewSubmission(access, data, context.user);
+  const permissions = resolveRecordPermissions(access, data, context.user);
 
-  return { access: kind, submission };
+  return {
+    access: accessKindForClient(access),
+    roleId: access.kind === "shared" ? access.roleId : null,
+    permissions,
+    submission,
+  };
 };
 
 export type GetFileResult = {
@@ -316,6 +351,8 @@ export const getFile: GetFile<{ fileId: string }, GetFileResult> = async (
 
 export type GetSubmissionByTokenResult = {
   access: "owner" | "admin" | "edit" | "view";
+  roleId: string | null;
+  permissions: RecordPermissions;
   submission: Submission;
 };
 
@@ -332,7 +369,12 @@ export const getSubmissionByToken: GetSubmissionByToken<
   if (!submission.editToken || submission.editToken !== token) {
     throw new HttpError(403, "Invalid edit link");
   }
-  return { access: "edit", submission };
+  return {
+    access: "edit",
+    roleId: null,
+    permissions: { view: true, edit: true, delete: false },
+    submission,
+  };
 };
 
 export type SubmissionsCsvResult = {
@@ -405,7 +447,16 @@ export const getSubmissionsCsv: GetSubmissionsCsv<
   ];
   const selectedSet = submissionIds ? new Set(submissionIds) : null;
   const rows = form.submissions
-    .filter((submission) => !selectedSet || selectedSet.has(submission.id))
+    .filter((submission) => {
+      if (selectedSet && !selectedSet.has(submission.id)) {
+        return false;
+      }
+      const data =
+        submission.data && typeof submission.data === "object"
+          ? (submission.data as SubmissionData)
+          : {};
+      return resolveRecordPermissions(access, data, context.user).view;
+    })
     .map((submission) => {
       const data = submission.data as Record<string, unknown>;
       return [
@@ -494,7 +545,15 @@ export const getSubmissionsExcel: GetSubmissionsExcel<
       continue;
     }
     const data = submission.data as Record<string, unknown>;
-    const row: Record<string, unknown> = { _submittedAt: submission.createdAt.toISOString(), _updatedAt: submission.updatedAt.toISOString() };
+    if (
+      !resolveRecordPermissions(access, data, context.user).view
+    ) {
+      continue;
+    }
+    const row: Record<string, unknown> = {
+      _submittedAt: submission.createdAt.toISOString(),
+      _updatedAt: submission.updatedAt.toISOString(),
+    };
     for (const key of keys) {
       const value = data[key];
       row[key] = Array.isArray(value) ? value.join(", ") : value;
@@ -546,6 +605,7 @@ export const getSubmissionPdf: GetSubmissionPdf<
     submission.data && typeof submission.data === "object"
       ? (submission.data as SubmissionData)
       : {};
+  assertCanViewSubmission(access, data, context.user);
   const fileIds = collectFileUploadIds(fields, data);
   const fileNames: Record<string, string> = {};
   if (fileIds.length > 0) {
@@ -626,12 +686,15 @@ export const getFormAccess: GetFormAccess<
     select: {
       id: true,
       userId: true,
+      settings: true,
       user: { select: { id: true, name: true, role: true } },
     },
   });
   if (!form) {
     throw new HttpError(404, "Form not found");
   }
+
+  const roles = getRolesFromSettings(form.settings);
 
   const entries = await context.entities.FormAccess.findMany({
     where: { formId },
@@ -646,10 +709,18 @@ export const getFormAccess: GetFormAccess<
   return {
     formId: form.id,
     owner: form.user,
-    entries: entries.map((entry) => ({
-      id: entry.id,
-      level: entry.level,
-      user: entry.user,
-    })),
+    roles: roles.map((role) => ({ id: role.id, label: role.label })),
+    entries: entries.map((entry) => {
+      const role =
+        roles.find((r) => r.id === entry.roleId) ??
+        roles.find((r) => r.id === BUILTIN_ROLE_VIEWER) ??
+        roles[0];
+      return {
+        id: entry.id,
+        roleId: role.id,
+        roleLabel: role.label,
+        user: entry.user,
+      };
+    }),
   };
 };

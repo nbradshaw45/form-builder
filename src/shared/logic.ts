@@ -17,10 +17,8 @@ export type ConditionOperatorDef = {
   needsValue: boolean;
 };
 
-/**
- * Pseudo-field available in condition rules so a form can behave differently
- * for a brand-new record vs. updating one that has already been saved.
- */
+export const USER_EMAIL_KEY = "_user_email";
+export const USER_ID_KEY = "_user_id";
 export const RECORD_MODE_KEY = "_record_mode";
 export const RECORD_MODE_NEW = "new";
 export const RECORD_MODE_UPDATE = "update";
@@ -34,6 +32,41 @@ export function recordModeField(): FormField {
     options: [RECORD_MODE_NEW, RECORD_MODE_UPDATE],
     optionLabels: ["New record", "Update (already saved)"],
   };
+}
+
+export function currentUserEmailField(): FormField {
+  return {
+    id: USER_EMAIL_KEY,
+    key: USER_EMAIL_KEY,
+    type: "text",
+    label: "Current user email",
+  };
+}
+
+export function currentUserIdField(): FormField {
+  return {
+    id: USER_ID_KEY,
+    key: USER_ID_KEY,
+    type: "text",
+    label: "Current user id",
+  };
+}
+
+/** Pseudo-fields available when authoring record-permission conditions. */
+export function permissionConditionFields(
+  formFields: FormField[],
+): FormField[] {
+  return [
+    currentUserEmailField(),
+    currentUserIdField(),
+    recordModeField(),
+    ...formFields.filter(
+      (field) =>
+        !["section_header", "divider", "paragraph", "math", "captcha"].includes(
+          field.type,
+        ),
+    ),
+  ];
 }
 
 export const CONDITION_OPERATORS: ConditionOperatorDef[] = [

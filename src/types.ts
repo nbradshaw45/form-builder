@@ -87,6 +87,30 @@ export type LogicCondition = {
   else?: LogicAction[];
 };
 
+/** Grant for a single record capability (view / edit / delete). */
+export type CapabilityGrant =
+  | { allowed: false }
+  | { allowed: true; when?: Condition };
+
+/** Per-form role controlling submission view/edit/delete. */
+export type FormRoleDef = {
+  id: string;
+  label: string;
+  /** Built-in roles cannot be deleted (label/capabilities remain editable). */
+  builtIn?: boolean;
+  view: CapabilityGrant;
+  edit: CapabilityGrant;
+  delete: CapabilityGrant;
+};
+
+export type RecordCapability = "view" | "edit" | "delete";
+
+export type RecordPermissions = {
+  view: boolean;
+  edit: boolean;
+  delete: boolean;
+};
+
 export type FieldValidation = {
   /** Text length minimum (text, textarea, email, url, phone). */
   minLength?: number;
@@ -251,6 +275,11 @@ export type FormSettings = {
   conditions?: LogicCondition[];
   /** Custom JavaScript executed once when the form page loads. */
   jsOnLoad?: string;
+  /**
+   * Per-form roles for submission view/edit/delete. Assigned via FormAccess.
+   * Defaults to Viewer / Editor / Manager when omitted.
+   */
+  roles?: FormRoleDef[];
 };
 
 export type FormActionValueSource = "static" | "field" | "formula";

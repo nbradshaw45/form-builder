@@ -132,9 +132,13 @@ export function FormPage() {
 
   const recordData = (record?.submission.data as unknown as SubmissionData) ??
     undefined;
-  const canEdit = record ? EDIT_ACCESS.has(record.access) : true;
+  const recordCanEdit = record
+    ? record.permissions
+      ? record.permissions.edit
+      : EDIT_ACCESS.has(record.access)
+    : true;
   const isReadOnly =
-    recordMode === "view" || (recordMode === "edit" && !canEdit);
+    recordMode === "view" || (recordMode === "edit" && !recordCanEdit);
 
   const fieldDefaults: SubmissionData = {};
   for (const field of fields) {
@@ -358,7 +362,7 @@ export function FormPage() {
             {downloadingPdf ? "Preparing PDF..." : "Download PDF"}
           </Button>
         )}
-        {recordMode === "view" && canEdit && (
+        {recordMode === "view" && recordCanEdit && (
           <ButtonLink
             to="/forms/:id/records/:submissionId/edit"
             params={{ id: formId, submissionId: submissionId ?? "" }}

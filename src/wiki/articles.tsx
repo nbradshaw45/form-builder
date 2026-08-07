@@ -89,9 +89,10 @@ export const WIKI_ARTICLES: WikiArticle[] = [
             <em>context</em> (IP, referrer, UTM…).
           </Li>
           <Li>
-            <strong>Sharing &amp; roles</strong> — forms can be shared with other
-            users at <em>view</em> or <em>edit</em> level, and every user has a
-            role (admin, editor, or viewer).
+            <strong>Sharing &amp; roles</strong> — forms can be shared with
+            per-form roles (Viewer, Editor, Manager, or custom) that control
+            submission view/edit/delete. Every account also has a global role
+            (admin, editor, or viewer).
           </Li>
         </Ul>
         <P>
@@ -1914,34 +1915,114 @@ form.setValue("team_summary", names.join(", "));`}
     title: "Sharing forms",
     category: "admin",
     summary:
-      "Give other users view or edit access to a form's submissions, without sharing ownership.",
+      "Share a form with other users by assigning a per-form role that controls submission access.",
     content: (
       <>
         <P>
           Use the <strong>Access</strong> page (<Code>/forms/:id/access</Code>,
-          owner or admin only) to share a form with other users by email.
+          owner or admin only) to share a form with other users by email. Each
+          person is assigned one of the form&apos;s{" "}
+          <ArtLink to="record-roles">record roles</ArtLink>.
         </P>
         <Table
-          head={["Level", "Can do"]}
+          head={["Who", "Can do"]}
           rows={[
             [
-              <strong key="v">View</strong>,
-              "See the form, view submissions, export, and download PDFs.",
-            ],
-            [
-              <strong key="e">Edit</strong>,
-              "Everything a viewer can do, plus edit and delete submissions.",
+              <strong key="shared">Shared user</strong>,
+              "Whatever their assigned role allows for submissions (view, edit, and/or delete — optionally only when a condition matches).",
             ],
             [
               <strong key="o">Owner</strong>,
-              "Full control, including editing the form structure and managing access.",
+              "Full control: form structure, access list, and all submissions (bypasses role conditions).",
+            ],
+            [
+              <strong key="a">Admin</strong>,
+              "Same full record access as the owner on every form.",
             ],
           ]}
         />
         <Note>
           Form <strong>structure</strong> edits (the builder) always require the
-          owner or an admin — shared editors can only edit submissions.
+          owner or an admin — shared users never edit the form definition, only
+          submissions as their role allows.
         </Note>
+        <Tip>
+          Configure role capabilities under form settings →{" "}
+          <strong>Record roles</strong>, then assign those roles on the Access
+          page.
+        </Tip>
+      </>
+    ),
+  },
+
+  {
+    id: "record-roles",
+    title: "Record roles & conditions",
+    category: "admin",
+    summary:
+      "Per-form roles that gate submission view, edit, and delete — with optional conditions on each capability.",
+    content: (
+      <>
+        <P>
+          Every form has <strong>record roles</strong> stored in its settings.
+          When you share a form, you assign one of these roles to each person.
+          Capabilities apply to <em>submissions</em> only — not to editing the
+          form structure.
+        </P>
+        <H3 id="defaults">Default roles</H3>
+        <P>
+          New forms start with three built-in roles (you can change labels and
+          capabilities; built-ins cannot be deleted):
+        </P>
+        <Table
+          head={["Role", "View", "Edit", "Delete"]}
+          rows={[
+            [<strong key="v">Viewer</strong>, "always", "no", "no"],
+            [<strong key="e">Editor</strong>, "always", "always", "no"],
+            [<strong key="m">Manager</strong>, "always", "always", "always"],
+          ]}
+        />
+        <P>
+          Older shares that used View map to <strong>Viewer</strong>; Edit maps
+          to <strong>Manager</strong> (edit + delete), matching previous
+          behavior.
+        </P>
+        <H3 id="conditions">Optional conditions</H3>
+        <P>
+          For each enabled capability you can add <strong>Only when…</strong> —
+          the same condition builder used for visibility and actions. The rule
+          is evaluated against that submission&apos;s field values, plus:
+        </P>
+        <Ul>
+          <Li>
+            <Code>_user_email</Code> — the signed-in user&apos;s email
+          </Li>
+          <Li>
+            <Code>_user_id</Code> — the signed-in user&apos;s id
+          </Li>
+        </Ul>
+        <P>Examples (configure these yourself; nothing is hard-coded):</P>
+        <Ul>
+          <Li>
+            Editor may edit only when <Code>status</Code> equals{" "}
+            <Code>open</Code>
+          </Li>
+          <Li>
+            Custom role may edit only when <Code>assigned_to</Code> equals{" "}
+            <Code>_user_email</Code> (records assigned to them)
+          </Li>
+        </Ul>
+        <Note>
+          The owner and global admins always have full record access and{" "}
+          <em>bypass</em> capability conditions, so you cannot lock yourself
+          out of your own form.
+        </Note>
+        <Tip>
+          Record ACL is separate from{" "}
+          <ArtLink to="conditions">Conditional logic</ArtLink> (show/hide
+          fields while filling). They share the same condition primitives but
+          answer different questions.
+        </Tip>
       </>
     ),
   },
@@ -1955,15 +2036,18 @@ form.setValue("team_summary", names.join(", "));`}
     content: (
       <>
         <P>
-          Accounts have one of three roles, set by an admin on the{" "}
-          <strong>Users</strong> page (<Code>/admin/users</Code>):
+          Accounts have one of three <strong>global</strong> roles, set by an
+          admin on the <strong>Users</strong> page (<Code>/admin/users</Code>).
+          These are separate from{" "}
+          <ArtLink to="record-roles">per-form record roles</ArtLink> used when
+          sharing a form.
         </P>
         <Table
           head={["Role", "Permissions"]}
           rows={[
             [
               <strong key="a">Admin</strong>,
-              "Everything. Can manage users, edit any form, and access all forms.",
+              "Everything. Can manage users, edit any form, and access all forms and submissions.",
             ],
             [
               <strong key="e">Editor</strong>,

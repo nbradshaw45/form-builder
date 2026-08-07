@@ -32,6 +32,7 @@ import {
 } from "../../shared/logic";
 import { getForms, getFormUsers, useQuery } from "wasp/client/operations";
 import { HelpBubble } from "../../shared/components/HelpBubble";
+import { FormRolesEditor } from "./FormRolesEditor";
 import {
   ArrowLeftIcon,
   ChevronDownIcon,
@@ -1453,6 +1454,17 @@ function FormSettingsPanel({
             help="automation"
           />
         </>
+      ),
+    },
+    {
+      id: "roles",
+      label: "Record roles",
+      node: (
+        <FormRolesEditor
+          settings={settings}
+          fields={fields}
+          onChange={onChange}
+        />
       ),
     },
     {

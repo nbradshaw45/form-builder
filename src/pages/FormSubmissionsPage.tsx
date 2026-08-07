@@ -35,6 +35,7 @@ import {
 import type {
   FormField,
   FormSettings,
+  RecordPermissions,
   SubmissionRowAction,
   SubmissionRowActionPlacement,
 } from "../types";
@@ -42,7 +43,9 @@ import { DEFAULT_FORM_SETTINGS, rowActionPlacement } from "../types";
 
 type FilterEntry = { value: string; value2: string };
 
-const columnHelper = createColumnHelper<Submission>();
+type SubmissionRow = Submission & { permissions?: RecordPermissions };
+
+const columnHelper = createColumnHelper<SubmissionRow>();
 
 function formatValue(value: unknown): string {
   if (value === null || value === undefined || value === "") {
@@ -99,6 +102,16 @@ export function FormSubmissionsPage({ user }: { user: AuthUser }) {
 
   const canEdit = access === "owner" || access === "admin" || access === "edit";
   const canManage = access === "owner" || access === "admin";
+  const canBulkDelete = useMemo(
+    () =>
+      [...selected].some((sid) => {
+        const row = submissions?.find((s) => s.id === sid) as
+          | SubmissionRow
+          | undefined;
+        return Boolean(row?.permissions?.delete ?? canEdit);
+      }),
+    [selected, submissions, canEdit],
+  );
 
   const fields = useMemo<FormField[]>(
     () =>
@@ -351,7 +364,14 @@ export function FormSubmissionsPage({ user }: { user: AuthUser }) {
   async function confirmBulkDelete() {
     setDeleting(true);
     try {
-      await deleteSubmissions({ submissionIds: [...selected] });
+      await deleteSubmissions({
+        submissionIds: [...selected].filter((sid) => {
+          const row = submissions?.find((s) => s.id === sid) as
+            | SubmissionRow
+            | undefined;
+          return Boolean(row?.permissions?.delete ?? canEdit);
+        }),
+      });
       setSelected(new Set());
       setBulkDeleteOpen(false);
       await refetch();
@@ -481,7 +501,10 @@ export function FormSubmissionsPage({ user }: { user: AuthUser }) {
           <RowActions
             formId={id}
             submissionId={info.row.original.id}
-            canEdit={canEdit}
+            canEdit={Boolean(info.row.original.permissions?.edit ?? canEdit)}
+            canDelete={Boolean(
+              info.row.original.permissions?.delete ?? canEdit,
+            )}
             showLabels={showActionLabels}
             actions={rowActions}
             onDelete={() => setDeleteTarget(info.row.original)}
@@ -619,13 +642,15 @@ export function FormSubmissionsPage({ user }: { user: AuthUser }) {
               >
                 Export Excel
               </Button>
-              <Button
-                size="sm"
-                variant="danger"
-                onClick={() => setBulkDeleteOpen(true)}
-              >
-                Delete
-              </Button>
+              {canBulkDelete && (
+                  <Button
+                    size="sm"
+                    variant="danger"
+                    onClick={() => setBulkDeleteOpen(true)}
+                  >
+                    Delete
+                  </Button>
+                )}
               <Button
                 size="sm"
                 variant="ghost"
@@ -747,6 +772,7 @@ function RowActions({
   formId,
   submissionId,
   canEdit,
+  canDelete,
   showLabels,
   actions,
   onDelete,
@@ -754,6 +780,7 @@ function RowActions({
   formId: string;
   submissionId: string;
   canEdit: boolean;
+  canDelete: boolean;
   showLabels: boolean;
   actions: Record<SubmissionRowAction, SubmissionRowActionPlacement>;
   onDelete: () => void;
@@ -810,12 +837,12 @@ function RowActions({
     }
   }
 
-  // Edit and Delete additionally require edit access to the form.
+  // Edit and Delete are gated by per-row record permissions.
   const effective: Record<SubmissionRowAction, SubmissionRowActionPlacement> =
     {
       view: actions.view,
       edit: canEdit ? actions.edit : "hidden",
-      delete: canEdit ? actions.delete : "hidden",
+      delete: canDelete ? actions.delete : "hidden",
       pdf: actions.pdf,
     };
 

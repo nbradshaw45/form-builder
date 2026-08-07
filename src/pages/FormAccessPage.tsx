@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   getForm,
   getFormAccess,
@@ -9,14 +9,10 @@ import {
 import type { AuthUser } from "wasp/auth";
 import { useParams } from "react-router";
 import type { FormAccessInfo } from "../queries";
+import { BUILTIN_ROLE_VIEWER } from "../shared/formRoles";
 import { Button, ButtonLink } from "../shared/components/Button";
 import { Card, CardHead } from "../shared/components/Card";
 import { inputClasses, selectClasses } from "../shared/styles";
-
-const levelBadge: Record<string, string> = {
-  VIEW: "bg-neutral-100 text-neutral-600",
-  EDIT: "bg-primary-50 text-primary-700",
-};
 
 export function FormAccessPage({ user }: { user: AuthUser }) {
   const { id = "" } = useParams<{ id: string }>();
@@ -26,10 +22,18 @@ export function FormAccessPage({ user }: { user: AuthUser }) {
     { formId: id },
   );
 
+  const roles = accessInfo?.roles ?? [];
+  const defaultRoleId = roles[0]?.id ?? BUILTIN_ROLE_VIEWER;
   const [email, setEmail] = useState("");
-  const [level, setLevel] = useState<"VIEW" | "EDIT">("VIEW");
+  const [roleId, setRoleId] = useState(defaultRoleId);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (roles.length > 0 && !roles.some((role) => role.id === roleId)) {
+      setRoleId(roles[0].id);
+    }
+  }, [roles, roleId]);
 
   async function handleAdd() {
     if (!email.trim()) {
@@ -38,7 +42,7 @@ export function FormAccessPage({ user }: { user: AuthUser }) {
     setIsSaving(true);
     setSaveError(null);
     try {
-      await setFormAccess({ formId: id, email, level });
+      await setFormAccess({ formId: id, email, roleId });
       setEmail("");
       await refetch();
     } catch (err) {
@@ -87,9 +91,11 @@ export function FormAccessPage({ user }: { user: AuthUser }) {
             {form ? form.title : "Form"} access
           </h1>
           <p className="max-w-[60ch] text-sm leading-relaxed text-neutral-500">
-            Share this form with other users. Viewers can see submissions;
-            editors can also edit and delete submissions. The form structure
-            stays under owner/admin control.
+            Assign per-form roles that control who can view, edit, or delete
+            submissions. Role capabilities (and optional conditions) are
+            configured in the form builder under{" "}
+            <strong>Record roles</strong>. The form structure stays under
+            owner/admin control.
           </p>
         </div>
         <div className="flex gap-2">
@@ -119,7 +125,7 @@ export function FormAccessPage({ user }: { user: AuthUser }) {
                   </span>
                 </span>
                 <span className="text-xs text-neutral-500">
-                  Full control of this form
+                  Full control of this form and all submissions
                 </span>
               </div>
               <span className="rounded-full bg-danger-soft px-2.5 py-1 text-[10.5px] font-semibold text-danger">
@@ -145,12 +151,8 @@ export function FormAccessPage({ user }: { user: AuthUser }) {
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span
-                    className={`rounded-full px-2.5 py-1 text-[10.5px] font-semibold ${
-                      levelBadge[entry.level] ?? ""
-                    }`}
-                  >
-                    {entry.level}
+                  <span className="rounded-full bg-primary-50 px-2.5 py-1 text-[10.5px] font-semibold text-primary-700">
+                    {entry.roleLabel}
                   </span>
                   <Button
                     size="xs"
@@ -193,15 +195,16 @@ export function FormAccessPage({ user }: { user: AuthUser }) {
               className={`${inputClasses} sm:flex-1`}
             />
             <select
-              aria-label="Access level"
-              value={level}
-              onChange={(event) =>
-                setLevel(event.target.value as "VIEW" | "EDIT")
-              }
-              className={`${selectClasses} sm:w-40`}
+              aria-label="Form role"
+              value={roleId}
+              onChange={(event) => setRoleId(event.target.value)}
+              className={`${selectClasses} sm:w-48`}
             >
-              <option value="VIEW">View</option>
-              <option value="EDIT">Edit</option>
+              {roles.map((role) => (
+                <option key={role.id} value={role.id}>
+                  {role.label}
+                </option>
+              ))}
             </select>
             <Button onClick={handleAdd} disabled={isSaving || !email.trim()}>
               {isSaving ? "Adding..." : "Add access"}
