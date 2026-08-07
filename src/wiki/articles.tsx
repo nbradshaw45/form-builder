@@ -2052,7 +2052,8 @@ return days;`}
           effects (writing to other records), use an{" "}
           <strong>after-submit form action</strong> or an{" "}
           <strong>outgoing webhook</strong> — see{" "}
-          <ArtLink to="actions">Form actions</ArtLink>.
+          <ArtLink to="actions">Form actions</ArtLink>. Stuck on a script? See{" "}
+          <ArtLink to="ai-help">Asking AI for help with calc scripts</ArtLink>.
         </P>
       </>
     ),
@@ -2074,6 +2075,8 @@ return days;`}
       "lookup",
       "sum",
       "calculate",
+      "join",
+      "in",
     ],
     content: (
       <>
@@ -2114,6 +2117,10 @@ return days;`}
               <Code key="f">db.find(formId, where?, limit?)</Code>,
               "Matching submission data objects, newest first (max 50 rows).",
             ],
+            [
+              <Code key="g">db.join(spec)</Code>,
+              "Aggregate rows of one form joined to another — see Joining two forms below.",
+            ],
           ]}
         />
         <H3 id="where">Filters (where)</H3>
@@ -2124,8 +2131,15 @@ return days;`}
           {`{ estate_id: "abc" }              // shorthand for equals
 { status: { equals: "active" } }  // explicit equals
 { score: { gte: 90 } }            // numeric: lt, lte, gt, gte
+{ user_id: { in: ["u1", "u2"] } } // value is any of these (max 100)
 { estate_id: "abc", score: { lt: 50 } }`}
         </CodeBlock>
+        <P>
+          <Code>in</Code> lists accept strings, numbers, booleans, and null, and
+          are silently truncated at <strong>100 values</strong>. Join keys and{" "}
+          <Code>equals</Code> compare as text — numbers stored as JSON compare
+          fine as text.
+        </P>
         <H3 id="example">Example: count related records</H3>
         <CodeBlock title="Members on this estate">
           {`return db.count("<members-form-id>", {
@@ -2138,6 +2152,63 @@ return days;`}
           are async, you can also <Code>await</Code> several of them and
           combine the results.
         </P>
+        <H3 id="join">Joining two forms</H3>
+        <P>
+          <Code>db.join(spec)</Code> aggregates rows of one form (<Code>from</Code>)
+          matched against rows of another (<Code>to</Code>) on a shared key —
+          computed in the database, so there&apos;s no row cap (the ~5 second
+          script timeout is the guard). Both forms must be owned by the same
+          account; form ids come from the form&apos;s URL (
+          <Code>/forms/&lt;form-id&gt;/submissions</Code>).
+        </P>
+        <Table
+          head={["Spec key", "Meaning"]}
+          rows={[
+            [<Code key="a">from</Code>, "Form id of the aggregated (left) side."],
+            [<Code key="b">to</Code>, "Form id of the matched (right) side."],
+            [
+              <Code key="c">on</Code>,
+              "[fromFieldKey, toFieldKey] — rows match when they're equal (text comparison).",
+            ],
+            [<Code key="d">whereFrom?</Code>, "Filters on the from side."],
+            [<Code key="e">whereTo?</Code>, "Filters on the to side."],
+            [
+              <Code key="f">aggregate</Code>,
+              "count | sum | avg | min | max.",
+            ],
+            [
+              <Code key="g">field</Code>,
+              "Field key on the FROM side — required for sum/avg/min/max.",
+            ],
+          ]}
+        />
+        <CodeBlock title="Active members on this estate">
+          {`// users joined to this estate's record, not blocked or lapsed
+return db.join({
+  from: "<members-form-id>",
+  to: "<estates-form-id>",
+  on: ["estate_id", "estate_id"],
+  whereTo: { estate_id: form.getValue("estate_id") },
+  whereFrom: { blocked: false, lapsed: false },
+  aggregate: "count",
+});`}
+        </CodeBlock>
+        <CodeBlock title="Total order value for the customer filling in the form">
+          {`return db.join({
+  from: "<orders-form-id>",
+  to: "<customers-form-id>",
+  on: ["customer_email", "email"],
+  whereTo: { email: form.getValue("email") },
+  aggregate: "sum",
+  field: "amount",
+});`}
+        </CodeBlock>
+        <CodeBlock title="No join needed? Chain two queries with `in`">
+          {`const ids = (await db.find("<members-form-id>", {
+  estate_id: form.getValue("estate_id"),
+})).map((row) => row.user_id);
+return db.count("<payments-form-id>", { user_id: { in: ids } });`}
+        </CodeBlock>
         <H3 id="rules">Rules &amp; caveats</H3>
         <Ul>
           <Li>
@@ -2157,14 +2228,123 @@ return days;`}
           </Li>
           <Li>
             <strong>Performance:</strong> submission data is stored as JSON, so
-            filters scan rows rather than using indexes. Prefer save-time
-            computation and avoid db calcs on very large forms.
+            filters and joins scan rows rather than using indexes. Prefer
+            save-time computation and avoid db calcs (especially joins) on very
+            large forms.
           </Li>
         </Ul>
         <Note>
           DB query scripts never run in the browser — while filling in a form,
           the value is recalculated by the server as you type (debounced) and
           again on every save, and the stored value is always the server&apos;s.
+          Writing a tricky script? See{" "}
+          <ArtLink to="ai-help">Asking AI for help with calc scripts</ArtLink>.
+        </Note>
+      </>
+    ),
+  },
+
+  {
+    id: "ai-help",
+    title: "Asking AI for help with calc scripts",
+    category: "advanced",
+    summary:
+      "How to get good calc scripts out of an AI chat: what context to paste, a ready-made prompt template, and what to double-check in the output.",
+    keywords: [
+      "ai",
+      "chatgpt",
+      "claude",
+      "prompt",
+      "llm",
+      "assistant",
+      "help",
+      "debug",
+    ],
+    content: (
+      <>
+        <P>
+          AI chats (ChatGPT, Claude, …) are good at writing{" "}
+          <ArtLink to="calc-scripts">calc scripts</ArtLink> and{" "}
+          <ArtLink to="db-calc">db queries</ArtLink> — as long as you give them
+          the exact API. They don&apos;t know this app, so paste the context
+          yourself.
+        </P>
+        <H3 id="context">What to paste</H3>
+        <Ul>
+          <Li>
+            The <strong>form API</strong> table from{" "}
+            <ArtLink to="calc-scripts">Calc scripts</ArtLink> and the{" "}
+            <strong>db API</strong> table from{" "}
+            <ArtLink to="db-calc">Database query calculations</ArtLink>.
+          </Li>
+          <Li>
+            Your <strong>field keys</strong> (copy them from the builder — the
+            click-to-insert chips show them).
+          </Li>
+          <Li>
+            Your <strong>form ids</strong> (from each form&apos;s URL) for db
+            queries.
+          </Li>
+          <Li>
+            One <strong>example script</strong> from these docs, so the style is
+            clear.
+          </Li>
+        </Ul>
+        <H3 id="prompt">Prompt template</H3>
+        <CodeBlock title="Copy, fill in, paste">
+          {`Write a calc script for my form builder. Rules:
+- The script is the body of an async function receiving (form, db) and must
+  RETURN the value to store.
+- form.getValue(key) → raw value ('' when unset); form.getNumber(key) → number
+  (empty = 0); form.getArray(key) → array; form.getDate(key) → Date|null.
+- db.count(formId, where?), db.sum/avg/min/max(formId, fieldKey, where?),
+  db.find(formId, where?, limit?) — max 50 rows, and db.join({ from, to, on,
+  whereFrom, whereTo, aggregate, field }).
+- db helpers are ASYNC: always await them (or return the promise directly).
+- where = { key: value }, { key: { equals: v } }, { key: { gte: 90 } },
+  { key: { in: [...] } } (max 100 values).
+- Both forms in a query/join must belong to the same account.
+My fields: <paste field keys and what they mean>
+My form ids: <paste form ids>
+Task: <e.g. "return the member count for the estate in field estate_id">`}
+        </CodeBlock>
+        <H3 id="asks">Good things to ask for</H3>
+        <Ul>
+          <Li>&quot;Write a calc script that …&quot; (describe the output).</Li>
+          <Li>
+            &quot;Debug this script: …&quot; (paste the script and what it stored
+            vs. what you expected).
+          </Li>
+          <Li>
+            &quot;Rewrite this formula as a calc script&quot; (paste the bracket
+            formula).
+          </Li>
+        </Ul>
+        <H3 id="check">Double-check the output</H3>
+        <Ul>
+          <Li>
+            <strong>Hallucinated helpers</strong> — only the methods in the two
+            API tables exist. Anything else (db.query, form.setValue in a calc,
+            db.update…) will fail.
+          </Li>
+          <Li>
+            <strong>Missing await</strong> — <Code>db.count(...) + 1</Code>{" "}
+            without await produces nonsense; it must be{" "}
+            <Code>(await db.count(...)) + 1</Code>.
+          </Li>
+          <Li>
+            <strong>Wrong field keys / form ids</strong> — compare them against
+            your builder; AI guesses plausible-looking names.
+          </Li>
+          <Li>
+            <strong>A return statement</strong> — scripts that don&apos;t return
+            store an empty value.
+          </Li>
+        </Ul>
+        <Note>
+          Test scripts on a copy of your form first. Errors never block
+          submissions — a broken script just stores an empty value and logs to
+          the console.
         </Note>
       </>
     ),
