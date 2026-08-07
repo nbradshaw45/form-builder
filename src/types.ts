@@ -244,6 +244,10 @@ export type FormField = {
   optionRules?: (Condition | undefined)[];
   /** Math field display rounding (number of decimals). */
   mathDecimals?: number;
+  /** Calc engine: bracket formula (default) or custom JavaScript. */
+  calcMode?: "formula" | "script";
+  /** JavaScript body for calcMode "script"; must `return` the value. */
+  calcScript?: string;
   /** Prefill value for new submissions (also overridable via ?key=value URL). */
   defaultValue?: string;
   /** Input mask pattern (# digit, A/a letter, * alphanumeric, literals auto-inserted). */
@@ -327,6 +331,11 @@ export type FormSettings = {
   filterPlacement?: "top" | "header";
   /** Number of columns for the "top" filter grid (1-6). Defaults to 3. */
   filterColumns?: number;
+  /**
+   * When filterPlacement is "top", whether the filter grid starts expanded.
+   * Defaults to false (collapsed). Ignored for header placement.
+   */
+  filtersExpanded?: boolean;
   /** Show text labels ("View", "Edit") on the submissions table row actions. Defaults to false (icons only). */
   showActionLabels?: boolean;
   /**

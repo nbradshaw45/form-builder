@@ -15,6 +15,7 @@ import type {
   DuplicateForm,
   ImportForm,
   RemoveFormAccess,
+  RenameFormTemplate,
   SaveFormAsTemplate,
   SetFormAccess,
   SubmitForm,
@@ -48,6 +49,7 @@ import {
   resolveFieldRestrictions,
 } from "./server/access";
 import { assertSubmissionDataValid } from "./server/fieldValidation";
+import { buildCalcValues } from "./server/calc";
 import { mergeSubmissionDataWithFieldRestrictions } from "./shared/formRoles";
 import {
   actorFromEmail,
@@ -433,6 +435,54 @@ export const saveFormAsTemplate: SaveFormAsTemplate<
   return template;
 };
 
+type RenameFormTemplateArgs = {
+  templateId: string;
+  title: string;
+};
+
+export const renameFormTemplate: RenameFormTemplate<
+  RenameFormTemplateArgs,
+  Form
+> = async ({ templateId, title }, context) => {
+  if (!context.user) {
+    throw new HttpError(401);
+  }
+  assertIsAdmin(context.user);
+
+  const trimmed = title.trim();
+  if (!trimmed) {
+    throw new HttpError(400, "Title is required");
+  }
+
+  const template = await context.entities.Form.findUnique({
+    where: { id: templateId },
+    select: { id: true, title: true, isTemplate: true },
+  });
+  if (!template?.isTemplate) {
+    throw new HttpError(404, "Template not found");
+  }
+
+  const updated = await context.entities.Form.update({
+    where: { id: templateId },
+    data: { title: trimmed },
+  });
+
+  if (template.title !== trimmed) {
+    void recordAuditEvent({
+      formId: null,
+      formTitle: trimmed,
+      actor: actorFromUser(context.user),
+      action: AUDIT_ACTIONS.FORM_TEMPLATE_RENAMED,
+      entityType: AUDIT_ENTITY_TYPES.FORM,
+      entityId: template.id,
+      summary: `Renamed template “${template.title}” to “${trimmed}”`,
+      changes: { title: { from: template.title, to: trimmed } },
+    });
+  }
+
+  return updated;
+};
+
 type DuplicateFormArgs = {
   formId: string;
 };
@@ -704,6 +754,8 @@ export const submitForm: SubmitForm<SubmitFormArgs, Submission> = async (
     fields,
     data,
     formId,
+    conditions: settings.conditions,
+    recordMode: "new",
   });
 
   if (settings.rateLimitPerHour) {
@@ -747,6 +799,13 @@ export const submitForm: SubmitForm<SubmitFormArgs, Submission> = async (
 
   const adjustedData = await applyBeforeSubmitActions(form, data);
 
+  // Calc values are authoritative: recomputed server-side, never client-sent.
+  const calcValues = await buildCalcValues(fields, {
+    ...adjustedData,
+    ...systemValues,
+    ...sequenceValues,
+  });
+
   const submissionContext: SubmissionContext = {
     ...(clientContext && typeof clientContext === "object"
       ? clientContext
@@ -773,6 +832,7 @@ export const submitForm: SubmitForm<SubmitFormArgs, Submission> = async (
         ...adjustedData,
         ...systemValues,
         ...sequenceValues,
+        ...calcValues,
       }),
       context: serialize(submissionContext),
       editToken,
@@ -851,18 +911,30 @@ export const updateSubmission: UpdateSubmission<
     ),
     ...systemValues,
   };
+  // Calc values are authoritative: recomputed server-side on every save.
+  const finalData = {
+    ...mergedData,
+    ...(await buildCalcValues(fields, mergedData)),
+  };
+
+  const updateSettings: FormSettings = {
+    ...DEFAULT_FORM_SETTINGS,
+    ...((submission.form.settings as unknown as FormSettings | null) ?? {}),
+  };
 
   await assertSubmissionDataValid({
     fields,
-    data: mergedData,
+    data: finalData,
     formId: submission.form.id,
     excludeSubmissionId: submissionId,
+    conditions: updateSettings.conditions,
+    recordMode: "update",
   });
 
   const updated = await context.entities.Submission.update({
     where: { id: submissionId },
     data: {
-      data: serialize(mergedData),
+      data: serialize(finalData),
     },
   });
 
@@ -872,7 +944,7 @@ export const updateSubmission: UpdateSubmission<
     "submission.updated",
   );
 
-  const fieldChanges = diffSubmissionData(previousData, mergedData, fields);
+  const fieldChanges = diffSubmissionData(previousData, finalData, fields);
   void recordAuditEvent({
     formId: submission.form.id,
     formTitle: submission.form.title,
@@ -937,24 +1009,36 @@ export const updateSubmissionByToken: UpdateSubmissionByToken<
     ...data,
     ...systemValues,
   };
+  // Calc values are authoritative: recomputed server-side on every save.
+  const finalData = {
+    ...mergedData,
+    ...(await buildCalcValues(fields, mergedData)),
+  };
+
+  const tokenUpdateSettings: FormSettings = {
+    ...DEFAULT_FORM_SETTINGS,
+    ...((submission.form.settings as unknown as FormSettings | null) ?? {}),
+  };
 
   await assertSubmissionDataValid({
     fields,
-    data: mergedData,
+    data: finalData,
     formId: submission.form.id,
     excludeSubmissionId: submissionId,
+    conditions: tokenUpdateSettings.conditions,
+    recordMode: "update",
   });
 
   const updated = await context.entities.Submission.update({
     where: { id: submissionId },
     data: {
-      data: serialize(mergedData),
+      data: serialize(finalData),
     },
   });
 
   void sendWebhook(submission.form, updated, "submission.updated");
 
-  const fieldChanges = diffSubmissionData(previousData, mergedData, fields);
+  const fieldChanges = diffSubmissionData(previousData, finalData, fields);
   void recordAuditEvent({
     formId: submission.form.id,
     formTitle: submission.form.title,

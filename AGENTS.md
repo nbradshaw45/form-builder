@@ -56,6 +56,7 @@ This project uses the Wasp framework (v0.25, see `main.wasp.ts`).
 - Templates & import/export: `Form.isTemplate` marks reusable templates. Ops: `getFormTemplates`, `exportForm` (queries), `saveFormAsTemplate`, `duplicateForm`, `createFormFromTemplate`, `importForm` (actions). Templates/duplicates/imports copy only title/fields/settings — never submissions or FormAccess rows. The `/forms/new` builder page has a template picker that seeds the builder client-side (the form row is still created on save).
 - Admin GUI: `/admin/users` (`AdminUsersPage`, admin-only; `updateUser` blocks self-demotion). Sharing GUI: `/forms/:id/access` (`FormAccessPage`).
 - Smart tags (`{field.KEY}`, `{all_fields}`, `{record_url}`, `{receipt}`, …) are rendered by `renderSmartTags` in `src/shared/smartTags.ts` (client + server safe). Used in email action subject/body templates (server, `formActions.ts`) and in the success message / custom redirect URL (client, `src/pages/FormPage.tsx`).
+- Calc/`math` fields support `calcMode`: `"formula"` (default, bracket syntax) or `"script"` (custom JS returning a value via the read-only `CalcFormApi` in `src/shared/calcScript.ts`). Values are submittable, recomputed server-side on every save (`buildCalcValues` in `src/server/calc.ts`, script mode sandboxed via `node:vm` with a 100ms timeout) and persisted — the stored value is authoritative, never client-sent. Calc fields cannot reference other calc fields. `calcMode`/`calcScript` live in the fields JSON, so templates/duplicates/imports copy them automatically.
 
 ## Generated code
 

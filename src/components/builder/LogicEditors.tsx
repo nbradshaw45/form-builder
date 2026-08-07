@@ -755,9 +755,9 @@ export function ConditionalLogicPanel({
         + Add condition
       </button>
       <p className="text-[11px] leading-snug text-neutral-400">
-        Conditions are evaluated in order on page load and whenever a value
-        changes. Rules within a group are AND, groups are OR. Fields hidden by
-        logic are skipped on submit.
+        Conditions run in order on page load and whenever a value changes (same
+        model as element Visibility). Rules within a group are AND; groups are
+        OR. Fields hidden by logic are skipped on submit and are not required.
       </p>
     </div>
   );

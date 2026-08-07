@@ -98,7 +98,6 @@ const SKIP_DIFF_TYPES = new Set([
   "paragraph",
   "page_break",
   "captcha",
-  "math",
 ]);
 
 export function diffSubmissionData(

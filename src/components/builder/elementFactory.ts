@@ -26,7 +26,7 @@ export const FIELD_DEFINITIONS: FieldDefinition[] = [
   { type: "user", name: "User", description: "Dropdown of users", category: "input" },
   { type: "confirm", name: "Confirmation", description: "Re-type another field", category: "input" },
   { type: "hidden", name: "Hidden field", description: "Stores a value not shown", category: "input" },
-  { type: "math", name: "Math", description: "Calculated field", category: "input" },
+  { type: "math", name: "Math", description: "Calculated value — formula or custom script", category: "input" },
   { type: "rating", name: "Rating", description: "Star rating scale", category: "advanced" },
   { type: "slider", name: "Slider", description: "Numeric range", category: "advanced" },
   { type: "currency", name: "Currency", description: "Money amount", category: "advanced" },
@@ -175,7 +175,7 @@ export function createElement(
     case "hidden":
       return { ...base, defaultValue: "" };
     case "math":
-      return { ...base, formula: "[text_field] * 1" };
+      return { ...base, formula: "[text_field] * 1", calcMode: "formula" };
     case "section_header":
       return { ...base, description: "Subtext for this section" };
     case "paragraph":

@@ -1,11 +1,21 @@
 import { HttpError, prisma } from "wasp/server";
-import { evaluateCondition } from "../shared/logic";
+import {
+  applyLogic,
+  RECORD_MODE_KEY,
+  RECORD_MODE_NEW,
+  RECORD_MODE_UPDATE,
+} from "../shared/logic";
 import {
   isEmptyValue,
   submissionValueEquals,
   validateFieldSync,
 } from "../shared/fieldValidation";
-import type { FormField, SubmissionData } from "../types";
+import { isEffectivelyVisible } from "../shared/visibility";
+import type {
+  FormField,
+  LogicCondition,
+  SubmissionData,
+} from "../types";
 
 const SUBMITTABLE_TYPES = new Set([
   "text",
@@ -29,6 +39,7 @@ const SUBMITTABLE_TYPES = new Set([
   "user",
   "confirm",
   "hidden",
+  "math",
 ]);
 
 function isSubmittableField(field: FormField): boolean {
@@ -82,14 +93,32 @@ export async function doesUserExist(email: string): Promise<boolean> {
 
 /**
  * Enforce sync + unique + userExists validators. Throws HttpError(400).
+ * Skips fields that are not effectively visible (visibleWhen, form logic
+ * hide/show, or a hidden parent section). Hidden fields are never required.
  */
 export async function assertSubmissionDataValid(args: {
   fields: FormField[];
   data: SubmissionData;
   formId: string;
   excludeSubmissionId?: string;
+  conditions?: LogicCondition[];
+  recordMode?: "new" | "update";
 }): Promise<void> {
-  const { fields, data, formId, excludeSubmissionId } = args;
+  const {
+    fields,
+    data,
+    formId,
+    excludeSubmissionId,
+    conditions,
+    recordMode = "new",
+  } = args;
+
+  const evalData: SubmissionData = {
+    ...data,
+    [RECORD_MODE_KEY]:
+      recordMode === "update" ? RECORD_MODE_UPDATE : RECORD_MODE_NEW,
+  };
+  const logic = applyLogic(conditions ?? [], evalData, fields);
 
   for (const field of fields) {
     if (!isSubmittableField(field)) {
@@ -99,14 +128,15 @@ export async function assertSubmissionDataValid(args: {
       continue;
     }
     if (
-      field.visibleWhen &&
-      !evaluateCondition(field.visibleWhen, data)
+      !isEffectivelyVisible(field, evalData, fields, logic.visible)
     ) {
       continue;
     }
 
     const value = data[field.key];
-    const syncError = validateFieldSync(field, value, data, fields);
+    const syncError = validateFieldSync(field, value, evalData, fields, {
+      logicVisible: logic.visible,
+    });
     if (syncError) {
       throw new HttpError(400, `${field.label}: ${syncError}`);
     }

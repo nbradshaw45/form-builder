@@ -17,5 +17,5 @@ export function columnStyle(width?: number): CSSProperties {
 export const gridRowClasses = "flex w-full flex-wrap";
 
 export function gridColumnClasses(): string {
-  return "mb-4 box-border min-w-0 px-1.5";
+  return "mb-4 box-border min-w-0 px-1.5 max-md:!w-full";
 }

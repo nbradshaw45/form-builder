@@ -65,7 +65,7 @@ export function Canvas({
     <div
       ref={setNodeRef}
       onClick={onDeselect}
-      className={`card flex min-h-[420px] flex-col p-2 transition-colors ${
+      className={`card flex min-h-[320px] flex-col p-2 transition-colors sm:min-h-[420px] ${
         isOver ? "border-primary-400 bg-primary-50/50" : ""
       }`}
     >

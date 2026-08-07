@@ -12,7 +12,7 @@ import type { FormAccessInfo } from "../queries";
 import { BUILTIN_ROLE_VIEWER } from "../shared/formRoles";
 import { Button, ButtonLink } from "../shared/components/Button";
 import { Card, CardHead } from "../shared/components/Card";
-import { inputClasses, selectClasses } from "../shared/styles";
+import { inputClasses, pageShellClasses, selectClasses } from "../shared/styles";
 
 export function FormAccessPage({ user }: { user: AuthUser }) {
   const { id = "" } = useParams<{ id: string }>();
@@ -63,7 +63,7 @@ export function FormAccessPage({ user }: { user: AuthUser }) {
 
   if (isError) {
     return (
-      <div className="mx-auto flex w-full max-w-(--breakpoint-2xl) flex-col items-center gap-4 px-8 py-12">
+      <div className={`${pageShellClasses} items-center`}>
         <h1 className="font-display text-3xl font-bold tracking-[-0.028em] text-neutral-900">
           Can&apos;t manage access
         </h1>
@@ -81,7 +81,7 @@ export function FormAccessPage({ user }: { user: AuthUser }) {
     accessInfo?.owner.name ?? accessInfo?.owner.id.slice(0, 8) ?? "—";
 
   return (
-    <div className="mx-auto flex w-full max-w-(--breakpoint-2xl) flex-col gap-6 px-8 py-8">
+    <div className={pageShellClasses}>
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex flex-col gap-1.5">
           <span className="font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-neutral-400">

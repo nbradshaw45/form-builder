@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { getFile, uploadFile, useQuery } from "wasp/client/operations";
 import type { FormField, SubmissionData } from "../types";
-import { formatFormulaValue } from "./builder/formula";
+import { computeCalcValue } from "../shared/calcScript";
 import { maskInput } from "../shared/mask";
 import {
   errorTextClasses,
@@ -69,9 +69,8 @@ export function FieldControl({
   }
 
   if (type === "math") {
-    const computed = field.formula
-      ? formatFormulaValue(field.formula, allValues, allFields, field.mathDecimals)
-      : "";
+    const computed = computeCalcValue(field, allValues, allFields ?? []);
+    const isScript = field.calcMode === "script";
     return (
       <div className={fieldClasses}>
         <div className="flex items-center gap-2">
@@ -87,7 +86,11 @@ export function FieldControl({
           value={computed}
           readOnly
           disabled={disabled}
-          placeholder={field.formula || "Enter a formula"}
+          placeholder={
+            isScript
+              ? field.calcScript || "Enter a script"
+              : field.formula || "Enter a formula"
+          }
           className={`${inputClasses} font-mono`}
         />
         {helpText && (

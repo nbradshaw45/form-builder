@@ -21,11 +21,13 @@ import type { FieldType, FormField, FormSettings } from "../../types";
 import { DEFAULT_FORM_SETTINGS } from "../../types";
 import { Button, ButtonLink } from "../../shared/components/Button";
 import { inputClasses } from "../../shared/styles";
+import { XL_UP, useMediaQuery } from "../../shared/hooks/useMediaQuery";
+import { Sheet } from "../Sheet";
 import { Canvas } from "./Canvas";
 import { ElementPalette } from "./ElementPalette";
 import { FieldControl } from "../FieldControl";
 import { FieldInspector } from "./FieldInspector";
-import { GripIcon } from "./icons";
+import { GripIcon, PlusIcon } from "./icons";
 import {
   createDefaultSystemFields,
   createElement,
@@ -138,6 +140,9 @@ export function FormBuilder({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [inspectorOpen, setInspectorOpen] = useState(false);
+  const isXlUp = useMediaQuery(XL_UP);
   const lastLoadedId = useRef<string | null>(null);
 
   useEffect(() => {
@@ -190,6 +195,17 @@ export function FormBuilder({
     next.splice(index ?? next.length, 0, newElement);
     setElements(next);
     setSelectedId(newElement.id);
+    if (!isXlUp) {
+      setPaletteOpen(false);
+      setInspectorOpen(true);
+    }
+  }
+
+  function handleSelect(id: string) {
+    setSelectedId(id);
+    if (!isXlUp) {
+      setInspectorOpen(true);
+    }
   }
 
   function handleDragStart(event: DragStartEvent) {
@@ -265,10 +281,6 @@ export function FormBuilder({
       next.splice(target.index, 0, moved);
       return next;
     });
-  }
-
-  function handleSelect(id: string) {
-    setSelectedId(id);
   }
 
   function handleMove(id: string, direction: -1 | 1) {
@@ -368,7 +380,7 @@ export function FormBuilder({
     elements.find((e) => e.id === selectedId) ?? null;
 
   return (
-    <div className="flex flex-col gap-5 px-8 py-8">
+    <div className="flex flex-col gap-5 px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div className="flex flex-col gap-3">
           <span className="font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-neutral-400">
@@ -383,22 +395,26 @@ export function FormBuilder({
               value={title}
               onChange={(event) => setTitle(event.target.value)}
               placeholder="Form title"
-              className={`${inputClasses} sm:w-72`}
+              className={`${inputClasses} w-full sm:w-72`}
             />
             <input
               aria-label="Form description"
               value={description}
               onChange={(event) => setDescription(event.target.value)}
               placeholder="Optional description"
-              className={`${inputClasses} sm:w-96`}
+              className={`${inputClasses} w-full sm:w-96`}
             />
           </div>
         </div>
-        <div className="flex gap-2">
-          <ButtonLink to="/forms" variant="ghost">
+        <div className="flex w-full gap-2 sm:w-auto">
+          <ButtonLink to="/forms" variant="ghost" className="flex-1 sm:flex-none">
             Cancel
           </ButtonLink>
-          <Button onClick={handleSave} disabled={isSaving || isInitialLoading}>
+          <Button
+            onClick={handleSave}
+            disabled={isSaving || isInitialLoading}
+            className="flex-1 sm:flex-none"
+          >
             {isSaving ? "Saving..." : "Save form"}
           </Button>
         </div>
@@ -417,35 +433,108 @@ export function FormBuilder({
           onDragEnd={handleDragEnd}
           onDragCancel={handleDragCancel}
         >
-          <div
-            className="grid items-start gap-4 xl:grid-cols-[260px_minmax(0,1fr)_320px]"
-            onClick={() => setSelectedId(null)}
-          >
-            <ElementPalette onAdd={addElement} />
-            <Canvas
-              elements={elements}
-              selectedId={selectedId}
-              dragTarget={dragTarget}
-              multiStep={settings.multiStep === true}
-              onSelect={handleSelect}
-              onDeselect={() => setSelectedId(null)}
-              onMove={handleMove}
-              onDuplicate={handleDuplicate}
-              onDelete={handleDelete}
-            />
-            <FieldInspector
-              element={selectedElement}
-              allElements={elements}
-              settings={settings}
-              onLabelChange={handleLabelChange}
-              onKeyChange={handleKeyChange}
-              onPatch={handlePatch}
-              onDeselect={() => setSelectedId(null)}
-              onSettingsChange={(patch) =>
-                setSettings((prev) => ({ ...prev, ...patch }))
-              }
-            />
-          </div>
+          {isXlUp ? (
+            <div
+              className="grid items-start gap-4 xl:grid-cols-[260px_minmax(0,1fr)_320px]"
+              onClick={() => setSelectedId(null)}
+            >
+              <ElementPalette onAdd={addElement} />
+              <Canvas
+                elements={elements}
+                selectedId={selectedId}
+                dragTarget={dragTarget}
+                multiStep={settings.multiStep === true}
+                onSelect={handleSelect}
+                onDeselect={() => setSelectedId(null)}
+                onMove={handleMove}
+                onDuplicate={handleDuplicate}
+                onDelete={handleDelete}
+              />
+              <FieldInspector
+                element={selectedElement}
+                allElements={elements}
+                settings={settings}
+                onLabelChange={handleLabelChange}
+                onKeyChange={handleKeyChange}
+                onPatch={handlePatch}
+                onDeselect={() => setSelectedId(null)}
+                onSettingsChange={(patch) =>
+                  setSettings((prev) => ({ ...prev, ...patch }))
+                }
+              />
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3 pb-20">
+              <Canvas
+                elements={elements}
+                selectedId={selectedId}
+                dragTarget={dragTarget}
+                multiStep={settings.multiStep === true}
+                onSelect={handleSelect}
+                onDeselect={() => setSelectedId(null)}
+                onMove={handleMove}
+                onDuplicate={handleDuplicate}
+                onDelete={handleDelete}
+              />
+              <div className="fixed inset-x-0 bottom-0 z-40 border-t border-neutral-200 bg-white/95 px-4 py-3 backdrop-blur-sm">
+                <div className="mx-auto flex w-full max-w-(--breakpoint-2xl) gap-2">
+                  <Button
+                    variant="ghost"
+                    className="flex-1"
+                    onClick={() => setPaletteOpen(true)}
+                  >
+                    <PlusIcon className="size-3.5" />
+                    Add elements
+                  </Button>
+                  <Button
+                    className="flex-1"
+                    onClick={() => setInspectorOpen(true)}
+                  >
+                    {selectedId ? "Inspector" : "Form settings"}
+                  </Button>
+                </div>
+              </div>
+              {paletteOpen && (
+                <Sheet
+                  title="Elements"
+                  onClose={() => setPaletteOpen(false)}
+                  className="sm:max-w-md"
+                >
+                  <ElementPalette onAdd={addElement} embedded />
+                </Sheet>
+              )}
+              {inspectorOpen && (
+                <Sheet
+                  title={selectedId ? "Field settings" : "Form settings"}
+                  onClose={() => setInspectorOpen(false)}
+                  className="sm:max-w-lg"
+                  footer={
+                    <Button
+                      variant="ghost"
+                      className="w-full sm:w-auto"
+                      onClick={() => setInspectorOpen(false)}
+                    >
+                      Done
+                    </Button>
+                  }
+                >
+                  <FieldInspector
+                    element={selectedElement}
+                    allElements={elements}
+                    settings={settings}
+                    embedded
+                    onLabelChange={handleLabelChange}
+                    onKeyChange={handleKeyChange}
+                    onPatch={handlePatch}
+                    onDeselect={() => setSelectedId(null)}
+                    onSettingsChange={(patch) =>
+                      setSettings((prev) => ({ ...prev, ...patch }))
+                    }
+                  />
+                </Sheet>
+              )}
+            </div>
+          )}
           <DragOverlay>
             {activeDrag ? (
               <DragPreview

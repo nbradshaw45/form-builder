@@ -37,6 +37,8 @@ export type WikiArticle = {
   category: string;
   /** Short 1–2 sentence description used in search results and help bubbles. */
   summary: string;
+  /** Extra search terms matched by the docs search box. */
+  keywords?: string[];
   content: ReactNode;
 };
 
@@ -190,6 +192,10 @@ export const WIKI_ARTICLES: WikiArticle[] = [
             <em>New form</em> does the same thing before the form is saved.
           </Li>
           <Li>
+            <strong>Rename template</strong> — admins can rename a template from
+            the Templates section on the forms page.
+          </Li>
+          <Li>
             <strong>Duplicate</strong> — copies a form instantly as{" "}
             <em>“&lt;title&gt; (copy)”</em>.
           </Li>
@@ -277,8 +283,14 @@ export const WIKI_ARTICLES: WikiArticle[] = [
           </Li>
           <Li>
             A step can be skipped entirely by adding a{" "}
-            <em>show conditionally</em> rule to its Section header — when the
-            rule fails the step is hidden.
+            <em>show when answers match</em> rule to its Section header — when
+            the rule fails the step is hidden. Fields in a hidden section are
+            not required.
+          </Li>
+          <Li>
+            On a Section header, <strong>Require all fields in this section</strong>{" "}
+            makes every visible input in that step mandatory while the step is
+            shown.
           </Li>
           <Li>
             When viewing a saved record, all steps are shown at once (the full
@@ -520,6 +532,11 @@ TURNSTILE_SECRET_KEY=1x0000000000000000000000000000000AA`}
           How many columns the top filter grid uses (1, 2, 3, 4, or 6). Fewer
           columns keeps the table higher on the page.
         </Setting>
+        <Setting name={<>Filters expanded on load</>}>
+          When filters sit on top of the table, choose whether the filter grid
+          starts <strong>expanded</strong> or <strong>collapsed</strong>.
+          Collapsed by default. Ignored when filters are under column headers.
+        </Setting>
         <P>
           Which fields appear in the filters, and how each one is matched, is
           configured per element under{" "}
@@ -688,7 +705,10 @@ TURNSTILE_SECRET_KEY=1x0000000000000000000000000000000AA`}
           <strong>Conditions</strong> let a form react to what the user types.
           Each condition has a <em>When</em> (a set of rules), a <em>Then do</em>{" "}
           (actions when the rules match), and an optional{" "}
-          <em>Otherwise (not met)</em> (actions when they don&apos;t).
+          <em>Otherwise (not met)</em> (actions when they don&apos;t). There are
+          no click or hover hooks — conditions re-run on page load and whenever
+          any answer changes (for example a dropdown selection). Prefer{" "}
+          <strong>Show field / Hide field</strong> over custom JS for visibility.
         </P>
         <H3 id="rules">Rules</H3>
         <Ul>
@@ -714,7 +734,7 @@ TURNSTILE_SECRET_KEY=1x0000000000000000000000000000000AA`}
           rows={[
             [
               "Show field / Hide field",
-              "Shows or hides a field. Hidden fields are skipped on submit.",
+              "Shows or hides a field. Hidden fields are skipped on submit and are not required.",
             ],
             [
               "Set value",
@@ -749,11 +769,12 @@ Then  Show field [state]
 Otherwise  Hide field [state]`}
         </CodeBlock>
         <Note>
-          A field&apos;s own <em>show conditionally</em> rule (in its element
-          settings) works together with these conditions: the field is visible
-          only when <strong>both</strong> its own rule is satisfied and no
-          condition hides it. Use form-level conditions for anything beyond a
-          simple local rule.
+          A field&apos;s own <em>show when answers match</em> rule (in its
+          element Visibility settings) works together with these conditions: the
+          field is visible only when <strong>both</strong> its own rule is
+          satisfied and no condition hides it, and its section (if any) is
+          visible. Use form-level conditions for anything beyond a simple local
+          rule.
         </Note>
       </>
     ),
@@ -771,7 +792,10 @@ Otherwise  Hide field [state]`}
           The <strong>Custom JS on page load</strong> box runs a script once,
           right after the form is rendered. It is the place to prefill hidden
           values, seed fields from the URL, or initialize anything before the
-          user interacts.
+          user interacts. For show/hide that reacts to answer changes, use{" "}
+          <ArtLink to="visibility">element Visibility</ArtLink> or form{" "}
+          <ArtLink to="conditions">Conditional logic</ArtLink> (Show/Hide field)
+          instead of page-load JS.
         </P>
         <P>Your code receives a <Code>form</Code> object with these helpers:</P>
         <Table
@@ -917,22 +941,28 @@ form.setValue("due_date", due.toISOString().slice(0, 10));`}
 
   {
     id: "visibility",
-    title: "Show conditionally",
+    title: "Show when answers match",
     category: "element-settings",
     summary:
-      "Show a field only when a rule about another field is satisfied — simple dependent fields.",
+      "Show a field only when a rule about another field is satisfied — reacts to every answer change (e.g. a dropdown).",
     content: (
       <>
         <P>
           The <strong>Visibility</strong> section lets you show a field only
           when a condition about another field is met — for example a “State”
-          field that only appears when “Country” is <em>United States</em>.
+          field that only appears when “Country” is <em>United States</em>, or
+          details that appear when a Status dropdown changes to{" "}
+          <em>Inactive</em>.
         </P>
         <Ul>
           <Li>
-            Turn on <strong>Show conditionally</strong> and build a rule: pick a
-            field, an operator (equals, not equals, contains, starts/ends with,
-            is set, is not set…), and a value.
+            Turn on <strong>Show when answers match…</strong> and build a rule:
+            pick a field, an operator (equals, not equals, contains, starts/ends
+            with, is set, is not set…), and a value.
+          </Li>
+          <Li>
+            The rule re-checks whenever someone changes an answer. There is no
+            separate click or hover event — value changes are the trigger.
           </Li>
           <Li>
             Multiple rules in the same group are <strong>AND</strong>; add{" "}
@@ -943,13 +973,20 @@ form.setValue("due_date", due.toISOString().slice(0, 10));`}
             <em>before</em> the current one, plus the{" "}
             <strong>Record state</strong> pseudo-field.
           </Li>
+          <Li>
+            On a <strong>Section header</strong>, the same rule hides the whole
+            section (and its fields). In a multi-step form that also skips the
+            step.
+          </Li>
         </Ul>
         <Note>
           This is the per-field, simple version of conditional behavior. For
           anything bigger — hiding several fields, setting values, running JS —
           use the form-level{" "}
           <ArtLink to="conditions">Conditional logic</ArtLink>, which combines
-          with this rule.
+          with this rule. A field is visible only when{" "}
+          <strong>both</strong> its own rule passes and no form condition hides
+          it, and its section (if any) is visible.
         </Note>
       </>
     ),
@@ -969,6 +1006,18 @@ form.setValue("due_date", due.toISOString().slice(0, 10));`}
           the field mandatory; <strong>Conditional required</strong> makes it
           mandatory only while a rule is satisfied (e.g. only when a previous
           field is set).
+        </P>
+        <Note>
+          <strong>Hidden fields are never required.</strong> If a field is
+          hidden by its Visibility rule, a form condition, or because its
+          section is hidden, validation skips it — even when Required is on.
+          The same rule applies on the server.
+        </Note>
+        <P>
+          On a <strong>Section header</strong>, turn on{" "}
+          <strong>Require all fields in this section</strong> to make every
+          visible input in that section mandatory while the section is shown.
+          Individual field Required / Conditional required still apply on top.
         </P>
         <P>
           The validation options depend on the field type:
@@ -1142,17 +1191,47 @@ City (select field):
 
   {
     id: "formula",
-    title: "Math / formula fields",
+    title: "Calculated fields (math)",
     category: "element-settings",
     summary:
-      "Calculated fields that reference other fields with [brackets] and recompute live as the user types.",
+      "Calculated fields compute a value from other fields — with a bracket formula or custom JavaScript — live as the user types, and the result is saved with each submission.",
+    keywords: [
+      "calculate",
+      "computed",
+      "derived",
+      "auto",
+      "math",
+      "formula",
+      "script",
+      "total",
+    ],
     content: (
       <>
         <P>
           A <strong>Math / Calculated</strong> field computes a value from other
-          fields. Reference fields with square brackets, for example{" "}
-          <Code>[quantity] * [unit_price]</Code>, and the result recalculates
-          live while the user types.
+          fields. It has two modes, chosen in the inspector&apos;s{" "}
+          <strong>Calculation</strong> section:
+        </P>
+        <Ul>
+          <Li>
+            <strong>Formula</strong> (default) — reference fields with square
+            brackets, for example <Code>[quantity] * [unit_price]</Code>.
+          </Li>
+          <Li>
+            <strong>JavaScript</strong> — a custom script with a read-only{" "}
+            <Code>form</Code> API that must <Code>return</Code> a value. See{" "}
+            <ArtLink to="calc-scripts">Calc scripts (custom JavaScript)</ArtLink>.
+          </Li>
+        </Ul>
+        <H3 id="timing">When it calculates</H3>
+        <P>
+          The value <strong>recalculates live</strong> while the user types, and
+          is <strong>recomputed on the server every time the record is saved</strong>{" "}
+          — the stored value always comes from the server, never from what the
+          browser sent. Because the result is saved with the submission, it shows
+          up in the submissions table and exports, and works in search, filters,
+          smart tags, and email templates. The stored value reflects the data as
+          of the last save; editing the record recalculates it.
         </P>
         <H3 id="operators">Operators</H3>
         <Ul>
@@ -1191,6 +1270,7 @@ City (select field):
         />
         <Setting name={<>Rounding</>}>
           The number of decimals the result is displayed with (0–4, default 2).
+          Display only — the stored value keeps full precision.
         </Setting>
         <CodeBlock title="Examples">
           {`[quantity] * [unit_price]            // line total
@@ -1201,8 +1281,9 @@ round([total] / 3, 2)              // exact split`}
         </CodeBlock>
         <Note>
           Unset or non-numeric fields evaluate as <Code>0</Code>, and an
-          invalid formula renders as an empty value. See the full reference
-          under <ArtLink to="formulas">Formula reference</ArtLink>.
+          invalid formula renders as an empty value. A calc field cannot
+          reference another calc field. See the full reference under{" "}
+          <ArtLink to="formulas">Formula reference</ArtLink>.
         </Note>
       </>
     ),
@@ -1831,8 +1912,141 @@ round([spent] / [budget] * 100, 0)
         </CodeBlock>
         <Note>
           Invalid formulas render as empty; a custom-rule formula that evaluates
-          to zero (or is invalid) fails validation.
+          to zero (or is invalid) fails validation. Need strings, arrays, or
+          dates instead of numbers? Use a{" "}
+          <ArtLink to="calc-scripts">calc script</ArtLink>.
         </Note>
+      </>
+    ),
+  },
+
+  {
+    id: "calc-scripts",
+    title: "Calc scripts (custom JavaScript)",
+    category: "advanced",
+    summary:
+      "Custom JavaScript calculation fields: compute, derive, or format values from other fields — join multi-select options into a comma-separated list, concatenate names, grade scores, totals with discounts — recalculated live and saved with each submission so you can search, filter, and export the results.",
+    keywords: [
+      "calculate",
+      "computed",
+      "derived",
+      "auto",
+      "math",
+      "formula",
+      "script",
+      "implode",
+      "join",
+      "concat",
+      "fabrik",
+    ],
+    content: (
+      <>
+        <P>
+          A <strong>Math / Calculated</strong> field set to{" "}
+          <strong>JavaScript</strong> mode runs your own script instead of a
+          bracket formula. The script receives a read-only <Code>form</Code>{" "}
+          API and must <Code>return</Code> the value to display and store. It
+          re-runs live on every change while the user fills in the form, and
+          again on the server every time the record is saved — the saved value
+          is searchable, filterable, exportable, and usable in{" "}
+          <ArtLink to="smart-tags">smart tags</ArtLink> and email templates.
+        </P>
+        <H3 id="api">The form API</H3>
+        <Table
+          head={["Helper", "Description"]}
+          rows={[
+            [
+              <Code key="a">form.getValue(key)</Code>,
+              "Raw value of a field ('' when unset).",
+            ],
+            [
+              <Code key="b">form.getNumber(key)</Code>,
+              "The value as a number; empty or non-numeric becomes 0.",
+            ],
+            [
+              <Code key="c">form.getArray(key)</Code>,
+              "Multi-select values as an array ([] when unset).",
+            ],
+            [
+              <Code key="d">form.getDate(key)</Code>,
+              "A date field parsed into a Date (null when unset).",
+            ],
+            [
+              <Code key="e">form.values()</Code>,
+              "All current values as an object.",
+            ],
+            [
+              <Code key="f">form.fields</Code>,
+              "Field definitions (key, label, type, options…).",
+            ],
+          ]}
+        />
+        <H3 id="examples">Worked examples</H3>
+        <CodeBlock title="Join a multi-select into a list">
+          {`return form.getArray("toppings").join(", ");`}
+        </CodeBlock>
+        <CodeBlock title="Full name from parts">
+          {`return [form.getValue("first_name"), form.getValue("last_name")]
+  .filter(Boolean)
+  .join(" ");`}
+        </CodeBlock>
+        <CodeBlock title="Letter grade from a score">
+          {`const score = form.getNumber("score");
+if (score >= 90) return "A";
+if (score >= 80) return "B";
+if (score >= 70) return "C";
+if (score >= 60) return "D";
+return "F";`}
+        </CodeBlock>
+        <CodeBlock title="Discounted total, formatted">
+          {`const total = form.getNumber("quantity") * form.getNumber("unit_price");
+return "$" + (total > 100 ? total * 0.9 : total).toFixed(2);`}
+        </CodeBlock>
+        <CodeBlock title="Days until a due date">
+          {`const due = form.getDate("due_date");
+if (!due) return "";
+const days = Math.ceil((due.getTime() - Date.now()) / 86400000);
+return days;`}
+        </CodeBlock>
+        <H3 id="rules">Rules &amp; gotchas</H3>
+        <Ul>
+          <Li>
+            The script must <Code>return</Code> a value — whatever it returns
+            (string, number, boolean, array, date) becomes the field value.
+          </Li>
+          <Li>
+            Scripts are <strong>read-only by design</strong>: there is no{" "}
+            <Code>setValue</Code>. For side effects use{" "}
+            <ArtLink to="actions">form actions</ArtLink> or{" "}
+            <ArtLink to="custom-js">custom JS logic</ArtLink>.
+          </Li>
+          <Li>
+            A calc field <strong>cannot reference another calc field</strong> —
+            every calc runs against the raw submitted values only.
+          </Li>
+          <Li>
+            Empty values: use <Code>getNumber()</Code> so unset fields become{" "}
+            <Code>0</Code>. There is no textual placeholder substitution, so an
+            empty value can never break your script&apos;s syntax.
+          </Li>
+          <Li>
+            On the server, scripts run in a sandbox (no{" "}
+            <Code>require</Code>/<Code>process</Code>/network) and time out at
+            ~100&nbsp;ms. Errors and timeouts store an empty value and log to
+            the console — they never block a submission.
+          </Li>
+        </Ul>
+        <H3 id="no-db">No database access from calc scripts</H3>
+        <P>
+          Calc scripts can only see the current record — they cannot query
+          other forms or count rows in another table. To keep a derived value
+          (like a running count) in sync, use an <strong>after-submit form
+          action</strong> (<Code>update_submission</Code> with a formula) or an{" "}
+          <strong>outgoing webhook</strong> — see{" "}
+          <ArtLink to="actions">Form actions</ArtLink>. (At-rest field
+          encryption is not supported, so encrypted-field workarounds don&apos;t
+          apply here.)
+        </P>
       </>
     ),
   },
@@ -1850,7 +2064,9 @@ round([spent] / [budget] * 100, 0)
           <strong>Custom JS on page load</strong> box (once, when the form
           loads) and <strong>Run custom JS</strong> logic actions (whenever a
           condition branch is active). Both receive the same{" "}
-          <Code>form</Code> API:
+          <Code>form</Code> API. (For calculated fields that just return a
+          value, see{" "}
+          <ArtLink to="calc-scripts">Calc scripts</ArtLink> instead.)
         </P>
         <Table
           head={["Helper", "Description"]}
@@ -2022,7 +2238,9 @@ form.setValue("team_summary", names.join(", "));`}
             the form&apos;s fields — the operator and input style come from each
             element&apos;s <ArtLink to="filters">Data table &amp; filters</ArtLink>{" "}
             settings, and placement from the{" "}
-            <ArtLink to="submissions-table">form settings</ArtLink>.
+            <ArtLink to="submissions-table">form settings</ArtLink>. When
+            filters sit on top of the table, they start collapsed unless the
+            form setting expands them on load.
           </Li>
         </Ul>
         <H3 id="actions">Row &amp; bulk actions</H3>

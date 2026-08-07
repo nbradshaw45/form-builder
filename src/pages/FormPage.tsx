@@ -33,6 +33,10 @@ import {
   formatContextLabel,
   type SubmissionContext,
 } from "../shared/submissionContext";
+import {
+  pageShellClasses,
+  pageShellNarrowClasses,
+} from "../shared/styles";
 
 const DEFAULT_SUCCESS_MESSAGE = "Thank you! Your response has been submitted.";
 const RECORD_SAVED_MESSAGE = "Record saved successfully.";
@@ -81,12 +85,12 @@ export function FormPage() {
   const [downloadingPdf, setDownloadingPdf] = useState(false);
 
   if (isLoading || (recordMode !== "new" && recordLoading)) {
-    return <p className="px-8 py-12">Loading form...</p>;
+    return <p className="px-4 py-12 sm:px-6 lg:px-8">Loading form...</p>;
   }
 
   if (!form) {
     return (
-      <div className="mx-auto flex w-full max-w-(--breakpoint-2xl) flex-col items-center gap-4 px-8 py-12">
+      <div className={`${pageShellClasses} items-center`}>
         <h1 className="font-display text-3xl font-bold tracking-[-0.028em] text-neutral-900">
           Form not found
         </h1>
@@ -100,7 +104,7 @@ export function FormPage() {
 
   if (recordMode !== "new" && recordError) {
     return (
-      <div className="mx-auto flex w-full max-w-(--breakpoint-2xl) flex-col items-center gap-4 px-8 py-12">
+      <div className={`${pageShellClasses} items-center`}>
         <h1 className="font-display text-3xl font-bold tracking-[-0.028em] text-neutral-900">
           Record unavailable
         </h1>
@@ -513,12 +517,12 @@ export function FormPage() {
           role="dialog"
           aria-modal="true"
           aria-label={form.title}
-          className="flex w-full flex-col gap-6 overflow-y-auto rounded-[16px] border border-neutral-200 bg-white p-6 shadow-lg lg:p-8"
+          className="flex w-full flex-col gap-6 overflow-y-auto rounded-[16px] border border-neutral-200 bg-white p-4 shadow-lg sm:p-6 lg:p-8"
           style={{
             maxWidth: modalWidth,
             width: "100%",
-            height: modalHeight ? `${modalHeight}px` : undefined,
-            maxHeight: modalHeight ? undefined : "88vh",
+            maxHeight: "88vh",
+            height: modalHeight ? `min(${modalHeight}px, 88vh)` : undefined,
           }}
         >
           {heading}
@@ -536,9 +540,9 @@ export function FormPage() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-8 py-12">
+    <div className={pageShellNarrowClasses}>
       {heading}
-      <section className="card flex w-full flex-col gap-6 p-6 lg:p-8">
+      <section className="card flex w-full flex-col gap-6 p-4 sm:p-6 lg:p-8">
         {backButton}
         {isReadOnly && recordMode === "edit" && (
           <p className="rounded-lg border border-neutral-100 bg-muted px-4 py-3 text-[13px] text-neutral-600">

@@ -20,6 +20,8 @@ import {
   isEmptyValue,
   validateFieldSync,
 } from "../shared/fieldValidation";
+import { computeCalcValue } from "../shared/calcScript";
+import { isEffectivelyVisible, isEffectivelyRequired } from "../shared/visibility";
 import type {
   FormField,
   FormSettings,
@@ -78,6 +80,10 @@ const LAYOUT_TYPES = new Set(["section_header", "divider", "paragraph"]);
 
 function isSubmittableField(field: FormField): boolean {
   if (field.type === "hidden") {
+    return true;
+  }
+  // Math (calc) values are stored; the server recomputes them on save.
+  if (field.type === "math") {
     return true;
   }
   if (EDITTABLE_TYPES.has(field.type)) {
@@ -141,16 +147,14 @@ function buildSteps(fields: FormField[]): FormField[][] {
 function isStepVisible(
   step: FormField[],
   values: SubmissionData,
-  visibleOverride?: Record<string, boolean>,
+  fields: FormField[],
+  logicVisible?: Record<string, boolean>,
 ): boolean {
   const header = step[0];
   if (!header || header.type !== "section_header") {
     return true;
   }
-  return (
-    evaluateCondition(header.visibleWhen, values) &&
-    (visibleOverride?.[header.key] ?? true)
-  );
+  return isEffectivelyVisible(header, values, fields, logicVisible);
 }
 
 export function DynamicFormRenderer({
@@ -256,10 +260,11 @@ export function DynamicFormRenderer({
   }, [jsKey]);
 
   function isFieldVisible(field: FormField): boolean {
-    return (
-      !field.hidden &&
-      evaluateCondition(field.visibleWhen, effectiveValues) &&
-      (logic.visible[field.key] ?? true)
+    return isEffectivelyVisible(
+      field,
+      effectiveValues,
+      effectiveFields,
+      logic.visible,
     );
   }
 
@@ -271,10 +276,15 @@ export function DynamicFormRenderer({
     () =>
       multiStep
         ? steps.filter((step) =>
-            isStepVisible(step, effectiveValues, logic.visible),
+            isStepVisible(
+              step,
+              effectiveValues,
+              effectiveFields,
+              logic.visible,
+            ),
           )
         : steps,
-    [steps, effectiveValues, logic.visible, multiStep],
+    [steps, effectiveValues, logic.visible, multiStep, effectiveFields],
   );
   const activeStepIndex = Math.min(
     currentStep,
@@ -297,7 +307,9 @@ export function DynamicFormRenderer({
     values: SubmissionData,
     fields: FormField[],
   ): string | null {
-    return validateFieldSync(field, value, values, fields);
+    return validateFieldSync(field, value, values, fields, {
+      logicVisible: logic.visible,
+    });
   }
 
   function validateFields(fieldsToCheck: FormField[]): Record<string, string> {
@@ -420,6 +432,14 @@ export function DynamicFormRenderer({
         case "multi_select":
           data[field.key] = Array.isArray(rawValue) ? rawValue : [];
           break;
+        case "math":
+          // Instant UX; the server recomputes and overwrites this on save.
+          data[field.key] = computeCalcValue(
+            field,
+            effectiveValues,
+            effectiveFields,
+          );
+          break;
         default:
           data[field.key] = (rawValue as string | undefined) ?? "";
       }
@@ -484,28 +504,40 @@ export function DynamicFormRenderer({
 
   const visibleFields = activeStep.filter((field) => isFieldVisible(field));
 
-  const renderField = (field: FormField) => (
-    <div
-      key={field.id}
-      className={gridColumnClasses()}
-      style={columnStyle(field.width)}
-    >
-      <FieldControl
-        field={applyOptionRules(
-          field,
-          effectiveValues,
-          logic.hiddenOptions[field.key],
-        )}
-        value={effectiveValues[field.key] ?? null}
-        onChange={(value) => setValue(field.key, value)}
-        allValues={effectiveValues}
-        error={errors[field.key]}
-        disabled={readOnly || readonlyKeySet.has(field.key)}
-        formId={formId}
-        allFields={effectiveFields}
-      />
-    </div>
-  );
+  const renderField = (field: FormField) => {
+    const withOptions = applyOptionRules(
+      field,
+      effectiveValues,
+      logic.hiddenOptions[field.key],
+    );
+    const displayField: FormField = {
+      ...withOptions,
+      required: isEffectivelyRequired(
+        field,
+        effectiveValues,
+        effectiveFields,
+        logic.visible,
+      ),
+    };
+    return (
+      <div
+        key={field.id}
+        className={gridColumnClasses()}
+        style={columnStyle(field.width)}
+      >
+        <FieldControl
+          field={displayField}
+          value={effectiveValues[field.key] ?? null}
+          onChange={(value) => setValue(field.key, value)}
+          allValues={effectiveValues}
+          error={errors[field.key]}
+          disabled={readOnly || readonlyKeySet.has(field.key)}
+          formId={formId}
+          allFields={effectiveFields}
+        />
+      </div>
+    );
+  };
 
   if (multiStep) {
     if (readOnly) {

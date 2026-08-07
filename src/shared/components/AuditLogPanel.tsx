@@ -5,6 +5,7 @@ import type { SubmissionFieldChange, FormDefinitionDiff } from "../audit";
 import { inputClasses, selectClasses } from "../styles";
 import { Button } from "./Button";
 import { Card } from "./Card";
+import { MD_UP, useMediaQuery } from "../hooks/useMediaQuery";
 
 export type AuditFilterState = {
   formId: string;
@@ -155,6 +156,7 @@ export function AuditLogPanel({
   onPageChange: (page: number) => void;
 }) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const isMdUp = useMediaQuery(MD_UP);
   const total = data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
@@ -261,9 +263,9 @@ export function AuditLogPanel({
           <p className="p-6 text-sm text-neutral-500">Loading audit log…</p>
         ) : events.length === 0 ? (
           <p className="p-6 text-sm text-neutral-500">No audit events match.</p>
-        ) : (
+        ) : isMdUp ? (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px] text-left text-sm">
+            <table className="w-full text-left text-sm">
               <thead className="border-b border-neutral-100 bg-neutral-50 text-xs uppercase tracking-wide text-neutral-500">
                 <tr>
                   <th className="px-4 py-3 font-semibold">When</th>
@@ -340,6 +342,59 @@ export function AuditLogPanel({
                 })}
               </tbody>
             </table>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3 p-4">
+            {events.map((event) => {
+              const open = expandedId === event.id;
+              return (
+                <div
+                  key={event.id}
+                  className="flex flex-col gap-2 rounded-xl border border-neutral-200 bg-white p-4"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold text-neutral-600">
+                      {event.actionLabel}
+                    </span>
+                    <span className="text-xs text-neutral-500">
+                      {new Date(event.createdAt).toLocaleString()}
+                    </span>
+                  </div>
+                  {showFormFilter && (
+                    <div className="text-sm">
+                      {event.formId ? (
+                        <Link
+                          to="/forms/:id/audit"
+                          params={{ id: event.formId }}
+                          className="font-medium text-primary-700 hover:underline"
+                        >
+                          {event.formTitle ?? "Form"}
+                        </Link>
+                      ) : (
+                        <span className="text-neutral-500">
+                          {event.formTitle ?? "Deleted form"}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  <ActorCell event={event} />
+                  <p className="text-sm text-neutral-700">{event.summary}</p>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="self-start"
+                    onClick={() => setExpandedId(open ? null : event.id)}
+                  >
+                    {open ? "Hide" : "Details"}
+                  </Button>
+                  {open && (
+                    <div className="rounded-lg bg-neutral-50/80 p-3">
+                      <EventDetails event={event} />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
         {total > pageSize && (

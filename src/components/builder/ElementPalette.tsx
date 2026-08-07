@@ -8,6 +8,8 @@ import type { FieldType } from "../../types";
 
 interface ElementPaletteProps {
   onAdd: (type: FieldType) => void;
+  /** When true, omit card chrome (e.g. inside a Sheet). */
+  embedded?: boolean;
 }
 
 function PaletteItem({
@@ -61,7 +63,7 @@ function PaletteItem({
   );
 }
 
-export function ElementPalette({ onAdd }: ElementPaletteProps) {
+export function ElementPalette({ onAdd, embedded = false }: ElementPaletteProps) {
   const [query, setQuery] = useState("");
   const normalizedQuery = query.trim().toLowerCase();
 
@@ -85,7 +87,13 @@ export function ElementPalette({ onAdd }: ElementPaletteProps) {
   const searching = normalizedQuery.length > 0;
 
   return (
-    <aside className="card flex flex-col gap-4 p-4">
+    <aside
+      className={
+        embedded
+          ? "flex flex-col gap-4"
+          : "card flex flex-col gap-4 p-4"
+      }
+    >
       <div className="flex flex-col gap-2.5 border-b border-neutral-100 pb-3">
         <h2 className="font-display text-sm font-bold tracking-[-0.02em] text-neutral-800">
           Elements

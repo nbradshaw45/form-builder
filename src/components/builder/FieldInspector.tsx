@@ -50,6 +50,8 @@ interface FieldInspectorProps {
   onPatch: (id: string, patch: Partial<FormField>) => void;
   onDeselect: () => void;
   onSettingsChange: (patch: Partial<FormSettings>) => void;
+  /** When true, omit card chrome (e.g. inside a Sheet). */
+  embedded?: boolean;
 }
 
 const labelClasses = "text-xs font-semibold tracking-[-0.005em] text-neutral-800";
@@ -112,6 +114,7 @@ export function FieldInspector({
   onPatch,
   onDeselect,
   onSettingsChange,
+  embedded = false,
 }: FieldInspectorProps) {
   const [settingsExpanded, setSettingsExpanded] = useState(false);
 
@@ -127,6 +130,7 @@ export function FieldInspector({
           fields={allElements}
           onChange={onSettingsChange}
           onExpand={() => setSettingsExpanded(true)}
+          embedded={embedded}
         />
         {settingsExpanded && (
           <div
@@ -137,7 +141,7 @@ export function FieldInspector({
               role="dialog"
               aria-modal="true"
               aria-label="Form settings"
-              className="w-full max-w-6xl rounded-2xl border border-neutral-200 bg-white p-6 shadow-xl"
+              className="w-full max-w-6xl rounded-2xl border border-neutral-200 bg-white p-4 shadow-xl sm:p-6"
               onClick={(event) => event.stopPropagation()}
             >
               <FormSettingsPanel
@@ -186,9 +190,26 @@ export function FieldInspector({
     });
   }
 
+  function insertScriptKey(key: string) {
+    if (!element) {
+      return;
+    }
+    const token = `form.getValue("${key}")`;
+    const script = element.calcScript ?? "";
+    onPatch(element.id, {
+      calcScript: script.trim()
+        ? `${script.trimEnd()}\n${token}`
+        : `return ${token};`,
+    });
+  }
+
   return (
     <aside
-      className="card flex flex-col gap-4 p-4"
+      className={
+        embedded
+          ? "flex flex-col gap-4"
+          : "card flex flex-col gap-4 p-4"
+      }
       onClick={(event) => event.stopPropagation()}
     >
       <div className="flex items-start justify-between gap-2 border-b border-neutral-100 pb-3">
@@ -217,36 +238,32 @@ export function FieldInspector({
         label="General"
         defaultOpen
       >
-        {!isMath && (
-          <div className="flex flex-col gap-1">
-            <label htmlFor="inspector-label" className={labelClasses}>
-              Label
-            </label>
-            <input
-              id="inspector-label"
-              value={element.label}
-              onChange={(event) => onLabelChange(element, event.target.value)}
-              className={inputClasses}
-            />
-          </div>
-        )}
+        <div className="flex flex-col gap-1">
+          <label htmlFor="inspector-label" className={labelClasses}>
+            Label
+          </label>
+          <input
+            id="inspector-label"
+            value={element.label}
+            onChange={(event) => onLabelChange(element, event.target.value)}
+            className={inputClasses}
+          />
+        </div>
 
-        {!isMath && (
-          <div className="flex flex-col gap-1">
-            <label htmlFor="inspector-key" className={labelClasses}>
-              Field key
-            </label>
-            <input
-              id="inspector-key"
-              value={element.key}
-              onChange={(event) => onKeyChange(element, event.target.value)}
-              className={`${inputClasses} font-mono`}
-            />
-            <span className="text-xs text-neutral-400">
-              Stored as the JSON key in submissions.
-            </span>
-          </div>
-        )}
+        <div className="flex flex-col gap-1">
+          <label htmlFor="inspector-key" className={labelClasses}>
+            Field key
+          </label>
+          <input
+            id="inspector-key"
+            value={element.key}
+            onChange={(event) => onKeyChange(element, event.target.value)}
+            className={`${inputClasses} font-mono`}
+          />
+          <span className="text-xs text-neutral-400">
+            Stored as the JSON key in submissions.
+          </span>
+        </div>
 
         <div className="flex flex-col gap-1">
           <label htmlFor="inspector-width" className={labelClasses}>
@@ -785,69 +802,141 @@ export function FieldInspector({
       )}
 
       {isMath && (
-        <SettingsAccordion key={`${element.id}-formula`} label="Formula">
+        <SettingsAccordion key={`${element.id}-calc`} label="Calculation">
           <div className="flex flex-col gap-2">
             <div className="flex flex-col gap-1">
-              <FieldLabel htmlFor="inspector-formula" help="formula">
-                Formula
-              </FieldLabel>
-              <textarea
-                id="inspector-formula"
-                value={element.formula ?? ""}
-                onChange={(event) =>
-                  onPatch(element.id, { formula: event.target.value })
-                }
-                rows={3}
-                className={`${inputClasses} font-mono`}
-                placeholder="[quantity] * [unit_price]"
-              />
-              <span className="text-xs text-neutral-400">
-                Reference other fields with square brackets, e.g.{" "}
-                <code className="font-mono">[quantity] * [unit_price]</code>.
-              </span>
-            </div>
-            {ruleTargets.length > 0 && (
-              <div className="flex flex-wrap gap-1">
-                {ruleTargets.map((target) => (
+              <span className={labelClasses}>Mode</span>
+              <div className="inline-flex self-start overflow-hidden rounded-lg border border-neutral-200 bg-white">
+                {(
+                  [
+                    { value: "formula", label: "Formula" },
+                    { value: "script", label: "JavaScript" },
+                  ] as const
+                ).map((mode, index) => (
                   <button
-                    key={target.id}
+                    key={mode.value}
                     type="button"
-                    onClick={() => insertFormulaKey(target.key)}
-                    className="rounded border border-neutral-300 bg-white px-2 py-1 font-mono text-xs text-neutral-600 hover:border-primary-400 hover:text-primary-700"
+                    aria-pressed={(element.calcMode ?? "formula") === mode.value}
+                    onClick={() =>
+                      onPatch(element.id, { calcMode: mode.value })
+                    }
+                    className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                      index > 0 ? "border-l border-neutral-200" : ""
+                    } ${
+                      (element.calcMode ?? "formula") === mode.value
+                        ? "bg-primary-600 text-white"
+                        : "text-neutral-700 hover:bg-neutral-50"
+                    }`}
                   >
-                    [{target.key}]
+                    {mode.label}
                   </button>
                 ))}
               </div>
-            )}
-            <div className="flex flex-col gap-1">
-              <label htmlFor="inspector-math-decimals" className={labelClasses}>
-                Rounding
-              </label>
-              <select
-                id="inspector-math-decimals"
-                value={element.mathDecimals ?? 2}
-                onChange={(event) =>
-                  onPatch(element.id, {
-                    mathDecimals: Number(event.target.value),
-                  })
-                }
-                className={inputClasses}
-              >
-                <option value={0}>0 decimals</option>
-                <option value={1}>1 decimal</option>
-                <option value={2}>2 decimals</option>
-                <option value={3}>3 decimals</option>
-                <option value={4}>4 decimals</option>
-              </select>
-              <span className="text-xs text-neutral-400">
-                Functions:{" "}
-                <code className="font-mono">
-                  sum(..) avg(..) min(..) max(..) round(x,d) abs(x) count(..)
-                  if(cond,a,b) dateDiff(a,b)
-                </code>
-              </span>
             </div>
+
+            {(element.calcMode ?? "formula") === "script" ? (
+              <>
+                <div className="flex flex-col gap-1">
+                  <FieldLabel htmlFor="inspector-calc-script" help="calc-scripts">
+                    JavaScript
+                  </FieldLabel>
+                  <textarea
+                    id="inspector-calc-script"
+                    value={element.calcScript ?? ""}
+                    onChange={(event) =>
+                      onPatch(element.id, { calcScript: event.target.value })
+                    }
+                    rows={6}
+                    className={`${inputClasses} font-mono`}
+                    placeholder={
+                      'return form.getNumber("quantity") * form.getNumber("unit_price");'
+                    }
+                  />
+                  <span className="text-xs text-neutral-400">
+                    Return a value. Scripts are read-only and re-run on every
+                    change and on save.
+                  </span>
+                </div>
+                {ruleTargets.length > 0 && (
+                  <div className="flex flex-wrap gap-1">
+                    {ruleTargets.map((target) => (
+                      <button
+                        key={target.id}
+                        type="button"
+                        onClick={() => insertScriptKey(target.key)}
+                        className="rounded border border-neutral-300 bg-white px-2 py-1 font-mono text-xs text-neutral-600 hover:border-primary-400 hover:text-primary-700"
+                      >
+                        [{target.key}]
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <div className="flex flex-col gap-1">
+                  <FieldLabel htmlFor="inspector-formula" help="formula">
+                    Formula
+                  </FieldLabel>
+                  <textarea
+                    id="inspector-formula"
+                    value={element.formula ?? ""}
+                    onChange={(event) =>
+                      onPatch(element.id, { formula: event.target.value })
+                    }
+                    rows={3}
+                    className={`${inputClasses} font-mono`}
+                    placeholder="[quantity] * [unit_price]"
+                  />
+                  <span className="text-xs text-neutral-400">
+                    Reference other fields with square brackets, e.g.{" "}
+                    <code className="font-mono">[quantity] * [unit_price]</code>.
+                  </span>
+                </div>
+                {ruleTargets.length > 0 && (
+                  <div className="flex flex-wrap gap-1">
+                    {ruleTargets.map((target) => (
+                      <button
+                        key={target.id}
+                        type="button"
+                        onClick={() => insertFormulaKey(target.key)}
+                        className="rounded border border-neutral-300 bg-white px-2 py-1 font-mono text-xs text-neutral-600 hover:border-primary-400 hover:text-primary-700"
+                      >
+                        [{target.key}]
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <div className="flex flex-col gap-1">
+                  <label htmlFor="inspector-math-decimals" className={labelClasses}>
+                    Rounding
+                  </label>
+                  <select
+                    id="inspector-math-decimals"
+                    value={element.mathDecimals ?? 2}
+                    onChange={(event) =>
+                      onPatch(element.id, {
+                        mathDecimals: Number(event.target.value),
+                      })
+                    }
+                    className={inputClasses}
+                  >
+                    <option value={0}>0 decimals</option>
+                    <option value={1}>1 decimal</option>
+                    <option value={2}>2 decimals</option>
+                    <option value={3}>3 decimals</option>
+                    <option value={4}>4 decimals</option>
+                  </select>
+                  <span className="text-xs text-neutral-400">
+                    Functions:{" "}
+                    <code className="font-mono">
+                      sum(..) avg(..) min(..) max(..) round(x,d) abs(x) count(..)
+                      if(cond,a,b) dateDiff(a,b)
+                    </code>
+                  </span>
+                </div>
+              </>
+            )}
           </div>
         </SettingsAccordion>
       )}
@@ -868,6 +957,9 @@ export function FieldInspector({
             />
             Required
           </label>
+          <span className="text-xs text-neutral-400">
+            If this field (or its section) is hidden, it is not required.
+          </span>
           <ValidationEditor
             element={element}
             ruleTargets={ruleTargets}
@@ -1017,6 +1109,29 @@ export function FieldInspector({
           onPatch={onPatch}
         />
       </SettingsAccordion>
+
+      {element.type === "section_header" && (
+        <SettingsAccordion
+          key={`${element.id}-section-required`}
+          label="Required"
+        >
+          <label className="flex items-center gap-2 text-sm font-medium text-neutral-800">
+            <input
+              type="checkbox"
+              checked={Boolean(element.required)}
+              onChange={(event) =>
+                onPatch(element.id, { required: event.target.checked })
+              }
+              className="size-4 rounded border-neutral-300 text-primary-500 focus:ring-primary-500"
+            />
+            Require all fields in this section
+          </label>
+          <span className="text-xs text-neutral-400">
+            When this section is shown, every visible input in it must be
+            filled. Hidden fields are never required.
+          </span>
+        </SettingsAccordion>
+      )}
     </aside>
   );
 }
@@ -1042,6 +1157,7 @@ function FormSettingsPanel({
   onChange,
   expanded = false,
   onExpand,
+  embedded = false,
 }: {
   settings: FormSettings;
   fieldOptions: { key: string; label: string }[];
@@ -1049,6 +1165,7 @@ function FormSettingsPanel({
   onChange: (patch: Partial<FormSettings>) => void;
   expanded?: boolean;
   onExpand?: () => void;
+  embedded?: boolean;
 }) {
   const isModal = settings.displayMode === "modal";
   const wantsRedirect =
@@ -1525,6 +1642,7 @@ function FormSettingsPanel({
                   onChange({ filterColumns: Number(event.target.value) })
                 }
                 className={inputClasses}
+                disabled={(settings.filterPlacement ?? "top") === "header"}
               >
                 {[1, 2, 3, 4, 6].map((count) => (
                   <option key={count} value={count}>
@@ -1536,6 +1654,17 @@ function FormSettingsPanel({
                 Fewer filters per row means the table stays higher on the page.
               </span>
             </div>
+            <ToggleRow
+              label="Filters expanded on load"
+              checked={settings.filtersExpanded === true}
+              onChange={(checked) => onChange({ filtersExpanded: checked })}
+              help="submissions-table"
+              disabled={(settings.filterPlacement ?? "top") === "header"}
+            />
+            <span className="-mt-1 text-xs text-neutral-400">
+              When filters sit on top of the table, choose whether the filter
+              grid starts open or collapsed. Collapsed by default.
+            </span>
           </div>
         </>
       ),
@@ -1652,9 +1781,11 @@ function FormSettingsPanel({
         <>
           <div className="flex items-start justify-between gap-2">
             <p className="text-xs leading-snug text-neutral-400">
-              Show or hide fields, change values, and run custom JavaScript based
-              on the value of other fields. Conditions are evaluated on page load
-              and whenever a value changes.
+              React to answer changes: show or hide fields, set values, or run
+              JavaScript. Evaluated on page load and whenever any value changes
+              (for example a dropdown selection). Prefer Show/Hide field over
+              custom JS for visibility. Simple one-field rules can live on the
+              element&apos;s Visibility settings instead.
             </p>
             <HelpBubble article="conditions" align="right" />
           </div>
@@ -1728,7 +1859,13 @@ function FormSettingsPanel({
   }
 
   return (
-    <div className="card flex flex-col gap-2 p-4">
+    <div
+      className={
+        embedded
+          ? "flex flex-col gap-2"
+          : "card flex flex-col gap-2 p-4"
+      }
+    >
       {header}
       {sections.map((section) => (
         <SettingsAccordion
@@ -2281,19 +2418,30 @@ function ToggleRow({
   checked,
   onChange,
   help,
+  disabled = false,
 }: {
   label: string;
   checked: boolean;
   onChange: (checked: boolean) => void;
   help?: string;
+  disabled?: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between gap-3">
-      <label className="flex cursor-pointer items-center gap-3 text-[13px] font-medium text-neutral-800">
+    <div
+      className={`flex items-center justify-between gap-3 ${
+        disabled ? "opacity-50" : ""
+      }`}
+    >
+      <label
+        className={`flex items-center gap-3 text-[13px] font-medium text-neutral-800 ${
+          disabled ? "cursor-not-allowed" : "cursor-pointer"
+        }`}
+      >
         <span>{label}</span>
         <input
           type="checkbox"
           checked={checked}
+          disabled={disabled}
           onChange={(event) => onChange(event.target.checked)}
           className="peer sr-only"
         />
@@ -3044,6 +3192,10 @@ function RequiredWhenEditor({
         />
       )}
 
+      <span className="text-xs text-neutral-400">
+        Conditional required is ignored while the field is hidden.
+      </span>
+
       {ruleTargets.length === 0 && (
         <p className="text-xs text-neutral-400">
           Add input fields before this one to use conditional required.
@@ -3086,10 +3238,16 @@ function RulesEditor({
             disabled={ruleTargets.length === 0}
             className="size-4 rounded border-neutral-300 text-primary-500 focus:ring-primary-500 disabled:cursor-not-allowed"
           />
-          Show conditionally
+          Show when answers match…
         </label>
         <HelpBubble article="visibility" align="right" />
       </div>
+
+      <p className="text-xs text-neutral-400">
+        Re-checks whenever someone changes a field (for example a dropdown).
+        For showing or hiding several fields at once, use form Conditional
+        logic instead.
+      </p>
 
       {enabled && (
         <ConditionEditor

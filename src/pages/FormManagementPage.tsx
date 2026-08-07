@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { AuthUser } from "wasp/auth";
 import { useNavigate } from "react-router";
 import {
@@ -6,7 +6,6 @@ import {
   flexRender,
   getCoreRowModel,
   useReactTable,
-  type Row,
 } from "@tanstack/react-table";
 import {
   createFormFromTemplate,
@@ -14,6 +13,7 @@ import {
   duplicateForm,
   exportForm,
   importForm,
+  renameFormTemplate,
   saveFormAsTemplate,
 } from "wasp/client/operations";
 import { getForms, getFormTemplates, useQuery } from "wasp/client/operations";
@@ -22,8 +22,10 @@ import type { FormTemplateSummary, FormWithAccess } from "../queries";
 import type { FormField, FormSettings } from "../types";
 import { Button, ButtonLink } from "../shared/components/Button";
 import { Card, CardHead, DataFoot, DataToolbar } from "../shared/components/Card";
-import { ConfirmDialog } from "../components/Modal";
-import { BookmarkIcon, DownloadIcon, DuplicateIcon, EyeIcon, PencilIcon, PlusIcon, ShareIcon, TableIcon, TrashIcon, UploadIcon } from "../components/builder/icons";
+import { ConfirmDialog, Modal } from "../components/Modal";
+import { BookmarkIcon, DownloadIcon, DuplicateIcon, EllipsisIcon, EyeIcon, PencilIcon, PlusIcon, ShareIcon, TableIcon, TrashIcon, UploadIcon } from "../components/builder/icons";
+import { inputClasses, pageShellClasses } from "../shared/styles";
+import { MD_UP, useMediaQuery } from "../shared/hooks/useMediaQuery";
 
 const columnHelper = createColumnHelper<FormWithAccess>();
 
@@ -35,6 +37,12 @@ interface DeleteState {
 interface TemplateDeleteState {
   template: FormTemplateSummary;
   isDeleting: boolean;
+}
+
+interface TemplateRenameState {
+  template: FormTemplateSummary;
+  title: string;
+  isSaving: boolean;
 }
 
 const accessBadge: Record<FormWithAccess["access"], string> = {
@@ -51,8 +59,10 @@ const accessLabel: Record<FormWithAccess["access"], string> = {
 
 export function FormManagementPage({ user }: { user: AuthUser }) {
   const navigate = useNavigate();
+  const isMdUp = useMediaQuery(MD_UP);
   const { data: forms, isLoading, isSuccess } = useQuery(getForms);
   const canCreate = user.role !== "VIEWER";
+  const isAdmin = user.role === "ADMIN";
   const { data: templates } = useQuery(getFormTemplates, undefined, {
     enabled: canCreate,
   });
@@ -60,6 +70,8 @@ export function FormManagementPage({ user }: { user: AuthUser }) {
   const [deleteState, setDeleteState] = useState<DeleteState | null>(null);
   const [templateDeleteState, setTemplateDeleteState] =
     useState<TemplateDeleteState | null>(null);
+  const [templateRenameState, setTemplateRenameState] =
+    useState<TemplateRenameState | null>(null);
   const [usingTemplateId, setUsingTemplateId] = useState<string | null>(null);
   const [isImporting, setIsImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -124,7 +136,11 @@ export function FormManagementPage({ user }: { user: AuthUser }) {
         id: "actions",
         header: "Actions",
         cell: (info) => (
-          <RowActions row={info.row} user={user} onDelete={setDeleteState} />
+          <RowActions
+            form={info.row.original}
+            user={user}
+            onDelete={setDeleteState}
+          />
         ),
       }),
     ],
@@ -163,6 +179,36 @@ export function FormManagementPage({ user }: { user: AuthUser }) {
       window.alert(`Error while deleting template: ${String(err)}`);
       setTemplateDeleteState(null);
     }
+  }
+
+  async function confirmTemplateRename() {
+    if (!templateRenameState) {
+      return;
+    }
+    const title = templateRenameState.title.trim();
+    if (!title) {
+      window.alert("Template name is required.");
+      return;
+    }
+    setTemplateRenameState({ ...templateRenameState, isSaving: true });
+    try {
+      await renameFormTemplate({
+        templateId: templateRenameState.template.id,
+        title,
+      });
+      setTemplateRenameState(null);
+    } catch (err) {
+      window.alert(`Error while renaming template: ${String(err)}`);
+      setTemplateRenameState({ ...templateRenameState, isSaving: false });
+    }
+  }
+
+  function openTemplateRename(template: FormTemplateSummary) {
+    setTemplateRenameState({
+      template,
+      title: template.title,
+      isSaving: false,
+    });
   }
 
   async function handleUseTemplate(template: FormTemplateSummary) {
@@ -229,7 +275,7 @@ export function FormManagementPage({ user }: { user: AuthUser }) {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-(--breakpoint-2xl) flex-col gap-6 px-8 py-8">
+    <div className={pageShellClasses}>
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex flex-col gap-1.5">
           <span className="font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-neutral-400">
@@ -246,7 +292,7 @@ export function FormManagementPage({ user }: { user: AuthUser }) {
             .
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex w-full flex-wrap gap-2 sm:w-auto">
           {canCreate && (
             <>
               <input
@@ -260,13 +306,16 @@ export function FormManagementPage({ user }: { user: AuthUser }) {
                 variant="ghost"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={isImporting}
+                className="flex-1 sm:flex-none"
               >
                 <UploadIcon className="size-3.5" />
                 {isImporting ? "Importing..." : "Import form"}
               </Button>
             </>
           )}
-          <ButtonLink to="/forms/new">New form</ButtonLink>
+          <ButtonLink to="/forms/new" className="flex-1 sm:flex-none">
+            New form
+          </ButtonLink>
         </div>
       </div>
 
@@ -296,7 +345,7 @@ export function FormManagementPage({ user }: { user: AuthUser }) {
         )}
         {isSuccess && forms.length > 0 && (
           <>
-            <div className="px-6 pt-5">
+            <div className="px-4 pt-5 sm:px-6">
               <DataToolbar
                 searchValue={search}
                 onSearchChange={setSearch}
@@ -308,6 +357,7 @@ export function FormManagementPage({ user }: { user: AuthUser }) {
                 }
               />
             </div>
+            {isMdUp ? (
             <div className="overflow-x-auto px-2 pb-2">
               <table className="w-full border-collapse">
                 <thead>
@@ -356,6 +406,51 @@ export function FormManagementPage({ user }: { user: AuthUser }) {
                 </tbody>
               </table>
             </div>
+            ) : (
+              <div className="flex flex-col gap-3 px-4 pb-4 sm:px-6">
+                {filteredForms.length === 0 ? (
+                  <p className="p-4 text-center text-[13px] text-neutral-500">
+                    No forms match your search.
+                  </p>
+                ) : (
+                  filteredForms.map((form) => (
+                    <div
+                      key={form.id}
+                      className="flex flex-col gap-3 rounded-xl border border-neutral-200 bg-white p-4"
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <Link
+                          to="/forms/:id"
+                          params={{ id: form.id }}
+                          className="font-semibold text-neutral-800 hover:text-primary-600 hover:underline"
+                        >
+                          {form.title}
+                        </Link>
+                        <span
+                          className={`rounded-full px-2.5 py-1 text-[10.5px] font-semibold ${accessBadge[form.access]}`}
+                        >
+                          {accessLabel[form.access]}
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap gap-3 text-xs text-neutral-500">
+                        <span>
+                          Created{" "}
+                          {new Date(form.createdAt).toLocaleDateString()}
+                        </span>
+                        <span className="rounded-full bg-primary-50 px-2.5 py-1 text-[10.5px] font-semibold text-primary-700">
+                          {form._count?.submissions ?? 0} submissions
+                        </span>
+                      </div>
+                      <RowActions
+                        form={form}
+                        user={user}
+                        onDelete={setDeleteState}
+                      />
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
             <DataFoot
               left={`Showing ${filteredForms.length} of ${forms.length}`}
             />
@@ -376,7 +471,8 @@ export function FormManagementPage({ user }: { user: AuthUser }) {
               }
             />
           </div>
-          <div className="overflow-x-auto px-2 pb-2">
+          <div className="overflow-x-auto px-2 pb-2 md:block">
+            {isMdUp ? (
             <table className="w-full border-collapse">
               <thead>
                 <tr>
@@ -411,6 +507,16 @@ export function FormManagementPage({ user }: { user: AuthUser }) {
                             ? "Creating..."
                             : "Use template"}
                         </Button>
+                        {isAdmin && (
+                          <Button
+                            size="xs"
+                            variant="ghost"
+                            onClick={() => openTemplateRename(template)}
+                          >
+                            <PencilIcon className="size-3.5" />
+                            Rename
+                          </Button>
+                        )}
                         <Button
                           size="xs"
                           variant="ghost"
@@ -431,6 +537,62 @@ export function FormManagementPage({ user }: { user: AuthUser }) {
                 ))}
               </tbody>
             </table>
+            ) : (
+              <div className="flex flex-col gap-3 px-4 pb-4">
+                {templates.map((template) => (
+                  <div
+                    key={template.id}
+                    className="flex flex-col gap-3 rounded-xl border border-neutral-200 bg-white p-4"
+                  >
+                    <div className="flex flex-col gap-1">
+                      <span className="font-semibold text-neutral-800">
+                        {template.title}
+                      </span>
+                      <span className="text-xs text-neutral-500">
+                        Created{" "}
+                        {new Date(template.createdAt).toLocaleDateString()}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      <Button
+                        size="xs"
+                        onClick={() => void handleUseTemplate(template)}
+                        disabled={usingTemplateId === template.id}
+                      >
+                        <PlusIcon className="size-3.5" />
+                        {usingTemplateId === template.id
+                          ? "Creating..."
+                          : "Use template"}
+                      </Button>
+                      {isAdmin && (
+                        <Button
+                          size="xs"
+                          variant="ghost"
+                          onClick={() => openTemplateRename(template)}
+                        >
+                          <PencilIcon className="size-3.5" />
+                          Rename
+                        </Button>
+                      )}
+                      <Button
+                        size="xs"
+                        variant="ghost"
+                        className="text-danger hover:border-danger hover:bg-danger-soft hover:text-danger"
+                        onClick={() =>
+                          setTemplateDeleteState({
+                            template,
+                            isDeleting: false,
+                          })
+                        }
+                      >
+                        <TrashIcon className="size-3.5" />
+                        Delete
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </Card>
       )}
@@ -454,22 +616,101 @@ export function FormManagementPage({ user }: { user: AuthUser }) {
           onCancel={() => setTemplateDeleteState(null)}
         />
       )}
+
+      {templateRenameState && (
+        <Modal
+          title="Rename template"
+          onClose={() => {
+            if (!templateRenameState.isSaving) {
+              setTemplateRenameState(null);
+            }
+          }}
+          footer={
+            <>
+              <Button
+                variant="ghost"
+                onClick={() => setTemplateRenameState(null)}
+                disabled={templateRenameState.isSaving}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => void confirmTemplateRename()}
+                disabled={
+                  templateRenameState.isSaving ||
+                  !templateRenameState.title.trim()
+                }
+              >
+                {templateRenameState.isSaving ? "Saving..." : "Save"}
+              </Button>
+            </>
+          }
+        >
+          <label className="flex flex-col gap-1.5">
+            <span className="text-sm font-medium text-neutral-700">
+              Template name
+            </span>
+            <input
+              autoFocus
+              value={templateRenameState.title}
+              onChange={(event) =>
+                setTemplateRenameState({
+                  ...templateRenameState,
+                  title: event.target.value,
+                })
+              }
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  void confirmTemplateRename();
+                }
+              }}
+              disabled={templateRenameState.isSaving}
+              className={inputClasses}
+            />
+          </label>
+        </Modal>
+      )}
     </div>
   );
 }
 
 function RowActions({
-  row,
+  form,
   user,
   onDelete,
 }: {
-  row: Row<FormWithAccess>;
+  form: FormWithAccess;
   user: AuthUser;
   onDelete: (state: DeleteState) => void;
 }) {
-  const { id, access } = row.original;
+  const { id, access } = form;
   const canManage = access === "owner" || user.role === "ADMIN";
   const [busyAction, setBusyAction] = useState<string | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!menuOpen) {
+      return;
+    }
+    function handlePointerDown(event: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [menuOpen]);
 
   async function runAction(name: string, fn: () => Promise<void>) {
     setBusyAction(name);
@@ -479,6 +720,7 @@ function RowActions({
       window.alert(`Error: ${String(err)}`);
     } finally {
       setBusyAction(null);
+      setMenuOpen(false);
     }
   }
 
@@ -491,7 +733,7 @@ function RowActions({
   function handleSaveAsTemplate() {
     return runAction("template", async () => {
       await saveFormAsTemplate({ formId: id });
-      window.alert(`Saved "${row.original.title}" as a template.`);
+      window.alert(`Saved "${form.title}" as a template.`);
     });
   }
 
@@ -504,22 +746,17 @@ function RowActions({
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `${row.original.title}.form.json`;
+      link.download = `${form.title}.form.json`;
       link.click();
       URL.revokeObjectURL(url);
     });
   }
 
+  const menuItemClasses =
+    "flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs font-medium text-neutral-700 hover:bg-neutral-50 disabled:opacity-60";
+
   return (
-    <div className="flex flex-wrap gap-1.5">
-      <ButtonLink to="/forms/:id" params={{ id }} size="xs">
-        <PlusIcon className="size-3.5" />
-        New Record
-      </ButtonLink>
-      <ButtonLink to="/forms/:id" params={{ id }} size="xs" variant="ghost">
-        <EyeIcon className="size-3.5" />
-        View
-      </ButtonLink>
+    <div className="flex flex-wrap items-center gap-1.5">
       <ButtonLink
         to="/forms/:id/submissions"
         params={{ id }}
@@ -529,65 +766,111 @@ function RowActions({
         <TableIcon className="size-3.5" />
         Submissions
       </ButtonLink>
-      <Button
-        size="xs"
-        variant="ghost"
-        onClick={() => void handleExport()}
-        disabled={busyAction !== null}
-      >
-        <DownloadIcon className="size-3.5" />
-        {busyAction === "export" ? "Exporting..." : "Export"}
-      </Button>
-      {canManage && (
-        <Button
-          size="xs"
-          variant="ghost"
-          onClick={() => void handleDuplicate()}
-          disabled={busyAction !== null}
-        >
-          <DuplicateIcon className="size-3.5" />
-          {busyAction === "duplicate" ? "Duplicating..." : "Duplicate"}
-        </Button>
-      )}
-      {canManage && (
-        <Button
-          size="xs"
-          variant="ghost"
-          onClick={() => void handleSaveAsTemplate()}
-          disabled={busyAction !== null}
-        >
-          <BookmarkIcon className="size-3.5" />
-          {busyAction === "template" ? "Saving..." : "Save as template"}
-        </Button>
-      )}
-      {canManage && (
-        <ButtonLink
-          to="/forms/:id/access"
-          params={{ id }}
-          size="xs"
-          variant="ghost"
-        >
-          <ShareIcon className="size-3.5" />
-          Access
-        </ButtonLink>
-      )}
+      <ButtonLink to="/forms/:id" params={{ id }} size="xs" variant="ghost">
+        <EyeIcon className="size-3.5" />
+        View
+      </ButtonLink>
       {canManage && (
         <ButtonLink to="/forms/:id/edit" params={{ id }} size="xs" variant="ghost">
           <PencilIcon className="size-3.5" />
           Edit
         </ButtonLink>
       )}
-      {canManage && (
+      <div className="relative" ref={menuRef}>
         <Button
           size="xs"
           variant="ghost"
-          className="text-danger hover:border-danger hover:bg-danger-soft hover:text-danger"
-          onClick={() => onDelete({ form: row.original, isDeleting: false })}
+          title="More actions"
+          aria-label="More actions"
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
+          onClick={() => setMenuOpen((open) => !open)}
         >
-          <TrashIcon className="size-3.5" />
-          Delete
+          <EllipsisIcon className="size-3.5" />
         </Button>
-      )}
+        {menuOpen && (
+          <div
+            role="menu"
+            className="absolute right-0 z-30 mt-1 w-48 overflow-hidden rounded-lg border border-neutral-200 bg-white py-1 shadow-lg"
+          >
+            <Link
+              to="/forms/:id"
+              params={{ id }}
+              role="menuitem"
+              className={menuItemClasses}
+              onClick={() => setMenuOpen(false)}
+            >
+              <PlusIcon className="size-3.5" />
+              New Record
+            </Link>
+            <button
+              type="button"
+              role="menuitem"
+              className={menuItemClasses}
+              disabled={busyAction !== null}
+              onClick={() => void handleExport()}
+            >
+              <DownloadIcon className="size-3.5" />
+              {busyAction === "export" ? "Exporting..." : "Export"}
+            </button>
+            <Link
+              to="/forms/:id/audit"
+              params={{ id }}
+              role="menuitem"
+              className={menuItemClasses}
+              onClick={() => setMenuOpen(false)}
+            >
+              Audit
+            </Link>
+            {canManage && (
+              <>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={menuItemClasses}
+                  disabled={busyAction !== null}
+                  onClick={() => void handleDuplicate()}
+                >
+                  <DuplicateIcon className="size-3.5" />
+                  {busyAction === "duplicate" ? "Duplicating..." : "Duplicate"}
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={menuItemClasses}
+                  disabled={busyAction !== null}
+                  onClick={() => void handleSaveAsTemplate()}
+                >
+                  <BookmarkIcon className="size-3.5" />
+                  {busyAction === "template" ? "Saving..." : "Save as template"}
+                </button>
+                <Link
+                  to="/forms/:id/access"
+                  params={{ id }}
+                  role="menuitem"
+                  className={menuItemClasses}
+                  onClick={() => setMenuOpen(false)}
+                >
+                  <ShareIcon className="size-3.5" />
+                  Access
+                </Link>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={`${menuItemClasses} text-danger hover:bg-danger-soft`}
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onDelete({ form, isDeleting: false });
+                  }}
+                >
+                  <TrashIcon className="size-3.5" />
+                  Delete
+                </button>
+              </>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

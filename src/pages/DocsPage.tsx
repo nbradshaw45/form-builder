@@ -2,7 +2,8 @@ import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
 import { Link } from "wasp/client/router";
 import { SearchIcon } from "../components/builder/icons";
-import { inputClasses } from "../shared/styles";
+import { inputClasses, pageShellClasses, selectClasses } from "../shared/styles";
+import { LG_UP, useMediaQuery } from "../shared/hooks/useMediaQuery";
 import {
   ARTICLE_INDEX,
   categoryLabel,
@@ -17,6 +18,7 @@ export function DocsPage() {
     ? (requested as string)
     : WIKI_ARTICLES[0].id;
   const [search, setSearch] = useState("");
+  const isLgUp = useMediaQuery(LG_UP);
 
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -27,7 +29,10 @@ export function DocsPage() {
       (article) =>
         article.title.toLowerCase().includes(query) ||
         article.summary.toLowerCase().includes(query) ||
-        article.id.includes(query),
+        article.id.includes(query) ||
+        (article.keywords ?? []).some((keyword) =>
+          keyword.toLowerCase().includes(query),
+        ),
     );
   }, [search]);
 
@@ -54,8 +59,22 @@ export function DocsPage() {
     (group) => group.articles.length > 0,
   );
 
+  const searchField = (
+    <div className="relative">
+      <SearchIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-neutral-400" />
+      <input
+        type="search"
+        value={search}
+        onChange={(event) => setSearch(event.target.value)}
+        placeholder="Search the wiki..."
+        aria-label="Search the wiki"
+        className={`${inputClasses} py-2 pl-9`}
+      />
+    </div>
+  );
+
   return (
-    <div className="mx-auto flex w-full max-w-(--breakpoint-2xl) flex-col gap-6 px-8 py-8">
+    <div className={pageShellClasses}>
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex flex-col gap-1.5">
           <span className="font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-neutral-400">
@@ -76,65 +95,81 @@ export function DocsPage() {
       </div>
 
       <div className="flex flex-col gap-6 lg:flex-row">
-        <aside className="lg:w-64 lg:shrink-0">
-          <div className="sticky top-20 flex flex-col gap-4">
-            <div className="relative">
-              <SearchIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-neutral-400" />
-              <input
-                type="search"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search the wiki..."
-                aria-label="Search the wiki"
-                className={`${inputClasses} py-2 pl-9`}
-              />
+        {isLgUp ? (
+          <aside className="lg:w-64 lg:shrink-0">
+            <div className="sticky top-20 flex flex-col gap-4">
+              {searchField}
+              <nav aria-label="Wiki" className="flex flex-col gap-4">
+                {categoriesWithArticles.map((group) => (
+                  <div key={group.id} className="flex flex-col gap-1">
+                    <span className="px-2 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-neutral-400">
+                      {group.label}
+                    </span>
+                    <ul className="flex flex-col gap-0.5">
+                      {group.articles.map((item) => (
+                        <li key={item.id}>
+                          <button
+                            type="button"
+                            onClick={() => navigateTo(item.id)}
+                            aria-current={
+                              item.id === activeArticle ? "page" : undefined
+                            }
+                            className={`w-full rounded-lg px-2 py-1.5 text-left text-[13px] transition-colors ${
+                              item.id === activeArticle
+                                ? "bg-primary-50 font-semibold text-primary-700"
+                                : "text-neutral-600 hover:bg-neutral-100 hover:text-neutral-800"
+                            }`}
+                          >
+                            {item.title}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+                {filtered.length === 0 && (
+                  <p className="px-2 text-[13px] text-neutral-500">
+                    No articles match your search.
+                  </p>
+                )}
+              </nav>
             </div>
-
-            <nav aria-label="Wiki" className="flex flex-col gap-4">
-              {categoriesWithArticles.map((group) => (
-                <div key={group.id} className="flex flex-col gap-1">
-                  <span className="px-2 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-neutral-400">
-                    {group.label}
-                  </span>
-                  <ul className="flex flex-col gap-0.5">
+          </aside>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {searchField}
+            <label className="flex flex-col gap-1.5">
+              <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-neutral-400">
+                Article
+              </span>
+              <select
+                className={selectClasses}
+                value={activeArticle}
+                onChange={(event) => navigateTo(event.target.value)}
+                aria-label="Select wiki article"
+              >
+                {categoriesWithArticles.map((group) => (
+                  <optgroup key={group.id} label={group.label}>
                     {group.articles.map((item) => (
-                      <li key={item.id}>
-                        <button
-                          type="button"
-                          onClick={() => navigateTo(item.id)}
-                          aria-current={
-                            item.id === activeArticle ? "page" : undefined
-                          }
-                          className={`w-full rounded-lg px-2 py-1.5 text-left text-[13px] transition-colors ${
-                            item.id === activeArticle
-                              ? "bg-primary-50 font-semibold text-primary-700"
-                              : "text-neutral-600 hover:bg-neutral-100 hover:text-neutral-800"
-                          }`}
-                        >
-                          {item.title}
-                        </button>
-                      </li>
+                      <option key={item.id} value={item.id}>
+                        {item.title}
+                      </option>
                     ))}
-                  </ul>
-                </div>
-              ))}
-              {filtered.length === 0 && (
-                <p className="px-2 text-[13px] text-neutral-500">
-                  No articles match your search.
-                </p>
-              )}
-            </nav>
+                  </optgroup>
+                ))}
+              </select>
+            </label>
           </div>
-        </aside>
+        )}
 
         <div className="min-w-0 flex-1">
           {article ? (
-            <article className="card p-6 lg:p-10">
+            <article className="card p-4 sm:p-6 lg:p-10">
               <div className="flex flex-col gap-1.5">
                 <span className="font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-neutral-400">
                   {categoryLabel(article.category)}
                 </span>
-                <h2 className="font-display text-3xl font-bold tracking-[-0.028em] text-neutral-900">
+                <h2 className="font-display text-2xl font-bold tracking-[-0.028em] text-neutral-900 sm:text-3xl">
                   {article.title}
                 </h2>
                 <p className="max-w-[70ch] text-[14px] leading-relaxed text-neutral-500">

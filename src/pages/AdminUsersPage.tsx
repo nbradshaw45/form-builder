@@ -11,7 +11,8 @@ import type { AdminUser } from "../queries";
 import { Button, ButtonLink } from "../shared/components/Button";
 import { Card, CardHead, DataFoot, DataToolbar } from "../shared/components/Card";
 import { ConfirmDialog } from "../components/Modal";
-import { inputClasses, selectClasses } from "../shared/styles";
+import { inputClasses, pageShellClasses, selectClasses } from "../shared/styles";
+import { MD_UP, useMediaQuery } from "../shared/hooks/useMediaQuery";
 
 const ROLES = ["ADMIN", "EDITOR", "VIEWER"] as const;
 type Role = (typeof ROLES)[number];
@@ -25,6 +26,7 @@ const roleBadge: Record<Role, string> = {
 const DEFAULT_EMAIL = "user@example.com";
 
 export function AdminUsersPage({ user }: { user: AuthUser }) {
+  const isMdUp = useMediaQuery(MD_UP);
   const { data: users, isLoading, isSuccess, refetch } = useQuery(getUsers);
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<AdminUser | null>(null);
@@ -58,7 +60,7 @@ export function AdminUsersPage({ user }: { user: AuthUser }) {
 
   if (user.role !== "ADMIN") {
     return (
-      <div className="mx-auto flex w-full max-w-(--breakpoint-2xl) flex-col items-center gap-4 px-8 py-12">
+      <div className={`${pageShellClasses} items-center`}>
         <h1 className="font-display text-3xl font-bold tracking-[-0.028em] text-neutral-900">
           Admins only
         </h1>
@@ -138,7 +140,7 @@ export function AdminUsersPage({ user }: { user: AuthUser }) {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-(--breakpoint-2xl) flex-col gap-6 px-8 py-8">
+    <div className={pageShellClasses}>
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex flex-col gap-1.5">
           <span className="font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-neutral-400">
@@ -153,9 +155,11 @@ export function AdminUsersPage({ user }: { user: AuthUser }) {
             see forms shared with them.
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button onClick={openAdd}>Add user</Button>
-          <ButtonLink to="/forms" variant="ghost">
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+          <Button onClick={openAdd} className="flex-1 sm:flex-none">
+            Add user
+          </Button>
+          <ButtonLink to="/forms" variant="ghost" className="flex-1 sm:flex-none">
             Back to forms
           </ButtonLink>
         </div>
@@ -178,7 +182,7 @@ export function AdminUsersPage({ user }: { user: AuthUser }) {
         {isLoading && <p className="p-6 text-neutral-500">Loading users...</p>}
         {isSuccess && (
           <>
-            <div className="px-6 pt-5">
+            <div className="px-4 pt-5 sm:px-6">
               <DataToolbar
                 searchValue={search}
                 onSearchChange={setSearch}
@@ -190,6 +194,7 @@ export function AdminUsersPage({ user }: { user: AuthUser }) {
                 }
               />
             </div>
+            {isMdUp ? (
             <div className="overflow-x-auto px-2 pb-2">
               <table className="w-full border-collapse">
                 <thead>
@@ -272,6 +277,72 @@ export function AdminUsersPage({ user }: { user: AuthUser }) {
                 </tbody>
               </table>
             </div>
+            ) : (
+              <div className="flex flex-col gap-3 px-4 pb-4 sm:px-6">
+                {filteredUsers.length === 0 ? (
+                  <p className="p-4 text-center text-[13px] text-neutral-500">
+                    No users match your search.
+                  </p>
+                ) : (
+                  filteredUsers.map((target) => (
+                    <div
+                      key={target.id}
+                      className="flex flex-col gap-3 rounded-xl border border-neutral-200 bg-white p-4"
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="truncate font-mono text-xs text-neutral-700">
+                            {target.email ?? "—"}
+                            {target.id === user.id && (
+                              <span className="ml-2 rounded-full bg-info-soft px-2 py-0.5 text-[9.5px] font-semibold uppercase tracking-wide text-info">
+                                You
+                              </span>
+                            )}
+                          </p>
+                          <p className="mt-1 text-[13px] text-neutral-800">
+                            {target.name ?? "—"}
+                          </p>
+                        </div>
+                        <span
+                          className={`rounded-full px-2.5 py-1 text-[10.5px] font-semibold ${
+                            roleBadge[(target.role as Role) ?? "EDITOR"]
+                          }`}
+                        >
+                          {target.role ?? "EDITOR"}
+                        </span>
+                      </div>
+                      <p className="text-xs text-neutral-500">
+                        Joined {new Date(target.createdAt).toLocaleDateString()}
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        <Button
+                          size="xs"
+                          variant="ghost"
+                          onClick={() => openEditor(target)}
+                          disabled={target.id === user.id}
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          size="xs"
+                          variant="ghost"
+                          className="text-danger hover:border-danger hover:bg-danger-soft hover:text-danger"
+                          disabled={target.id === user.id}
+                          onClick={() =>
+                            setDeleteState({
+                              target,
+                              isDeleting: false,
+                            })
+                          }
+                        >
+                          Delete
+                        </Button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
             <DataFoot
               left={`Showing ${filteredUsers.length} of ${users.length}`}
             />

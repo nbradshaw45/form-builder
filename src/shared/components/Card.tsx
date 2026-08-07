@@ -58,7 +58,7 @@ export function DataToolbar({
 }: DataToolbarProps) {
   return (
     <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-      <div className="relative min-w-[240px] flex-1 sm:max-w-[320px]">
+      <div className="relative min-w-0 w-full flex-1 sm:max-w-[320px]">
         <SearchIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-neutral-400" />
         <input
           type="search"

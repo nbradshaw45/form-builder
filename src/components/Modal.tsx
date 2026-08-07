@@ -45,7 +45,7 @@ export function Modal({
         </h2>
         <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
         {footer && (
-          <div className="flex justify-end gap-2 border-t border-neutral-100 pt-4">
+          <div className="flex flex-col-reverse gap-2 border-t border-neutral-100 pt-4 sm:flex-row sm:justify-end">
             {footer}
           </div>
         )}

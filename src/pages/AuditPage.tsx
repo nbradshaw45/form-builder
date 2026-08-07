@@ -6,6 +6,7 @@ import {
   EMPTY_AUDIT_FILTERS,
   type AuditFilterState,
 } from "../shared/components/AuditLogPanel";
+import { pageShellClasses } from "../shared/styles";
 
 const PAGE_SIZE = 50;
 
@@ -26,7 +27,7 @@ export function AuditPage({ user: _user }: { user: AuthUser }) {
   const { data, isLoading, error } = useQuery(getAuditEvents, queryArgs);
 
   return (
-    <div className="mx-auto flex w-full max-w-(--breakpoint-2xl) flex-col gap-6 px-8 py-8">
+    <div className={pageShellClasses}>
       <div className="flex flex-col gap-1.5">
         <span className="font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-neutral-400">
           Activity

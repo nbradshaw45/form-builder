@@ -1,5 +1,5 @@
 import { evaluateFormula } from "../components/builder/formula";
-import { evaluateCondition } from "./logic";
+import { isEffectivelyRequired } from "./visibility";
 import type {
   FieldCharSet,
   FieldCompareOp,
@@ -122,12 +122,18 @@ function compareNumeric(
 /**
  * Sync field validation. Does not check unique / userExists / emailExists —
  * those need DB lookups.
+ *
+ * Pass `logicVisible` so section-level required and form-logic hide/show are
+ * honored. Hidden fields are never required.
  */
 export function validateFieldSync(
   field: FormField,
   value: unknown,
   values: SubmissionData,
   fields: FormField[],
+  options?: {
+    logicVisible?: Record<string, boolean>;
+  },
 ): string | null {
   if (field.type === "hidden") {
     return null;
@@ -139,6 +145,10 @@ export function validateFieldSync(
     return null;
   }
   if (field.type === "sequence") {
+    return null;
+  }
+  // Math (calc) values are computed, not user input — never validated.
+  if (field.type === "math") {
     return null;
   }
   if (field.type === "confirm") {
@@ -160,11 +170,12 @@ export function validateFieldSync(
     return null;
   }
 
-  const required =
-    field.required ||
-    (field.requiredWhen
-      ? evaluateCondition(field.requiredWhen, values)
-      : false);
+  const required = isEffectivelyRequired(
+    field,
+    values,
+    fields,
+    options?.logicVisible ?? {},
+  );
   const empty = isEmptyValue(field, value);
   if (required && empty) {
     return "This field is required";

@@ -12,6 +12,7 @@ import {
   EMPTY_AUDIT_FILTERS,
   type AuditFilterState,
 } from "../shared/components/AuditLogPanel";
+import { pageShellClasses } from "../shared/styles";
 
 const PAGE_SIZE = 50;
 
@@ -35,7 +36,7 @@ export function FormAuditPage({ user: _user }: { user: AuthUser }) {
   });
 
   return (
-    <div className="mx-auto flex w-full max-w-(--breakpoint-2xl) flex-col gap-6 px-8 py-8">
+    <div className={pageShellClasses}>
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex flex-col gap-1.5">
           <span className="font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-neutral-400">
@@ -49,15 +50,16 @@ export function FormAuditPage({ user: _user }: { user: AuthUser }) {
             actions for this form.
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex w-full flex-wrap gap-2 sm:w-auto">
           <ButtonLink
             to="/forms/:id/submissions"
             params={{ id }}
             variant="ghost"
+            className="flex-1 sm:flex-none"
           >
             Submissions
           </ButtonLink>
-          <ButtonLink to="/audit" variant="ghost">
+          <ButtonLink to="/audit" variant="ghost" className="flex-1 sm:flex-none">
             All audit
           </ButtonLink>
         </div>

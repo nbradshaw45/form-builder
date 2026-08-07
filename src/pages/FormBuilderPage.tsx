@@ -34,7 +34,7 @@ export function FormBuilderPage({ user }: { user: AuthUser }) {
   return (
     <div className="flex flex-col">
       {!isEdit && templates && templates.length > 0 && (
-        <div className="flex flex-wrap items-center gap-3 px-8 pt-6">
+        <div className="flex flex-wrap items-center gap-3 px-4 pt-6 sm:px-6 lg:px-8">
           <label
             htmlFor="template-picker"
             className="font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-neutral-400"
@@ -45,7 +45,7 @@ export function FormBuilderPage({ user }: { user: AuthUser }) {
             id="template-picker"
             value={selectedTemplateId}
             onChange={(event) => setSelectedTemplateId(event.target.value)}
-            className={`${inputClasses} sm:w-72`}
+            className={`${inputClasses} w-full sm:w-72`}
           >
             <option value="">Blank form</option>
             {templates.map((template) => (

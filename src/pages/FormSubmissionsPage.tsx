@@ -23,8 +23,8 @@ import { Link } from "wasp/client/router";
 import { Button, ButtonLink } from "../shared/components/Button";
 import { Card, CardHead, DataFoot, DataToolbar } from "../shared/components/Card";
 import { ConfirmDialog } from "../components/Modal";
-import { inputClasses } from "../shared/styles";
-import { EllipsisIcon, EyeIcon, PencilIcon, PlusIcon, ShareIcon, TrashIcon } from "../components/builder/icons";
+import { inputClasses, pageShellClasses } from "../shared/styles";
+import { EllipsisIcon, EyeIcon, PencilIcon, PlusIcon, ShareIcon, TrashIcon, ChevronDownIcon, ChevronUpIcon } from "../components/builder/icons";
 import {
   filterInputForField,
   filterOperatorsForType,
@@ -40,6 +40,7 @@ import type {
   SubmissionRowActionPlacement,
 } from "../types";
 import { DEFAULT_FORM_SETTINGS, rowActionPlacement } from "../types";
+import { MD_UP, useMediaQuery } from "../shared/hooks/useMediaQuery";
 
 type FilterEntry = { value: string; value2: string };
 
@@ -98,6 +99,7 @@ function formatCellValue(
 
 export function FormSubmissionsPage({ user }: { user: AuthUser }) {
   const { id = "" } = useParams<{ id: string }>();
+  const isMdUp = useMediaQuery(MD_UP);
   const { data: form } = useQuery(getForm, { id });
   const { data: submissionsData, isLoading, error, refetch } = useQuery(
     getFormSubmissions,
@@ -154,6 +156,11 @@ export function FormSubmissionsPage({ user }: { user: AuthUser }) {
   const headerMode = settings.filterPlacement === "header";
   const filterColumns = settings.filterColumns ?? 3;
   const showActionLabels = settings.showActionLabels === true;
+  const [filtersExpanded, setFiltersExpanded] = useState(false);
+
+  useEffect(() => {
+    setFiltersExpanded(settings.filtersExpanded === true);
+  }, [form?.id, settings.filtersExpanded]);
   const rowActions = useMemo<
     Record<SubmissionRowAction, SubmissionRowActionPlacement>
   >(
@@ -224,6 +231,14 @@ export function FormSubmissionsPage({ user }: { user: AuthUser }) {
     }
     return map;
   }, [submissions, filterableFields]);
+
+  const activeFilterCount = useMemo(
+    () =>
+      filterableFields.filter((field) =>
+        isFilterActive(field, filters[field.key]),
+      ).length,
+    [filterableFields, filters],
+  );
 
   const filteredSubmissions = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -558,12 +573,12 @@ export function FormSubmissionsPage({ user }: { user: AuthUser }) {
   });
 
   if (isLoading) {
-    return <p className="px-8 py-12">Loading submissions...</p>;
+    return <p className="px-4 py-12 sm:px-6 lg:px-8">Loading submissions...</p>;
   }
 
   if (error) {
     return (
-      <div className="mx-auto flex w-full max-w-(--breakpoint-2xl) flex-col items-center gap-4 px-8 py-12">
+      <div className={`${pageShellClasses} items-center`}>
         <h1 className="font-display text-3xl font-bold tracking-[-0.028em] text-neutral-900">
           Can&apos;t load submissions
         </h1>
@@ -578,7 +593,7 @@ export function FormSubmissionsPage({ user }: { user: AuthUser }) {
   const count = submissions?.length ?? 0;
 
   return (
-    <div className="mx-auto flex w-full max-w-(--breakpoint-2xl) flex-col gap-6 px-8 py-8">
+    <div className={pageShellClasses}>
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex flex-col gap-1.5">
           <span className="font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-neutral-400">
@@ -595,8 +610,8 @@ export function FormSubmissionsPage({ user }: { user: AuthUser }) {
             .
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <ButtonLink to="/forms/:id" params={{ id }} size="sm">
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+          <ButtonLink to="/forms/:id" params={{ id }} size="sm" className="flex-1 sm:flex-none">
             <PlusIcon className="size-3.5" />
             New Record
           </ButtonLink>
@@ -706,13 +721,37 @@ export function FormSubmissionsPage({ user }: { user: AuthUser }) {
 
         {!headerMode && filterableFields.length > 0 && (
           <div className="px-6 pt-4">
-            <TopFilterGrid
-              filterableFields={filterableFields}
-              filters={filters}
-              distinctValues={distinctValues}
-              columns={filterColumns}
-              onFilterChange={updateFilter}
-            />
+            <button
+              type="button"
+              onClick={() => setFiltersExpanded((open) => !open)}
+              aria-expanded={filtersExpanded}
+              className="flex w-full items-center justify-between gap-3 rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-left text-sm font-medium text-neutral-700 transition-colors hover:bg-neutral-100"
+            >
+              <span className="flex items-center gap-2">
+                Filters
+                {activeFilterCount > 0 && (
+                  <span className="rounded-full bg-primary-50 px-2 py-0.5 text-[10.5px] font-semibold text-primary-700">
+                    {activeFilterCount} active
+                  </span>
+                )}
+              </span>
+              {filtersExpanded ? (
+                <ChevronUpIcon className="size-4 shrink-0 text-neutral-500" />
+              ) : (
+                <ChevronDownIcon className="size-4 shrink-0 text-neutral-500" />
+              )}
+            </button>
+            {filtersExpanded && (
+              <div className="mt-2">
+                <TopFilterGrid
+                  filterableFields={filterableFields}
+                  filters={filters}
+                  distinctValues={distinctValues}
+                  columns={filterColumns}
+                  onFilterChange={updateFilter}
+                />
+              </div>
+            )}
           </div>
         )}
 
@@ -723,7 +762,7 @@ export function FormSubmissionsPage({ user }: { user: AuthUser }) {
           </p>
         ) : (
           <>
-            <div className="px-6 pt-5">
+            <div className="px-4 pt-5 sm:px-6">
               <DataToolbar
                 searchValue={search}
                 onSearchChange={setSearch}
@@ -735,6 +774,7 @@ export function FormSubmissionsPage({ user }: { user: AuthUser }) {
                 }
               />
             </div>
+            {isMdUp ? (
             <div className="overflow-x-auto px-2 pb-2">
               <table className="w-full border-collapse">
                 <thead>
@@ -783,6 +823,78 @@ export function FormSubmissionsPage({ user }: { user: AuthUser }) {
                 </tbody>
               </table>
             </div>
+            ) : (
+              <div className="flex flex-col gap-3 px-4 pb-4 sm:px-6">
+                {filteredSubmissions.length === 0 ? (
+                  <p className="p-4 text-center text-[13px] text-neutral-500">
+                    No responses match your search.
+                  </p>
+                ) : (
+                  filteredSubmissions.map((submission) => {
+                    const data = (submission.data ?? {}) as Record<
+                      string,
+                      unknown
+                    >;
+                    const previewFields = fields
+                      .filter((field) => field.type !== "hidden")
+                      .slice(0, 4);
+                    return (
+                      <div
+                        key={submission.id}
+                        className="flex flex-col gap-3 rounded-xl border border-neutral-200 bg-white p-4"
+                      >
+                        <div className="flex items-start gap-3">
+                          <input
+                            type="checkbox"
+                            aria-label="Select row"
+                            checked={selected.has(submission.id)}
+                            onChange={() => toggleSelected(submission.id)}
+                            className="mt-1 size-4 shrink-0 rounded border-neutral-300 accent-primary-600"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs text-neutral-500">
+                              Submitted{" "}
+                              {new Date(submission.createdAt).toLocaleString()}
+                            </p>
+                            <dl className="mt-2 flex flex-col gap-1.5">
+                              {previewFields.map((field) => (
+                                <div key={field.key} className="min-w-0">
+                                  <dt className="font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-neutral-400">
+                                    {field.label}
+                                  </dt>
+                                  <dd className="truncate text-sm text-neutral-800">
+                                    {formatCellValue(
+                                      field.key,
+                                      data[field.key],
+                                      field,
+                                    )}
+                                  </dd>
+                                </div>
+                              ))}
+                            </dl>
+                          </div>
+                        </div>
+                        <RowActions
+                          formId={id}
+                          submissionId={submission.id}
+                          canEdit={Boolean(
+                            (submission as SubmissionRow).permissions?.edit ??
+                              canEdit,
+                          )}
+                          canDelete={Boolean(
+                            (submission as SubmissionRow).permissions?.delete ??
+                              canEdit,
+                          )}
+                          showLabels={showActionLabels}
+                          actions={rowActions}
+                          onDelete={() => setDeleteTarget(submission)}
+                        />
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            )}
             <DataFoot
               left={`Showing ${filteredSubmissions.length} of ${count}`}
             />
