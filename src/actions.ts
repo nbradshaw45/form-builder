@@ -44,6 +44,16 @@ import {
   resolveFieldRestrictions,
 } from "./server/access";
 import { mergeSubmissionDataWithFieldRestrictions } from "./shared/formRoles";
+import {
+  actorFromEmail,
+  actorFromUser,
+  AUDIT_ACTIONS,
+  AUDIT_ENTITY_TYPES,
+  diffFormDefinition,
+  diffSubmissionData,
+  formDiffHasChanges,
+  recordAuditEvent,
+} from "./server/audit";
 import { sendWebhook } from "./server/notifications";
 import {
   applyBeforeSubmitActions,
@@ -143,7 +153,7 @@ export const createForm: CreateForm<CreateFormArgs, Form> = async (
     roles: normalizeFormRoles(settings?.roles ?? defaultFormRoles()),
   };
 
-  return context.entities.Form.create({
+  const form = await context.entities.Form.create({
     data: {
       title: title.trim(),
       description: description?.trim() || null,
@@ -156,6 +166,18 @@ export const createForm: CreateForm<CreateFormArgs, Form> = async (
       },
     },
   });
+
+  void recordAuditEvent({
+    formId: form.id,
+    formTitle: form.title,
+    actor: actorFromUser(context.user),
+    action: AUDIT_ACTIONS.FORM_CREATED,
+    entityType: AUDIT_ENTITY_TYPES.FORM,
+    entityId: form.id,
+    summary: `Created form “${form.title}”`,
+  });
+
+  return form;
 };
 
 type UpdateFormArgs = {
@@ -185,6 +207,14 @@ export const updateForm: UpdateForm<UpdateFormArgs, Form> = async (
   const access = await getFormAccessForUser(formId, context.user);
   assertIsOwnerOrAdmin(access);
 
+  const existing = await context.entities.Form.findUnique({
+    where: { id: formId },
+    select: { title: true, fields: true, settings: true },
+  });
+  if (!existing) {
+    throw new HttpError(404, "Form not found");
+  }
+
   const mergedSettings = settings
     ? {
         ...DEFAULT_FORM_SETTINGS,
@@ -193,7 +223,7 @@ export const updateForm: UpdateForm<UpdateFormArgs, Form> = async (
       }
     : undefined;
 
-  return context.entities.Form.update({
+  const updated = await context.entities.Form.update({
     where: { id: formId },
     data: {
       title: title.trim(),
@@ -202,6 +232,41 @@ export const updateForm: UpdateForm<UpdateFormArgs, Form> = async (
       settings: mergedSettings ? serialize(mergedSettings) : undefined,
     },
   });
+
+  const prevFields = Array.isArray(existing.fields)
+    ? (existing.fields as unknown as FormField[])
+    : [];
+  const prevSettings =
+    (existing.settings as unknown as FormSettings | null) ?? null;
+  const nextSettings =
+    mergedSettings ??
+    ((updated.settings as unknown as FormSettings | null) ?? null);
+  const diff = diffFormDefinition(
+    {
+      title: existing.title,
+      fields: prevFields,
+      settings: prevSettings,
+    },
+    {
+      title: updated.title,
+      fields,
+      settings: nextSettings,
+    },
+  );
+  if (formDiffHasChanges(diff)) {
+    void recordAuditEvent({
+      formId: updated.id,
+      formTitle: updated.title,
+      actor: actorFromUser(context.user),
+      action: AUDIT_ACTIONS.FORM_UPDATED,
+      entityType: AUDIT_ENTITY_TYPES.FORM,
+      entityId: updated.id,
+      summary: `Updated form “${updated.title}”`,
+      changes: diff,
+    });
+  }
+
+  return updated;
 };
 
 type DeleteFormArgs = {
@@ -219,8 +284,26 @@ export const deleteForm: DeleteForm<DeleteFormArgs, void> = async (
   const access = await getFormAccessForUser(formId, context.user);
   assertIsOwnerOrAdmin(access);
 
+  const existing = await context.entities.Form.findUnique({
+    where: { id: formId },
+    select: { id: true, title: true },
+  });
+  if (!existing) {
+    throw new HttpError(404, "Form not found");
+  }
+
   await context.entities.Form.delete({
     where: { id: formId },
+  });
+
+  void recordAuditEvent({
+    formId: null,
+    formTitle: existing.title,
+    actor: actorFromUser(context.user),
+    action: AUDIT_ACTIONS.FORM_DELETED,
+    entityType: AUDIT_ENTITY_TYPES.FORM,
+    entityId: existing.id,
+    summary: `Deleted form “${existing.title}”`,
   });
 };
 
@@ -247,7 +330,7 @@ export const saveFormAsTemplate: SaveFormAsTemplate<
     throw new HttpError(404, "Form not found");
   }
 
-  return context.entities.Form.create({
+  const template = await context.entities.Form.create({
     data: {
       title: form.title,
       fields: serialize(form.fields),
@@ -260,6 +343,19 @@ export const saveFormAsTemplate: SaveFormAsTemplate<
       },
     },
   });
+
+  void recordAuditEvent({
+    formId: formId,
+    formTitle: form.title,
+    actor: actorFromUser(context.user),
+    action: AUDIT_ACTIONS.FORM_TEMPLATE_SAVED,
+    entityType: AUDIT_ENTITY_TYPES.FORM,
+    entityId: template.id,
+    summary: `Saved “${form.title}” as a template`,
+    changes: { templateId: template.id },
+  });
+
+  return template;
 };
 
 type DuplicateFormArgs = {
@@ -285,7 +381,7 @@ export const duplicateForm: DuplicateForm<DuplicateFormArgs, Form> = async (
     throw new HttpError(404, "Form not found");
   }
 
-  return context.entities.Form.create({
+  const copy = await context.entities.Form.create({
     data: {
       title: `${form.title} (copy)`,
       description: form.description,
@@ -298,6 +394,19 @@ export const duplicateForm: DuplicateForm<DuplicateFormArgs, Form> = async (
       },
     },
   });
+
+  void recordAuditEvent({
+    formId: copy.id,
+    formTitle: copy.title,
+    actor: actorFromUser(context.user),
+    action: AUDIT_ACTIONS.FORM_CREATED,
+    entityType: AUDIT_ENTITY_TYPES.FORM,
+    entityId: copy.id,
+    summary: `Duplicated form “${form.title}” → “${copy.title}”`,
+    changes: { sourceFormId: formId },
+  });
+
+  return copy;
 };
 
 type CreateFormFromTemplateArgs = {
@@ -326,7 +435,7 @@ export const createFormFromTemplate: CreateFormFromTemplate<
 
   const finalTitle = title?.trim() || template.title;
 
-  return context.entities.Form.create({
+  const created = await context.entities.Form.create({
     data: {
       title: finalTitle,
       fields: serialize(template.fields),
@@ -338,6 +447,19 @@ export const createFormFromTemplate: CreateFormFromTemplate<
       },
     },
   });
+
+  void recordAuditEvent({
+    formId: created.id,
+    formTitle: created.title,
+    actor: actorFromUser(context.user),
+    action: AUDIT_ACTIONS.FORM_CREATED,
+    entityType: AUDIT_ENTITY_TYPES.FORM,
+    entityId: created.id,
+    summary: `Created form “${created.title}” from template`,
+    changes: { templateId },
+  });
+
+  return created;
 };
 
 type ImportFormArgs = {
@@ -361,13 +483,16 @@ export const importForm: ImportForm<ImportFormArgs, Form> = async (
     throw new HttpError(400, "fields must be an array of field definitions");
   }
 
-  return context.entities.Form.create({
+  const created = await context.entities.Form.create({
     data: {
       title: title?.trim() || "Untitled (imported)",
       fields: serialize(fields),
       settings:
         settings && typeof settings === "object"
-          ? serialize(settings)
+          ? serialize({
+              ...settings,
+              roles: normalizeFormRoles(settings.roles),
+            })
           : undefined,
       user: {
         connect: {
@@ -376,6 +501,18 @@ export const importForm: ImportForm<ImportFormArgs, Form> = async (
       },
     },
   });
+
+  void recordAuditEvent({
+    formId: created.id,
+    formTitle: created.title,
+    actor: actorFromUser(context.user),
+    action: AUDIT_ACTIONS.FORM_CREATED,
+    entityType: AUDIT_ENTITY_TYPES.FORM,
+    entityId: created.id,
+    summary: `Imported form “${created.title}”`,
+  });
+
+  return created;
 };
 
 type SubmitFormArgs = {
@@ -547,6 +684,18 @@ export const submitForm: SubmitForm<SubmitFormArgs, Submission> = async (
   void sendWebhook(form, submission, "submission.created");
   void runAfterSubmitActions(form, submission, submitterEmail);
 
+  void recordAuditEvent({
+    formId: form.id,
+    formTitle: form.title,
+    actor: actorUser
+      ? actorFromUser(actorUser)
+      : actorFromEmail(submitterEmail),
+    action: AUDIT_ACTIONS.SUBMISSION_CREATED,
+    entityType: AUDIT_ENTITY_TYPES.SUBMISSION,
+    entityId: submission.id,
+    summary: `New submission on “${form.title}”`,
+  });
+
   return submission;
 };
 
@@ -590,21 +739,25 @@ export const updateSubmission: UpdateSubmission<
   const fieldRestrictions = resolveFieldRestrictions(access);
   const systemValues = buildSystemValues(
     submission.form.fields,
-    undefined,
+    context.user as UserContext,
     previousData,
   );
+  const fields = Array.isArray(submission.form.fields)
+    ? (submission.form.fields as unknown as FormField[])
+    : [];
+  const mergedData = {
+    ...mergeSubmissionDataWithFieldRestrictions(
+      previousData,
+      data,
+      fieldRestrictions,
+    ),
+    ...systemValues,
+  };
 
   const updated = await context.entities.Submission.update({
     where: { id: submissionId },
     data: {
-      data: serialize({
-        ...mergeSubmissionDataWithFieldRestrictions(
-          previousData,
-          data,
-          fieldRestrictions,
-        ),
-        ...systemValues,
-      }),
+      data: serialize(mergedData),
     },
   });
 
@@ -613,6 +766,21 @@ export const updateSubmission: UpdateSubmission<
     updated,
     "submission.updated",
   );
+
+  const fieldChanges = diffSubmissionData(previousData, mergedData, fields);
+  void recordAuditEvent({
+    formId: submission.form.id,
+    formTitle: submission.form.title,
+    actor: actorFromUser(context.user),
+    action: AUDIT_ACTIONS.SUBMISSION_UPDATED,
+    entityType: AUDIT_ENTITY_TYPES.SUBMISSION,
+    entityId: submissionId,
+    summary:
+      fieldChanges.length > 0
+        ? `Updated submission (${fieldChanges.length} field${fieldChanges.length === 1 ? "" : "s"})`
+        : "Updated submission",
+    changes: { fields: fieldChanges },
+  });
 
   return updated;
 };
@@ -656,19 +824,38 @@ export const updateSubmissionByToken: UpdateSubmissionByToken<
     undefined,
     previousData,
   );
+  const fields = Array.isArray(submission.form.fields)
+    ? (submission.form.fields as unknown as FormField[])
+    : [];
+  const mergedData = {
+    ...previousData,
+    ...data,
+    ...systemValues,
+  };
 
   const updated = await context.entities.Submission.update({
     where: { id: submissionId },
     data: {
-      data: serialize({
-        ...previousData,
-        ...data,
-        ...systemValues,
-      }),
+      data: serialize(mergedData),
     },
   });
 
   void sendWebhook(submission.form, updated, "submission.updated");
+
+  const fieldChanges = diffSubmissionData(previousData, mergedData, fields);
+  void recordAuditEvent({
+    formId: submission.form.id,
+    formTitle: submission.form.title,
+    actor: actorFromEmail(undefined),
+    action: AUDIT_ACTIONS.SUBMISSION_UPDATED,
+    entityType: AUDIT_ENTITY_TYPES.SUBMISSION,
+    entityId: submissionId,
+    summary:
+      fieldChanges.length > 0
+        ? `Updated submission via edit link (${fieldChanges.length} field${fieldChanges.length === 1 ? "" : "s"})`
+        : "Updated submission via edit link",
+    changes: { fields: fieldChanges, viaToken: true },
+  });
 
   return updated;
 };
@@ -687,7 +874,10 @@ export const deleteSubmission: DeleteSubmission<
 
   const submission = await context.entities.Submission.findUnique({
     where: { id: submissionId },
-    select: { form: { select: { id: true } }, data: true },
+    select: {
+      form: { select: { id: true, title: true } },
+      data: true,
+    },
   });
   if (!submission) {
     throw new HttpError(404, "Submission not found");
@@ -705,6 +895,16 @@ export const deleteSubmission: DeleteSubmission<
 
   await context.entities.Submission.delete({
     where: { id: submissionId },
+  });
+
+  void recordAuditEvent({
+    formId: submission.form.id,
+    formTitle: submission.form.title,
+    actor: actorFromUser(context.user),
+    action: AUDIT_ACTIONS.SUBMISSION_DELETED,
+    entityType: AUDIT_ENTITY_TYPES.SUBMISSION,
+    entityId: submissionId,
+    summary: `Deleted submission on “${submission.form.title}”`,
   });
 };
 
@@ -725,7 +925,11 @@ export const deleteSubmissions: DeleteSubmissions<
 
   const submissions = await context.entities.Submission.findMany({
     where: { id: { in: submissionIds } },
-    select: { id: true, form: { select: { id: true } }, data: true },
+    select: {
+      id: true,
+      form: { select: { id: true, title: true } },
+      data: true,
+    },
   });
   for (const submission of submissions) {
     const access = await getFormAccessForUser(
@@ -742,6 +946,19 @@ export const deleteSubmissions: DeleteSubmissions<
   await context.entities.Submission.deleteMany({
     where: { id: { in: submissionIds } },
   });
+
+  for (const submission of submissions) {
+    void recordAuditEvent({
+      formId: submission.form.id,
+      formTitle: submission.form.title,
+      actor: actorFromUser(context.user),
+      action: AUDIT_ACTIONS.SUBMISSION_DELETED,
+      entityType: AUDIT_ENTITY_TYPES.SUBMISSION,
+      entityId: submission.id,
+      summary: `Deleted submission on “${submission.form.title}”`,
+      changes: { bulk: true },
+    });
+  }
 };
 
 type UpdateUserArgs = {
@@ -976,7 +1193,7 @@ export const setFormAccess: SetFormAccess<
 
   const form = await context.entities.Form.findUnique({
     where: { id: formId },
-    select: { userId: true, settings: true },
+    select: { userId: true, settings: true, title: true },
   });
   if (!form) {
     throw new HttpError(404, "Form not found");
@@ -1006,6 +1223,12 @@ export const setFormAccess: SetFormAccess<
     throw new HttpError(400, "That user already owns this form");
   }
 
+  const existing = await context.entities.FormAccess.findUnique({
+    where: {
+      formId_userId: { formId, userId: targetUser.id },
+    },
+  });
+
   const entry = await context.entities.FormAccess.upsert({
     where: {
       formId_userId: { formId, userId: targetUser.id },
@@ -1017,6 +1240,26 @@ export const setFormAccess: SetFormAccess<
     },
     update: { roleId: role.id },
     include: { user: { select: { id: true, name: true, role: true } } },
+  });
+
+  void recordAuditEvent({
+    formId,
+    formTitle: form.title,
+    actor: actorFromUser(context.user),
+    action: existing
+      ? AUDIT_ACTIONS.ACCESS_UPDATED
+      : AUDIT_ACTIONS.ACCESS_GRANTED,
+    entityType: AUDIT_ENTITY_TYPES.FORM_ACCESS,
+    entityId: entry.id,
+    summary: existing
+      ? `Updated access for ${email.trim().toLowerCase()} → ${role.label}`
+      : `Granted ${role.label} to ${email.trim().toLowerCase()}`,
+    changes: {
+      userId: targetUser.id,
+      email: email.trim().toLowerCase(),
+      roleId: role.id,
+      previousRoleId: existing?.roleId ?? null,
+    },
   });
 
   return {
@@ -1042,7 +1285,28 @@ export const removeFormAccess: RemoveFormAccess<
   const access = await getFormAccessForUser(formId, context.user);
   assertIsOwnerOrAdmin(access);
 
+  const form = await context.entities.Form.findUnique({
+    where: { id: formId },
+    select: { title: true },
+  });
+  const existing = await context.entities.FormAccess.findUnique({
+    where: { formId_userId: { formId, userId } },
+  });
+
   await context.entities.FormAccess.deleteMany({
     where: { formId, userId },
   });
+
+  if (existing) {
+    void recordAuditEvent({
+      formId,
+      formTitle: form?.title ?? null,
+      actor: actorFromUser(context.user),
+      action: AUDIT_ACTIONS.ACCESS_REVOKED,
+      entityType: AUDIT_ENTITY_TYPES.FORM_ACCESS,
+      entityId: existing.id,
+      summary: `Revoked access for user ${userId}`,
+      changes: { userId, previousRoleId: existing.roleId },
+    });
+  }
 };

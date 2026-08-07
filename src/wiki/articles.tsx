@@ -2033,12 +2033,64 @@ form.setValue("team_summary", names.join(", "));`}
           Hidden fields are also treated as non-editable. Owners and global
           admins bypass field restrictions as well as capability conditions.
         </Note>
+        <H3 id="audit">Audit log access</H3>
+        <P>
+          Each role includes <strong>Can view audit log</strong> (on by
+          default). Anyone with form access who has this capability can open
+          the form&apos;s audit page and the global Audit menu. Owners and
+          admins always can.
+        </P>
         <Tip>
           Record ACL is separate from{" "}
           <ArtLink to="conditions">Conditional logic</ArtLink> (show/hide
           fields while filling). They share the same condition primitives but
           answer different questions.
         </Tip>
+      </>
+    ),
+  },
+
+  {
+    id: "audit",
+    title: "Audit log",
+    category: "admin",
+    summary:
+      "Track form saves, submission field edits, sharing changes, and form actions — with filters and per-role access.",
+    content: (
+      <>
+        <P>
+          The audit log records mutating activity on forms. Open the global{" "}
+          <strong>Audit</strong> menu or a form&apos;s{" "}
+          <strong>Audit</strong> link on the submissions page (
+          <Code>/forms/:id/audit</Code>).
+        </P>
+        <H3 id="what">What is logged</H3>
+        <Ul>
+          <Li>Form create, update, delete, duplicate, import, template save</Li>
+          <Li>
+            Submission create, update (with per-field before/after values),
+            delete
+          </Li>
+          <Li>Sharing grant / update / revoke</Li>
+          <Li>Form actions that actually run (email, API, set field, …)</Li>
+        </Ul>
+        <P>
+          Page views, CSV/PDF downloads, and submissions-table filter changes
+          are <em>not</em> logged.
+        </P>
+        <H3 id="filters">Filters</H3>
+        <P>
+          Use the dropdowns for event type, actor, and date range (plus form on
+          the global page). Expand a row for field-level diffs or other
+          details. Hidden fields for your role are redacted from diffs.
+        </P>
+        <H3 id="access">Who can see it</H3>
+        <P>
+          Controlled by the role capability{" "}
+          <ArtLink to="record-roles">Can view audit log</ArtLink>, which
+          defaults to on for Viewer, Editor, and Manager. Owners and admins
+          always have access.
+        </P>
       </>
     ),
   },

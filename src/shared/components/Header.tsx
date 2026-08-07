@@ -29,6 +29,11 @@ export function Header() {
                   </ButtonLink>
                 </li>
                 <li>
+                  <ButtonLink to="/audit" variant="ghost" size="sm">
+                    Audit
+                  </ButtonLink>
+                </li>
+                <li>
                   <ButtonLink to="/docs" variant="ghost" size="sm">
                     Wiki
                   </ButtonLink>

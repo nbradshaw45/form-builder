@@ -20,9 +20,39 @@ import {
   sendEmail,
   type EmailAttachment,
 } from "./notifications";
+import {
+  AUDIT_ACTIONS,
+  AUDIT_ENTITY_TYPES,
+  actorFromEmail,
+  recordAuditEvent,
+} from "./audit";
 import { buildSubmissionPdf, collectFileUploadIds } from "./pdf";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function auditActionRan(
+  form: Pick<Form, "id" | "title">,
+  submissionId: string | null,
+  action: FormAction,
+  detail?: Record<string, unknown>,
+) {
+  void recordAuditEvent({
+    formId: form.id,
+    formTitle: form.title,
+    actor: actorFromEmail(undefined),
+    action: AUDIT_ACTIONS.ACTION_RAN,
+    entityType: AUDIT_ENTITY_TYPES.FORM_ACTION,
+    entityId: action.id,
+    summary: `Ran ${action.type} action (${action.trigger})`,
+    changes: {
+      actionId: action.id,
+      actionType: action.type,
+      trigger: action.trigger,
+      submissionId,
+      ...detail,
+    },
+  });
+}
 
 function getSettings(form: Pick<Form, "settings">): FormSettings {
   return {
@@ -148,7 +178,7 @@ function collectEmailRecipients(
 }
 
 export async function applyBeforeSubmitActions(
-  form: Pick<Form, "settings" | "fields">,
+  form: Pick<Form, "id" | "title" | "settings" | "fields">,
   data: SubmissionData,
 ): Promise<SubmissionData> {
   const settings = getSettings(form);
@@ -164,12 +194,16 @@ export async function applyBeforeSubmitActions(
     }
     if (action.type === "set_field") {
       result[action.field] = resolveValue(action, result, fields);
+      auditActionRan(form, null, action, { field: action.field });
     } else if (action.type === "http_call") {
       const value = await callHttp(action, { data: result });
       if (action.responseField && value !== undefined) {
         result[action.responseField] =
           typeof value === "string" ? value : String(value);
       }
+      auditActionRan(form, null, action, {
+        responseField: action.responseField ?? null,
+      });
     }
   }
 
@@ -204,6 +238,7 @@ export async function runAfterSubmitActions(
           data: submission.data,
         },
       });
+      auditActionRan(form, submission.id, action);
     } else if (action.type === "update_submission") {
       const value = resolveValue(action, sourceData, fields);
       await prisma.submission.update({
@@ -214,6 +249,7 @@ export async function runAfterSubmitActions(
           ),
         },
       });
+      auditActionRan(form, submission.id, action, { field: action.field });
     } else if (action.type === "create_submission") {
       const target = await prisma.form.findUnique({
         where: { id: action.formId },
@@ -233,6 +269,9 @@ export async function runAfterSubmitActions(
           formId: target.id,
           data: JSON.parse(JSON.stringify(mapped)),
         },
+      });
+      auditActionRan(form, submission.id, action, {
+        targetFormId: target.id,
       });
     } else if (action.type === "email") {
       const recipients = collectEmailRecipients(action, sourceData, submitterEmail);
@@ -325,6 +364,9 @@ export async function runAfterSubmitActions(
           replyTo,
         });
       }
+      auditActionRan(form, submission.id, action, {
+        recipientCount: recipients.length,
+      });
     }
   }
 }

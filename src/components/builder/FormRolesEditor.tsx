@@ -24,6 +24,7 @@ const CAPABILITIES: { key: RecordCapability; label: string }[] = [
   { key: "view", label: "View" },
   { key: "edit", label: "Edit" },
   { key: "delete", label: "Delete" },
+  { key: "viewAudit", label: "View audit log" },
 ];
 
 const NON_RESTRICTABLE = new Set([
@@ -196,6 +197,7 @@ export function FormRolesEditor({
         view: { allowed: true },
         edit: { allowed: false },
         delete: { allowed: false },
+        viewAudit: { allowed: true },
         cannotViewFields: [],
         cannotEditFields: [],
       },
@@ -307,8 +309,11 @@ export function FormRolesEditor({
                     }
                     className="size-3.5 rounded border-neutral-300 text-primary-500 focus:ring-primary-500"
                   />
-                  Can {label.toLowerCase()} submissions
-                </label>
+                    Can{" "}
+                    {key === "viewAudit"
+                      ? "view audit log"
+                      : `${label.toLowerCase()} submissions`}
+                  </label>
                 {allowed && (
                   <>
                     <label className="flex items-center gap-2 text-[11px] font-medium text-neutral-600">

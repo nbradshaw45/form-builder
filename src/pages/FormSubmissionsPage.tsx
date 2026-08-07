@@ -106,6 +106,7 @@ export function FormSubmissionsPage({ user }: { user: AuthUser }) {
 
   const canEdit = access === "owner" || access === "admin" || access === "edit";
   const canManage = access === "owner" || access === "admin";
+  const canViewAudit = submissionsData?.canViewAudit === true;
   const canBulkDelete = useMemo(
     () =>
       [...selected].some((sid) => {
@@ -586,6 +587,11 @@ export function FormSubmissionsPage({ user }: { user: AuthUser }) {
           >
             {exporting ? "Exporting..." : "Export Excel"}
           </Button>
+          {canViewAudit && (
+            <ButtonLink to="/forms/:id/audit" params={{ id }} variant="ghost">
+              Audit
+            </ButtonLink>
+          )}
           {canManage && (
             <ButtonLink to="/forms/:id/access" params={{ id }} variant="ghost">
               <ShareIcon className="size-3.5" />

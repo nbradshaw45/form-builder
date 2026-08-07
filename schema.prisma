@@ -35,8 +35,30 @@ model Form {
   submissions  Submission[]
   formAccesses FormAccess[]
   uploadedFiles UploadedFile[]
+  auditEvents  AuditEvent[]
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
+}
+
+model AuditEvent {
+  id          String   @id @default(uuid())
+  formId      String?
+  formTitle   String?
+  form        Form?    @relation(fields: [formId], references: [id], onDelete: SetNull)
+  actorUserId String?
+  actorEmail  String?
+  actorName   String?
+  action      String
+  entityType  String
+  entityId    String?
+  summary     String
+  changes     Json?
+  createdAt   DateTime @default(now())
+
+  @@index([formId, createdAt])
+  @@index([createdAt])
+  @@index([action])
+  @@index([actorUserId])
 }
 
 model UploadedFile {

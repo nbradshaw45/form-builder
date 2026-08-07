@@ -101,13 +101,15 @@ export type FormRoleDef = {
   view: CapabilityGrant;
   edit: CapabilityGrant;
   delete: CapabilityGrant;
+  /** Can open the form's audit log (default on for all roles). */
+  viewAudit: CapabilityGrant;
   /** Field keys this role cannot see (redacted from submissions). */
   cannotViewFields?: string[];
   /** Field keys this role cannot change (shown read-only; preserved on save). */
   cannotEditFields?: string[];
 };
 
-export type RecordCapability = "view" | "edit" | "delete";
+export type RecordCapability = "view" | "edit" | "delete" | "viewAudit";
 
 export type RecordPermissions = {
   view: boolean;

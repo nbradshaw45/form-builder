@@ -24,7 +24,7 @@ import {
 
 export type UserLike = {
   id: string;
-  role: string;
+  role?: string;
   name?: string | null;
   identities?: { username?: { id?: string } | null } | null;
 };
@@ -175,6 +175,27 @@ export function resolveFieldRestrictions(
     return { ...NO_FIELD_RESTRICTIONS };
   }
   return fieldRestrictionsFromRole(access.role);
+}
+
+/** Audit page access: owner/admin always; shared uses viewAudit with user pseudo-fields only. */
+export function canViewAudit(
+  access: FormAccessKind,
+  user: UserLike | undefined,
+): boolean {
+  if (access.kind === "owner" || access.kind === "admin") {
+    return true;
+  }
+  const values = buildPermissionValues({}, user);
+  return grantAllows(access.role.viewAudit, values);
+}
+
+export function assertCanViewAudit(
+  access: FormAccessKind,
+  user: UserLike | undefined,
+) {
+  if (!canViewAudit(access, user)) {
+    throw new HttpError(403, "You cannot view the audit log for this form");
+  }
 }
 
 export function assertCanViewSubmission(

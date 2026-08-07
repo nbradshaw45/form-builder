@@ -4,11 +4,33 @@ import ExcelJS from "exceljs";
 import type { Form, Submission } from "wasp/entities";
 import type { FormField, FormSettings, SubmissionData } from "./types";
 import { HttpError, prisma } from "wasp/server";
+import {
+  assertCanView,
+  assertCanViewAudit,
+  assertCanViewSubmission,
+  assertIsAdmin,
+  assertIsOwnerOrAdmin,
+  accessKindForClient,
+  canViewAudit,
+  getFormAccessForUser,
+  getRolesFromSettings,
+  resolveFieldRestrictions,
+  resolveRecordPermissions,
+} from "./server/access";
+import { buildSubmissionPdf, collectFileUploadIds } from "./server/pdf";
+import type { FieldRestrictions, RecordPermissions } from "./types";
+import { BUILTIN_ROLE_VIEWER } from "./shared/formRoles";
+import { redactSubmissionData } from "./shared/formRoles";
+import { redactSubmissionFieldChanges } from "./server/audit";
+import type { SubmissionFieldChange } from "./shared/audit";
+import { AUDIT_ACTIONS, AUDIT_ACTION_LABELS } from "./shared/audit";
 import type {
   ExportForm,
+  GetAuditEvents,
   GetFile,
   GetForm,
   GetFormAccess,
+  GetFormAuditEvents,
   GetFormSubmissions,
   GetForms,
   GetFormTemplates,
@@ -20,21 +42,6 @@ import type {
   GetSubmissionsExcel,
   GetUsers,
 } from "wasp/server/operations";
-import {
-  assertCanView,
-  assertCanViewSubmission,
-  assertIsAdmin,
-  assertIsOwnerOrAdmin,
-  accessKindForClient,
-  getFormAccessForUser,
-  getRolesFromSettings,
-  resolveFieldRestrictions,
-  resolveRecordPermissions,
-} from "./server/access";
-import { buildSubmissionPdf, collectFileUploadIds } from "./server/pdf";
-import type { FieldRestrictions, RecordPermissions } from "./types";
-import { BUILTIN_ROLE_VIEWER } from "./shared/formRoles";
-import { redactSubmissionData } from "./shared/formRoles";
 
 export type FormWithSubmissionsCount = Form & {
   _count: { submissions: number };
@@ -82,6 +89,7 @@ export type SubmissionsResult = {
   access: "owner" | "admin" | "edit" | "view";
   roleId: string | null;
   fieldRestrictions: FieldRestrictions;
+  canViewAudit: boolean;
   submissions: SubmissionWithPermissions[];
 };
 
@@ -279,6 +287,7 @@ export const getFormSubmissions: GetFormSubmissions<
     access: accessKindForClient(access),
     roleId: access.kind === "shared" ? access.roleId : null,
     fieldRestrictions,
+    canViewAudit: canViewAudit(access, context.user),
     submissions: withPermissions,
   };
 };
@@ -764,5 +773,347 @@ export const getFormAccess: GetFormAccess<
         user: entry.user,
       };
     }),
+  };
+};
+
+export type AuditEventRow = {
+  id: string;
+  formId: string | null;
+  formTitle: string | null;
+  actorUserId: string | null;
+  actorEmail: string | null;
+  actorName: string | null;
+  action: string;
+  actionLabel: string;
+  entityType: string;
+  entityId: string | null;
+  summary: string;
+  changes: object | null;
+  createdAt: Date;
+};
+
+export type AuditEventsResult = {
+  events: AuditEventRow[];
+  total: number;
+  forms: { id: string; title: string }[];
+  actors: { value: string; label: string }[];
+  actions: { value: string; label: string }[];
+};
+
+export type AuditEventFilters = {
+  formId?: string;
+  action?: string;
+  actor?: string;
+  entityType?: string;
+  from?: string;
+  to?: string;
+  skip?: number;
+  take?: number;
+};
+
+function parseAuditDate(value: string | undefined, endOfDay: boolean): Date | null {
+  if (!value?.trim()) {
+    return null;
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+  if (endOfDay && /^\d{4}-\d{2}-\d{2}$/.test(value.trim())) {
+    date.setHours(23, 59, 59, 999);
+  }
+  return date;
+}
+
+async function formIdsWithAuditAccess(
+  user: {
+    id: string;
+    role: string;
+    name?: string | null;
+    identities?: { username?: { id?: string } | null } | null;
+  },
+): Promise<string[]> {
+  if (user.role === "ADMIN") {
+    const forms = await prisma.form.findMany({
+      where: { isTemplate: false },
+      select: { id: true },
+    });
+    return forms.map((form) => form.id);
+  }
+
+  const owned = await prisma.form.findMany({
+    where: { userId: user.id, isTemplate: false },
+    select: { id: true },
+  });
+  const shared = await prisma.formAccess.findMany({
+    where: { userId: user.id, form: { isTemplate: false } },
+    include: { form: { select: { id: true, settings: true, userId: true } } },
+  });
+
+  const ids = new Set(owned.map((form) => form.id));
+  for (const entry of shared) {
+    if (entry.form.userId === user.id) {
+      continue;
+    }
+    try {
+      const access = await getFormAccessForUser(entry.form.id, user);
+      if (canViewAudit(access, user)) {
+        ids.add(entry.form.id);
+      }
+    } catch {
+      // skip
+    }
+  }
+  return [...ids];
+}
+
+function redactEventChanges(
+  action: string,
+  changes: unknown,
+  cannotView: string[],
+): Record<string, unknown> | null {
+  if (!changes || typeof changes !== "object" || Array.isArray(changes)) {
+    return null;
+  }
+  const record = { ...(changes as Record<string, unknown>) };
+  if (
+    (action === AUDIT_ACTIONS.SUBMISSION_UPDATED ||
+      action === AUDIT_ACTIONS.SUBMISSION_CREATED) &&
+    Array.isArray(record.fields)
+  ) {
+    record.fields = redactSubmissionFieldChanges(
+      record.fields as SubmissionFieldChange[],
+      cannotView,
+    );
+  }
+  return record;
+}
+
+function mapAuditRow(
+  event: {
+    id: string;
+    formId: string | null;
+    formTitle: string | null;
+    actorUserId: string | null;
+    actorEmail: string | null;
+    actorName: string | null;
+    action: string;
+    entityType: string;
+    entityId: string | null;
+    summary: string;
+    changes: unknown;
+    createdAt: Date;
+  },
+  cannotView: string[],
+): AuditEventRow {
+  return {
+    id: event.id,
+    formId: event.formId,
+    formTitle: event.formTitle,
+    actorUserId: event.actorUserId,
+    actorEmail: event.actorEmail,
+    actorName: event.actorName,
+    action: event.action,
+    actionLabel:
+      AUDIT_ACTION_LABELS[event.action as keyof typeof AUDIT_ACTION_LABELS] ??
+      event.action,
+    entityType: event.entityType,
+    entityId: event.entityId,
+    summary: event.summary,
+    changes: redactEventChanges(event.action, event.changes, cannotView),
+    createdAt: event.createdAt,
+  };
+}
+
+export const getFormAuditEvents: GetFormAuditEvents<
+  AuditEventFilters & { formId: string },
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  any
+> = async (args, context): Promise<AuditEventsResult> => {
+  if (!context.user) {
+    throw new HttpError(401);
+  }
+  const { formId } = args;
+  const access = await getFormAccessForUser(formId, context.user);
+  assertCanView(access);
+  assertCanViewAudit(access, context.user);
+
+  const fieldRestrictions = resolveFieldRestrictions(access);
+  const take = Math.min(Math.max(args.take ?? 50, 1), 200);
+  const skip = Math.max(args.skip ?? 0, 0);
+
+  const where: Record<string, unknown> = { formId };
+  if (args.action) {
+    where.action = args.action;
+  }
+  if (args.entityType) {
+    where.entityType = args.entityType;
+  }
+  if (args.actor) {
+    where.OR = [{ actorEmail: args.actor }, { actorUserId: args.actor }];
+  }
+  const from = parseAuditDate(args.from, false);
+  const to = parseAuditDate(args.to, true);
+  if (from || to) {
+    where.createdAt = {
+      ...(from ? { gte: from } : {}),
+      ...(to ? { lte: to } : {}),
+    };
+  }
+
+  const [total, events, actorRows, form] = await Promise.all([
+    prisma.auditEvent.count({ where }),
+    prisma.auditEvent.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip,
+      take,
+    }),
+    prisma.auditEvent.findMany({
+      where: { formId },
+      distinct: ["actorEmail"],
+      select: { actorEmail: true, actorName: true, actorUserId: true },
+      take: 200,
+    }),
+    prisma.form.findUnique({
+      where: { id: formId },
+      select: { id: true, title: true },
+    }),
+  ]);
+
+  const actors = actorRows
+    .filter((row) => row.actorEmail || row.actorUserId)
+    .map((row) => ({
+      value: row.actorEmail || row.actorUserId || "",
+      label:
+        row.actorName && row.actorEmail
+          ? `${row.actorName} (${row.actorEmail})`
+          : row.actorEmail || row.actorName || row.actorUserId || "Unknown",
+    }));
+
+  return {
+    events: events.map((event) =>
+      mapAuditRow(event, fieldRestrictions.cannotView),
+    ),
+    total,
+    forms: form ? [{ id: form.id, title: form.title }] : [],
+    actors,
+    actions: Object.entries(AUDIT_ACTION_LABELS).map(([value, label]) => ({
+      value,
+      label,
+    })),
+  };
+};
+
+export const getAuditEvents: GetAuditEvents<
+  AuditEventFilters,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  any
+> = async (args, context): Promise<AuditEventsResult> => {
+  if (!context.user) {
+    throw new HttpError(401);
+  }
+
+  const allowedFormIds = await formIdsWithAuditAccess(context.user);
+  if (allowedFormIds.length === 0) {
+    return {
+      events: [],
+      total: 0,
+      forms: [],
+      actors: [],
+      actions: Object.entries(AUDIT_ACTION_LABELS).map(([value, label]) => ({
+        value,
+        label,
+      })),
+    };
+  }
+
+  const scopedIds =
+    args.formId && allowedFormIds.includes(args.formId)
+      ? [args.formId]
+      : allowedFormIds;
+
+  const take = Math.min(Math.max(args.take ?? 50, 1), 200);
+  const skip = Math.max(args.skip ?? 0, 0);
+
+  const where: Record<string, unknown> = {
+    formId: { in: scopedIds },
+  };
+  if (args.action) {
+    where.action = args.action;
+  }
+  if (args.entityType) {
+    where.entityType = args.entityType;
+  }
+  if (args.actor) {
+    where.OR = [{ actorEmail: args.actor }, { actorUserId: args.actor }];
+  }
+  const from = parseAuditDate(args.from, false);
+  const to = parseAuditDate(args.to, true);
+  if (from || to) {
+    where.createdAt = {
+      ...(from ? { gte: from } : {}),
+      ...(to ? { lte: to } : {}),
+    };
+  }
+
+  const [total, events, forms, actorRows] = await Promise.all([
+    prisma.auditEvent.count({ where }),
+    prisma.auditEvent.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip,
+      take,
+    }),
+    prisma.form.findMany({
+      where: { id: { in: allowedFormIds } },
+      select: { id: true, title: true },
+      orderBy: { title: "asc" },
+    }),
+    prisma.auditEvent.findMany({
+      where: { formId: { in: allowedFormIds } },
+      distinct: ["actorEmail"],
+      select: { actorEmail: true, actorName: true, actorUserId: true },
+      take: 200,
+    }),
+  ]);
+
+  const restrictionByForm = new Map<string, string[]>();
+  for (const formId of scopedIds) {
+    try {
+      const access = await getFormAccessForUser(formId, context.user);
+      restrictionByForm.set(
+        formId,
+        resolveFieldRestrictions(access).cannotView,
+      );
+    } catch {
+      restrictionByForm.set(formId, []);
+    }
+  }
+
+  const actors = actorRows
+    .filter((row) => row.actorEmail || row.actorUserId)
+    .map((row) => ({
+      value: row.actorEmail || row.actorUserId || "",
+      label:
+        row.actorName && row.actorEmail
+          ? `${row.actorName} (${row.actorEmail})`
+          : row.actorEmail || row.actorName || row.actorUserId || "Unknown",
+    }));
+
+  return {
+    events: events.map((event) =>
+      mapAuditRow(
+        event,
+        event.formId ? (restrictionByForm.get(event.formId) ?? []) : [],
+      ),
+    ),
+    total,
+    forms,
+    actors,
+    actions: Object.entries(AUDIT_ACTION_LABELS).map(([value, label]) => ({
+      value,
+      label,
+    })),
   };
 };

@@ -36,6 +36,8 @@ import {
   getSubmissionsCsv,
   getSubmissionsExcel,
   getUsers,
+  getAuditEvents,
+  getFormAuditEvents,
 } from "./src/queries" with { type: "ref" };
 import { LoginPage } from "./src/auth/LoginPage" with { type: "ref" };
 import { SignupPage } from "./src/auth/SignupPage" with { type: "ref" };
@@ -49,6 +51,8 @@ import { RedirectToForms } from "./src/pages/RedirectToForms" with { type: "ref"
 import { AdminUsersPage } from "./src/pages/AdminUsersPage" with { type: "ref" };
 import { FormAccessPage } from "./src/pages/FormAccessPage" with { type: "ref" };
 import { DocsPage } from "./src/pages/DocsPage" with { type: "ref" };
+import { AuditPage } from "./src/pages/AuditPage" with { type: "ref" };
+import { FormAuditPage } from "./src/pages/FormAuditPage" with { type: "ref" };
 
 export default app({
   name: "formBuilder",
@@ -97,7 +101,13 @@ export default app({
       "/forms/:id/submissions",
       page(FormSubmissionsPage, { authRequired: true }),
     ),
+    route(
+      "FormAuditRoute",
+      "/forms/:id/audit",
+      page(FormAuditPage, { authRequired: true }),
+    ),
     route("FormAccessRoute", "/forms/:id/access", page(FormAccessPage, { authRequired: true })),
+    route("AuditRoute", "/audit", page(AuditPage, { authRequired: true })),
     route("AdminUsersRoute", "/admin/users", page(AdminUsersPage, { authRequired: true })),
     route("DocsRoute", "/docs", page(DocsPage, { authRequired: true })),
     route("LoginRoute", "/login", page(LoginPage)),
@@ -124,6 +134,8 @@ export default app({
     }),
     query(getUsers, { entities: ["User"] }),
     query(getFormAccess, { entities: ["Form", "FormAccess", "User"] }),
+    query(getAuditEvents, { entities: ["Form", "FormAccess", "User"] }),
+    query(getFormAuditEvents, { entities: ["Form", "FormAccess", "User"] }),
     action(createForm, { entities: ["Form"] }),
     action(updateForm, { entities: ["Form", "FormAccess", "User"] }),
     action(deleteForm, { entities: ["Form", "FormAccess", "User"] }),

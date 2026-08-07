@@ -166,8 +166,9 @@ into sections — in the sidebar they are **collapsible accordions**; the pop-ou
   builder as visibility/actions; includes `_user_email` / `_user_id`
   pseudo-fields). Each role can also list fields that **cannot be viewed**
   (redacted server-side) or **cannot be edited** (read-only; values
-  preserved on save). Assigned to people on the Access page. Owners/admins
-  bypass conditions and field restrictions.
+  preserved on save), and **Can view audit log** (default on). Assigned to
+  people on the Access page. Owners/admins bypass conditions and field
+  restrictions.
 - **Actions** — ordered steps that run before or after a submission is stored.
   Actions run in order; each action can have its own **"Only run when..."**
   condition (a rule against the submission data). Multiple actions are
@@ -345,7 +346,11 @@ The submissions table (`/forms/:id/submissions`):
   configured under form settings → **Record roles**.
   Form structure edits still require the owner or an admin. Owners/admins
   bypass capability conditions and field restrictions so they cannot lock
-  themselves out.
+  themselves out. Roles also have **Can view audit log** (default on).
+- **Audit log** (`/audit` and `/forms/:id/audit`): append-only history of
+  form/submission/access/action mutations. Submission updates include
+  per-field diffs. Filter by form, event type, actor, and date. Linked from
+  the submissions page when the viewer’s role allows.
 
 ---
 
