@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import type {
   CapabilityGrant,
   Condition,
@@ -16,7 +17,7 @@ import { permissionConditionFields } from "../../shared/logic";
 import { slugify, uniqueKey } from "./elementFactory";
 import { ConditionEditor, defaultCondition } from "./LogicEditors";
 import { HelpBubble } from "../../shared/components/HelpBubble";
-import { inputClasses } from "../../shared/styles";
+import { inputClasses, selectClasses } from "../../shared/styles";
 import { TrashIcon } from "./icons";
 
 const CAPABILITIES: { key: RecordCapability; label: string }[] = [
@@ -47,6 +48,16 @@ function restrictableFields(fields: FormField[]): FormField[] {
   );
 }
 
+function capabilitySummary(role: FormRoleDef): string {
+  const parts: string[] = [];
+  for (const { key, label } of CAPABILITIES) {
+    if (grantAllowed(role[key])) {
+      parts.push(label.toLowerCase());
+    }
+  }
+  return parts.length > 0 ? parts.join(" · ") : "no submission access";
+}
+
 function FieldDenyPicker({
   label,
   help,
@@ -67,7 +78,11 @@ function FieldDenyPicker({
 
   function toggle(key: string, checked: boolean) {
     if (checked) {
-      onChange([...selectedSet, key].filter((value, index, all) => all.indexOf(value) === index));
+      onChange(
+        [...selectedSet, key].filter(
+          (value, index, all) => all.indexOf(value) === index,
+        ),
+      );
     } else {
       onChange(selected.filter((value) => value !== key));
     }
@@ -115,6 +130,17 @@ export function FormRolesEditor({
   const roles = normalizeFormRoles(settings.roles);
   const ruleTargets = permissionConditionFields(fields);
   const fieldOptions = restrictableFields(fields);
+  const [selectedRoleId, setSelectedRoleId] = useState(
+    () => roles[0]?.id ?? BUILTIN_ROLE_VIEWER,
+  );
+
+  useEffect(() => {
+    if (!roles.some((role) => role.id === selectedRoleId)) {
+      setSelectedRoleId(roles[0]?.id ?? BUILTIN_ROLE_VIEWER);
+    }
+  }, [roles, selectedRoleId]);
+
+  const role = roles.find((candidate) => candidate.id === selectedRoleId);
 
   function updateRoles(next: FormRoleDef[]) {
     onChange({ roles: normalizeFormRoles(next) });
@@ -122,7 +148,7 @@ export function FormRolesEditor({
 
   function patchRole(roleId: string, patch: Partial<FormRoleDef>) {
     updateRoles(
-      roles.map((role) => (role.id === roleId ? { ...role, ...patch } : role)),
+      roles.map((item) => (item.id === roleId ? { ...item, ...patch } : item)),
     );
   }
 
@@ -131,11 +157,11 @@ export function FormRolesEditor({
     capability: RecordCapability,
     allowed: boolean,
   ) {
-    const role = roles.find((r) => r.id === roleId);
-    if (!role) {
+    const current = roles.find((item) => item.id === roleId);
+    if (!current) {
       return;
     }
-    const previous = role[capability];
+    const previous = current[capability];
     const nextGrant: CapabilityGrant = allowed
       ? { allowed: true, when: grantWhen(previous) }
       : { allowed: false };
@@ -147,8 +173,8 @@ export function FormRolesEditor({
     capability: RecordCapability,
     when: Condition | undefined,
   ) {
-    const role = roles.find((r) => r.id === roleId);
-    if (!role || !grantAllowed(role[capability])) {
+    const current = roles.find((item) => item.id === roleId);
+    if (!current || !grantAllowed(current[capability])) {
       return;
     }
     patchRole(roleId, {
@@ -159,7 +185,7 @@ export function FormRolesEditor({
   function addCustomRole() {
     const id = uniqueKey(
       slugify("custom_role") || "custom_role",
-      roles.map((role) => role.id),
+      roles.map((item) => item.id),
     );
     updateRoles([
       ...roles,
@@ -174,14 +200,17 @@ export function FormRolesEditor({
         cannotEditFields: [],
       },
     ]);
+    setSelectedRoleId(id);
   }
 
   function removeRole(roleId: string) {
-    const role = roles.find((r) => r.id === roleId);
-    if (!role || role.builtIn) {
+    const current = roles.find((item) => item.id === roleId);
+    if (!current || current.builtIn) {
       return;
     }
-    updateRoles(roles.filter((r) => r.id !== roleId));
+    const next = roles.filter((item) => item.id !== roleId);
+    updateRoles(next);
+    setSelectedRoleId(next[0]?.id ?? BUILTIN_ROLE_VIEWER);
   }
 
   return (
@@ -195,134 +224,152 @@ export function FormRolesEditor({
         <HelpBubble article="record-roles" align="right" />
       </div>
 
-      <ul className="flex flex-col gap-3">
-        {roles.map((role) => (
-          <li
-            key={role.id}
-            className="flex flex-col gap-2.5 rounded-lg border border-neutral-200 bg-white p-3"
+      <div className="flex flex-col gap-1.5">
+        <label
+          htmlFor="record-role-picker"
+          className="text-[11px] font-semibold uppercase tracking-[0.06em] text-neutral-500"
+        >
+          Edit role
+        </label>
+        <div className="flex items-center gap-2">
+          <select
+            id="record-role-picker"
+            value={selectedRoleId}
+            onChange={(event) => setSelectedRoleId(event.target.value)}
+            className={`${selectClasses} flex-1 py-2 text-sm font-semibold`}
           >
-            <div className="flex items-center gap-2">
-              <input
-                value={role.label}
-                onChange={(event) =>
-                  patchRole(role.id, { label: event.target.value })
-                }
-                aria-label="Role label"
-                className={`${inputClasses} flex-1 text-sm font-semibold`}
-              />
-              {role.builtIn ? (
-                <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 font-mono text-[9.5px] font-semibold uppercase tracking-[0.08em] text-neutral-500">
-                  built-in
-                </span>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => removeRole(role.id)}
-                  aria-label="Remove role"
-                  className="rounded-md p-1.5 text-neutral-400 hover:bg-danger-soft hover:text-danger"
-                >
-                  <TrashIcon className="size-3.5" />
-                </button>
-              )}
-            </div>
-            <p className="font-mono text-[10px] text-neutral-400">
-              id: {role.id}
-              {(role.id === BUILTIN_ROLE_VIEWER ||
-                role.id === BUILTIN_ROLE_EDITOR ||
-                role.id === BUILTIN_ROLE_MANAGER) &&
-                " · default"}
-            </p>
+            {roles.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.label}
+                {item.builtIn ? " (built-in)" : ""} — {capabilitySummary(item)}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={addCustomRole}
+            className="shrink-0 rounded-lg border border-neutral-300 bg-white px-2.5 py-2 text-xs font-semibold text-neutral-600 hover:border-primary-400 hover:text-primary-700"
+          >
+            + Add
+          </button>
+        </div>
+      </div>
 
-            {CAPABILITIES.map(({ key, label }) => {
-              const allowed = grantAllowed(role[key]);
-              const when = grantWhen(role[key]);
-              const whenEnabled = Boolean(when);
-              return (
-                <div
-                  key={key}
-                  className="flex flex-col gap-1.5 border-t border-neutral-100 pt-2"
-                >
-                  <label className="flex items-center gap-2 text-xs font-medium text-neutral-700">
-                    <input
-                      type="checkbox"
-                      checked={allowed}
-                      onChange={(event) =>
-                        setCapability(role.id, key, event.target.checked)
-                      }
-                      className="size-3.5 rounded border-neutral-300 text-primary-500 focus:ring-primary-500"
-                    />
-                    Can {label.toLowerCase()} submissions
-                  </label>
-                  {allowed && (
-                    <>
-                      <label className="flex items-center gap-2 text-[11px] font-medium text-neutral-600">
-                        <input
-                          type="checkbox"
-                          checked={whenEnabled}
-                          onChange={(event) =>
-                            setCapabilityWhen(
-                              role.id,
-                              key,
-                              event.target.checked
-                                ? (when ?? defaultCondition())
-                                : undefined,
-                            )
-                          }
-                          className="size-3.5 rounded border-neutral-300 text-primary-500 focus:ring-primary-500"
-                        />
-                        Only when…
-                      </label>
-                      {whenEnabled && (
-                        <ConditionEditor
-                          condition={when ?? defaultCondition()}
-                          targets={ruleTargets}
-                          onChange={(next) =>
-                            setCapabilityWhen(role.id, key, next)
-                          }
-                        />
-                      )}
-                    </>
-                  )}
-                </div>
-              );
-            })}
-
-            <FieldDenyPicker
-              label="Cannot view fields"
-              help="Hidden on records, table, exports, and PDFs for this role."
-              fields={fieldOptions}
-              selected={role.cannotViewFields ?? []}
-              onChange={(cannotViewFields) =>
-                patchRole(role.id, {
-                  cannotViewFields,
-                  cannotEditFields: (role.cannotEditFields ?? []).filter(
-                    (key) => !cannotViewFields.includes(key),
-                  ),
-                })
+      {role && (
+        <div className="flex flex-col gap-2.5 rounded-lg border border-neutral-200 bg-white p-3">
+          <div className="flex items-center gap-2">
+            <input
+              value={role.label}
+              onChange={(event) =>
+                patchRole(role.id, { label: event.target.value })
               }
+              aria-label="Role label"
+              className={`${inputClasses} flex-1 text-sm font-semibold`}
             />
-            <FieldDenyPicker
-              label="Cannot edit fields"
-              help="Visible but read-only; values are preserved on save."
-              fields={fieldOptions.filter(
-                (field) => !(role.cannotViewFields ?? []).includes(field.key),
-              )}
-              selected={role.cannotEditFields ?? []}
-              onChange={(cannotEditFields) =>
-                patchRole(role.id, { cannotEditFields })
-              }
-            />
-          </li>
-        ))}
-      </ul>
+            {role.builtIn ? (
+              <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 font-mono text-[9.5px] font-semibold uppercase tracking-[0.08em] text-neutral-500">
+                built-in
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => removeRole(role.id)}
+                aria-label="Remove role"
+                className="rounded-md p-1.5 text-neutral-400 hover:bg-danger-soft hover:text-danger"
+              >
+                <TrashIcon className="size-3.5" />
+              </button>
+            )}
+          </div>
+          <p className="font-mono text-[10px] text-neutral-400">
+            id: {role.id}
+            {(role.id === BUILTIN_ROLE_VIEWER ||
+              role.id === BUILTIN_ROLE_EDITOR ||
+              role.id === BUILTIN_ROLE_MANAGER) &&
+              " · default"}
+          </p>
 
-      <button
-        type="button"
-        onClick={addCustomRole}
-        className="self-start rounded-lg border border-neutral-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-neutral-600 hover:border-primary-400 hover:text-primary-700"
-      >
-        + Add custom role
-      </button>
+          {CAPABILITIES.map(({ key, label }) => {
+            const allowed = grantAllowed(role[key]);
+            const when = grantWhen(role[key]);
+            const whenEnabled = Boolean(when);
+            return (
+              <div
+                key={key}
+                className="flex flex-col gap-1.5 border-t border-neutral-100 pt-2"
+              >
+                <label className="flex items-center gap-2 text-xs font-medium text-neutral-700">
+                  <input
+                    type="checkbox"
+                    checked={allowed}
+                    onChange={(event) =>
+                      setCapability(role.id, key, event.target.checked)
+                    }
+                    className="size-3.5 rounded border-neutral-300 text-primary-500 focus:ring-primary-500"
+                  />
+                  Can {label.toLowerCase()} submissions
+                </label>
+                {allowed && (
+                  <>
+                    <label className="flex items-center gap-2 text-[11px] font-medium text-neutral-600">
+                      <input
+                        type="checkbox"
+                        checked={whenEnabled}
+                        onChange={(event) =>
+                          setCapabilityWhen(
+                            role.id,
+                            key,
+                            event.target.checked
+                              ? (when ?? defaultCondition())
+                              : undefined,
+                          )
+                        }
+                        className="size-3.5 rounded border-neutral-300 text-primary-500 focus:ring-primary-500"
+                      />
+                      Only when…
+                    </label>
+                    {whenEnabled && (
+                      <ConditionEditor
+                        condition={when ?? defaultCondition()}
+                        targets={ruleTargets}
+                        onChange={(next) =>
+                          setCapabilityWhen(role.id, key, next)
+                        }
+                      />
+                    )}
+                  </>
+                )}
+              </div>
+            );
+          })}
+
+          <FieldDenyPicker
+            label="Cannot view fields"
+            help="Hidden on records, table, exports, and PDFs for this role."
+            fields={fieldOptions}
+            selected={role.cannotViewFields ?? []}
+            onChange={(cannotViewFields) =>
+              patchRole(role.id, {
+                cannotViewFields,
+                cannotEditFields: (role.cannotEditFields ?? []).filter(
+                  (key) => !cannotViewFields.includes(key),
+                ),
+              })
+            }
+          />
+          <FieldDenyPicker
+            label="Cannot edit fields"
+            help="Visible but read-only; values are preserved on save."
+            fields={fieldOptions.filter(
+              (field) => !(role.cannotViewFields ?? []).includes(field.key),
+            )}
+            selected={role.cannotEditFields ?? []}
+            onChange={(cannotEditFields) =>
+              patchRole(role.id, { cannotEditFields })
+            }
+          />
+        </div>
+      )}
     </div>
   );
 }
