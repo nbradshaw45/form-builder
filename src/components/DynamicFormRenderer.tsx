@@ -30,6 +30,8 @@ interface DynamicFormRendererProps {
   submitterName?: string;
   initialValues?: SubmissionData;
   readOnly?: boolean;
+  /** Field keys that stay read-only even when the form is editable. */
+  readonlyFieldKeys?: string[];
   showReset?: boolean;
   formId?: string;
   multiStep?: boolean;
@@ -149,6 +151,7 @@ export function DynamicFormRenderer({
   submitterName,
   initialValues,
   readOnly = false,
+  readonlyFieldKeys,
   showReset = false,
   formId,
   multiStep = false,
@@ -165,6 +168,11 @@ export function DynamicFormRenderer({
   const [currentStep, setCurrentStep] = useState(0);
   const [honeypotValue, setHoneypotValue] = useState("");
   const formLoadedAtRef = useRef(Date.now());
+
+  const readonlyKeySet = useMemo(
+    () => new Set(readonlyFieldKeys ?? []),
+    [readonlyFieldKeys],
+  );
 
   const { data: userOptions } = useQuery(getFormUsers);
 
@@ -575,7 +583,7 @@ export function DynamicFormRenderer({
         onChange={(value) => setValue(field.key, value)}
         allValues={effectiveValues}
         error={errors[field.key]}
-        disabled={readOnly}
+        disabled={readOnly || readonlyKeySet.has(field.key)}
         formId={formId}
         allFields={effectiveFields}
       />

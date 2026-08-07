@@ -11,7 +11,10 @@ import { DEFAULT_FORM_SETTINGS } from "../types";
 import {
   BUILTIN_ROLE_VIEWER,
   FULL_RECORD_PERMISSIONS,
+  fieldRestrictionsFromRole,
   normalizeFormRoles,
+  type FieldRestrictions,
+  NO_FIELD_RESTRICTIONS,
 } from "../shared/formRoles";
 import {
   evaluateCondition,
@@ -163,6 +166,15 @@ export function resolveRecordPermissions(
     edit: grantAllows(access.role.edit, values),
     delete: grantAllows(access.role.delete, values),
   };
+}
+
+export function resolveFieldRestrictions(
+  access: FormAccessKind,
+): FieldRestrictions {
+  if (access.kind === "owner" || access.kind === "admin") {
+    return { ...NO_FIELD_RESTRICTIONS };
+  }
+  return fieldRestrictionsFromRole(access.role);
 }
 
 export function assertCanViewSubmission(

@@ -1,11 +1,13 @@
 import type {
   CapabilityGrant,
   Condition,
+  FieldRestrictions,
   FormRoleDef,
   RecordPermissions,
+  SubmissionData,
 } from "../types";
 
-export type { CapabilityGrant, FormRoleDef, RecordPermissions };
+export type { CapabilityGrant, FormRoleDef, RecordPermissions, FieldRestrictions };
 
 export const BUILTIN_ROLE_VIEWER = "viewer";
 export const BUILTIN_ROLE_EDITOR = "editor";
@@ -26,6 +28,11 @@ export const NO_RECORD_PERMISSIONS: RecordPermissions = {
   delete: false,
 };
 
+export const NO_FIELD_RESTRICTIONS: FieldRestrictions = {
+  cannotView: [],
+  cannotEdit: [],
+};
+
 export function defaultFormRoles(): FormRoleDef[] {
   return [
     {
@@ -35,6 +42,8 @@ export function defaultFormRoles(): FormRoleDef[] {
       view: ALWAYS,
       edit: NEVER,
       delete: NEVER,
+      cannotViewFields: [],
+      cannotEditFields: [],
     },
     {
       id: BUILTIN_ROLE_EDITOR,
@@ -43,6 +52,8 @@ export function defaultFormRoles(): FormRoleDef[] {
       view: ALWAYS,
       edit: ALWAYS,
       delete: NEVER,
+      cannotViewFields: [],
+      cannotEditFields: [],
     },
     {
       id: BUILTIN_ROLE_MANAGER,
@@ -51,6 +62,8 @@ export function defaultFormRoles(): FormRoleDef[] {
       view: ALWAYS,
       edit: ALWAYS,
       delete: ALWAYS,
+      cannotViewFields: [],
+      cannotEditFields: [],
     },
   ];
 }
@@ -102,7 +115,31 @@ function normalizeGrant(
   return fallback;
 }
 
+function normalizeKeyList(keys: unknown): string[] {
+  if (!Array.isArray(keys)) {
+    return [];
+  }
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const key of keys) {
+    if (typeof key !== "string") {
+      continue;
+    }
+    const trimmed = key.trim();
+    if (!trimmed || seen.has(trimmed)) {
+      continue;
+    }
+    seen.add(trimmed);
+    result.push(trimmed);
+  }
+  return result;
+}
+
 function normalizeRoleDef(role: FormRoleDef): FormRoleDef {
+  const cannotViewFields = normalizeKeyList(role.cannotViewFields);
+  const cannotEditFields = normalizeKeyList(role.cannotEditFields).filter(
+    (key) => !cannotViewFields.includes(key),
+  );
   return {
     id: role.id,
     label: role.label?.trim() || role.id,
@@ -110,6 +147,8 @@ function normalizeRoleDef(role: FormRoleDef): FormRoleDef {
     view: normalizeGrant(role.view, ALWAYS),
     edit: normalizeGrant(role.edit, NEVER),
     delete: normalizeGrant(role.delete, NEVER),
+    cannotViewFields,
+    cannotEditFields,
   };
 }
 
@@ -119,4 +158,65 @@ export function legacyLevelToRoleId(level: string): string {
     return BUILTIN_ROLE_MANAGER;
   }
   return BUILTIN_ROLE_VIEWER;
+}
+
+/** Effective field restrictions for a shared role (owner/admin → none). */
+export function fieldRestrictionsFromRole(
+  role: FormRoleDef | null | undefined,
+): FieldRestrictions {
+  if (!role) {
+    return { cannotView: [], cannotEdit: [] };
+  }
+  const cannotView = normalizeKeyList(role.cannotViewFields);
+  const cannotEdit = [
+    ...new Set([
+      ...normalizeKeyList(role.cannotEditFields),
+      ...cannotView,
+    ]),
+  ];
+  return { cannotView, cannotEdit };
+}
+
+export function redactSubmissionData(
+  data: SubmissionData,
+  cannotView: string[],
+): SubmissionData {
+  if (cannotView.length === 0) {
+    return data;
+  }
+  const hidden = new Set(cannotView);
+  const next: SubmissionData = {};
+  for (const [key, value] of Object.entries(data)) {
+    if (!hidden.has(key)) {
+      next[key] = value;
+    }
+  }
+  return next;
+}
+
+/**
+ * Merge an update payload into previous data while preserving keys the role
+ * cannot view or edit.
+ */
+export function mergeSubmissionDataWithFieldRestrictions(
+  previous: SubmissionData,
+  incoming: SubmissionData,
+  restrictions: FieldRestrictions,
+): SubmissionData {
+  const protectedKeys = new Set([
+    ...restrictions.cannotView,
+    ...restrictions.cannotEdit,
+  ]);
+  if (protectedKeys.size === 0) {
+    return { ...previous, ...incoming };
+  }
+  const merged: SubmissionData = { ...previous, ...incoming };
+  for (const key of protectedKeys) {
+    if (Object.prototype.hasOwnProperty.call(previous, key)) {
+      merged[key] = previous[key];
+    } else {
+      delete merged[key];
+    }
+  }
+  return merged;
 }

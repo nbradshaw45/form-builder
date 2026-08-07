@@ -91,6 +91,10 @@ export function FormSubmissionsPage({ user }: { user: AuthUser }) {
 
   const submissions = submissionsData?.submissions;
   const access = submissionsData?.access ?? "view";
+  const fieldRestrictions = submissionsData?.fieldRestrictions ?? {
+    cannotView: [],
+    cannotEdit: [],
+  };
 
   const [deleteTarget, setDeleteTarget] = useState<Submission | null>(null);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
@@ -113,13 +117,16 @@ export function FormSubmissionsPage({ user }: { user: AuthUser }) {
     [selected, submissions, canEdit],
   );
 
-  const fields = useMemo<FormField[]>(
-    () =>
-      Array.isArray(form?.fields)
-        ? (form.fields as unknown as FormField[])
-        : [],
-    [form],
-  );
+  const fields = useMemo<FormField[]>(() => {
+    const all = Array.isArray(form?.fields)
+      ? (form.fields as unknown as FormField[])
+      : [];
+    if (fieldRestrictions.cannotView.length === 0) {
+      return all;
+    }
+    const hidden = new Set(fieldRestrictions.cannotView);
+    return all.filter((field) => !hidden.has(field.key));
+  }, [form, fieldRestrictions.cannotView]);
 
   const settings = useMemo<FormSettings>(
     () => ({

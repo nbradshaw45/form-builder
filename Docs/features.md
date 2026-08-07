@@ -164,8 +164,10 @@ into sections — in the sidebar they are **collapsible accordions**; the pop-ou
   that control submission view / edit / delete. Each capability can be
   always-on, off, or **only when** a condition matches (same condition
   builder as visibility/actions; includes `_user_email` / `_user_id`
-  pseudo-fields). Assigned to people on the Access page. Owners/admins
-  bypass conditions.
+  pseudo-fields). Each role can also list fields that **cannot be viewed**
+  (redacted server-side) or **cannot be edited** (read-only; values
+  preserved on save). Assigned to people on the Access page. Owners/admins
+  bypass conditions and field restrictions.
 - **Actions** — ordered steps that run before or after a submission is stored.
   Actions run in order; each action can have its own **"Only run when..."**
   condition (a rule against the submission data). Multiple actions are
@@ -339,9 +341,11 @@ The submissions table (`/forms/:id/submissions`):
 - **Form sharing** (`/forms/:id/access`): assign a per-form **record role**
   (Viewer / Editor / Manager / custom) to each user by email. Role
   capabilities (view / edit / delete, each optionally "only when…" a
-  condition matches) are configured under form settings → **Record roles**.
+  condition matches) and per-field cannot-view / cannot-edit lists are
+  configured under form settings → **Record roles**.
   Form structure edits still require the owner or an admin. Owners/admins
-  bypass capability conditions so they cannot lock themselves out.
+  bypass capability conditions and field restrictions so they cannot lock
+  themselves out.
 
 ---
 

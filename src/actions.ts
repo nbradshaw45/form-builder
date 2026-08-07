@@ -41,7 +41,9 @@ import {
   assertIsOwnerOrAdmin,
   getFormAccessForUser,
   getRolesFromSettings,
+  resolveFieldRestrictions,
 } from "./server/access";
+import { mergeSubmissionDataWithFieldRestrictions } from "./shared/formRoles";
 import { sendWebhook } from "./server/notifications";
 import {
   applyBeforeSubmitActions,
@@ -585,6 +587,7 @@ export const updateSubmission: UpdateSubmission<
       ? (submission.data as SubmissionData)
       : {};
   assertCanEditSubmission(access, previousData, context.user);
+  const fieldRestrictions = resolveFieldRestrictions(access);
   const systemValues = buildSystemValues(
     submission.form.fields,
     undefined,
@@ -595,8 +598,11 @@ export const updateSubmission: UpdateSubmission<
     where: { id: submissionId },
     data: {
       data: serialize({
-        ...previousData,
-        ...data,
+        ...mergeSubmissionDataWithFieldRestrictions(
+          previousData,
+          data,
+          fieldRestrictions,
+        ),
         ...systemValues,
       }),
     },

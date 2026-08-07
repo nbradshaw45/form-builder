@@ -28,11 +28,13 @@ import {
   accessKindForClient,
   getFormAccessForUser,
   getRolesFromSettings,
+  resolveFieldRestrictions,
   resolveRecordPermissions,
 } from "./server/access";
 import { buildSubmissionPdf, collectFileUploadIds } from "./server/pdf";
-import type { RecordPermissions } from "./types";
+import type { FieldRestrictions, RecordPermissions } from "./types";
 import { BUILTIN_ROLE_VIEWER } from "./shared/formRoles";
+import { redactSubmissionData } from "./shared/formRoles";
 
 export type FormWithSubmissionsCount = Form & {
   _count: { submissions: number };
@@ -79,6 +81,7 @@ export type SubmissionWithPermissions = Submission & {
 export type SubmissionsResult = {
   access: "owner" | "admin" | "edit" | "view";
   roleId: string | null;
+  fieldRestrictions: FieldRestrictions;
   submissions: SubmissionWithPermissions[];
 };
 
@@ -86,6 +89,7 @@ export type SubmissionResult = {
   access: "owner" | "admin" | "edit" | "view";
   roleId: string | null;
   permissions: RecordPermissions;
+  fieldRestrictions: FieldRestrictions;
   submission: Submission;
 };
 
@@ -254,6 +258,7 @@ export const getFormSubmissions: GetFormSubmissions<
   });
 
   const withPermissions: SubmissionWithPermissions[] = [];
+  const fieldRestrictions = resolveFieldRestrictions(access);
   for (const submission of submissions) {
     const data =
       submission.data && typeof submission.data === "object"
@@ -263,12 +268,17 @@ export const getFormSubmissions: GetFormSubmissions<
     if (!permissions.view) {
       continue;
     }
-    withPermissions.push({ ...submission, permissions });
+    withPermissions.push({
+      ...submission,
+      data: redactSubmissionData(data, fieldRestrictions.cannotView),
+      permissions,
+    });
   }
 
   return {
     access: accessKindForClient(access),
     roleId: access.kind === "shared" ? access.roleId : null,
+    fieldRestrictions,
     submissions: withPermissions,
   };
 };
@@ -297,12 +307,17 @@ export const getSubmission: GetSubmission<
       : {};
   assertCanViewSubmission(access, data, context.user);
   const permissions = resolveRecordPermissions(access, data, context.user);
+  const fieldRestrictions = resolveFieldRestrictions(access);
 
   return {
     access: accessKindForClient(access),
     roleId: access.kind === "shared" ? access.roleId : null,
     permissions,
-    submission,
+    fieldRestrictions,
+    submission: {
+      ...submission,
+      data: redactSubmissionData(data, fieldRestrictions.cannotView),
+    },
   };
 };
 
@@ -353,6 +368,7 @@ export type GetSubmissionByTokenResult = {
   access: "owner" | "admin" | "edit" | "view";
   roleId: string | null;
   permissions: RecordPermissions;
+  fieldRestrictions: FieldRestrictions;
   submission: Submission;
 };
 
@@ -373,6 +389,7 @@ export const getSubmissionByToken: GetSubmissionByToken<
     access: "edit",
     roleId: null,
     permissions: { view: true, edit: true, delete: false },
+    fieldRestrictions: { cannotView: [], cannotEdit: [] },
     submission,
   };
 };
@@ -402,6 +419,8 @@ export const getSubmissionsCsv: GetSubmissionsCsv<
   }
   const access = await getFormAccessForUser(formId, context.user);
   assertCanView(access);
+  const fieldRestrictions = resolveFieldRestrictions(access);
+  const hiddenKeys = new Set(fieldRestrictions.cannotView);
 
   const form = await context.entities.Form.findUnique({
     where: { id: formId },
@@ -427,6 +446,9 @@ export const getSubmissionsCsv: GetSubmissionsCsv<
     if (field.showInTable === false) {
       continue;
     }
+    if (hiddenKeys.has(field.key)) {
+      continue;
+    }
     if (!keys.includes(field.key)) {
       keys.push(field.key);
     }
@@ -434,6 +456,9 @@ export const getSubmissionsCsv: GetSubmissionsCsv<
   for (const submission of form.submissions) {
     const data = submission.data as Record<string, unknown>;
     for (const key of Object.keys(data)) {
+      if (hiddenKeys.has(key)) {
+        continue;
+      }
       if (!keys.includes(key)) {
         keys.push(key);
       }
@@ -487,6 +512,8 @@ export const getSubmissionsExcel: GetSubmissionsExcel<
   }
   const access = await getFormAccessForUser(formId, context.user);
   assertCanView(access);
+  const fieldRestrictions = resolveFieldRestrictions(access);
+  const hiddenKeys = new Set(fieldRestrictions.cannotView);
 
   const form = await context.entities.Form.findUnique({
     where: { id: formId },
@@ -513,6 +540,9 @@ export const getSubmissionsExcel: GetSubmissionsExcel<
     if (field.showInTable === false) {
       continue;
     }
+    if (hiddenKeys.has(field.key)) {
+      continue;
+    }
     if (!keys.includes(field.key)) {
       keys.push(field.key);
     }
@@ -520,6 +550,9 @@ export const getSubmissionsExcel: GetSubmissionsExcel<
   for (const submission of form.submissions) {
     const data = submission.data as Record<string, unknown>;
     for (const key of Object.keys(data)) {
+      if (hiddenKeys.has(key)) {
+        continue;
+      }
       if (!keys.includes(key)) {
         keys.push(key);
       }
@@ -606,7 +639,12 @@ export const getSubmissionPdf: GetSubmissionPdf<
       ? (submission.data as SubmissionData)
       : {};
   assertCanViewSubmission(access, data, context.user);
-  const fileIds = collectFileUploadIds(fields, data);
+  const fieldRestrictions = resolveFieldRestrictions(access);
+  const visibleData = redactSubmissionData(data, fieldRestrictions.cannotView);
+  const visibleFields = fields.filter(
+    (field) => !fieldRestrictions.cannotView.includes(field.key),
+  );
+  const fileIds = collectFileUploadIds(visibleFields, visibleData);
   const fileNames: Record<string, string> = {};
   if (fileIds.length > 0) {
     const files = await context.entities.UploadedFile.findMany({
@@ -617,7 +655,11 @@ export const getSubmissionPdf: GetSubmissionPdf<
     }
   }
 
-  const buffer = await buildSubmissionPdf(form, submission, { fileNames });
+  const buffer = await buildSubmissionPdf(
+    { ...form, fields: visibleFields },
+    { ...submission, data: visibleData },
+    { fileNames },
+  );
   return {
     filename: `${form.title}-${submission.id}.pdf`,
     base64: buffer.toString("base64"),

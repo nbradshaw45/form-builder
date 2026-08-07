@@ -1960,7 +1960,7 @@ form.setValue("team_summary", names.join(", "));`}
     title: "Record roles & conditions",
     category: "admin",
     summary:
-      "Per-form roles that gate submission view, edit, and delete — with optional conditions on each capability.",
+      "Per-form roles that gate submission view, edit, and delete — with optional conditions and per-field hide/lock lists.",
     content: (
       <>
         <P>
@@ -2012,10 +2012,26 @@ form.setValue("team_summary", names.join(", "));`}
             <Code>_user_email</Code> (records assigned to them)
           </Li>
         </Ul>
+        <H3 id="field-restrictions">Field restrictions</H3>
+        <P>
+          Each role can also list fields that the assignee{" "}
+          <strong>cannot view</strong> or <strong>cannot edit</strong>:
+        </P>
+        <Ul>
+          <Li>
+            <strong>Cannot view</strong> — redacted from the record page,
+            submissions table, CSV/Excel exports, and PDFs. The server never
+            returns those values to that role.
+          </Li>
+          <Li>
+            <strong>Cannot edit</strong> — still visible, but read-only on the
+            edit form. On save, the server keeps the previous values for those
+            keys (even if the client tries to change them).
+          </Li>
+        </Ul>
         <Note>
-          The owner and global admins always have full record access and{" "}
-          <em>bypass</em> capability conditions, so you cannot lock yourself
-          out of your own form.
+          Hidden fields are also treated as non-editable. Owners and global
+          admins bypass field restrictions as well as capability conditions.
         </Note>
         <Tip>
           Record ACL is separate from{" "}

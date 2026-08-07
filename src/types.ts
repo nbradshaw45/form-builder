@@ -101,6 +101,10 @@ export type FormRoleDef = {
   view: CapabilityGrant;
   edit: CapabilityGrant;
   delete: CapabilityGrant;
+  /** Field keys this role cannot see (redacted from submissions). */
+  cannotViewFields?: string[];
+  /** Field keys this role cannot change (shown read-only; preserved on save). */
+  cannotEditFields?: string[];
 };
 
 export type RecordCapability = "view" | "edit" | "delete";
@@ -109,6 +113,12 @@ export type RecordPermissions = {
   view: boolean;
   edit: boolean;
   delete: boolean;
+};
+
+/** Effective field-level restrictions for the current user's form role. */
+export type FieldRestrictions = {
+  cannotView: string[];
+  cannotEdit: string[];
 };
 
 export type FieldValidation = {

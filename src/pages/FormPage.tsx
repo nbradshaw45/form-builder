@@ -117,6 +117,18 @@ export function FormPage() {
   const fields = Array.isArray(form.fields)
     ? (form.fields as unknown as FormField[])
     : [];
+  const fieldRestrictions = record?.fieldRestrictions ?? {
+    cannotView: [],
+    cannotEdit: [],
+  };
+  const visibleFields =
+    recordMode === "new"
+      ? fields
+      : fields.filter(
+          (field) => !fieldRestrictions.cannotView.includes(field.key),
+        );
+  const readonlyFieldKeys =
+    recordMode === "new" ? [] : fieldRestrictions.cannotEdit;
   const settings: FormSettings = {
     ...DEFAULT_FORM_SETTINGS,
     ...((form.settings as unknown as FormSettings | null) ?? {}),
@@ -440,11 +452,12 @@ export function FormPage() {
   ) : (
     <DynamicFormRenderer
       key={`${recordMode}-${submissionId ?? "new"}-${formId}`}
-      fields={fields}
+      fields={visibleFields}
       onSubmit={handleSubmit}
       submitLabel={recordMode === "edit" ? "Save changes" : "Submit"}
       hideSubmit={isReadOnly}
       readOnly={isReadOnly}
+      readonlyFieldKeys={readonlyFieldKeys}
       showReset={settings.showResetButton}
       multiStep={settings.multiStep === true}
       honeypot={settings.honeypot === true}

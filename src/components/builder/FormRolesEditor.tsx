@@ -25,12 +25,82 @@ const CAPABILITIES: { key: RecordCapability; label: string }[] = [
   { key: "delete", label: "Delete" },
 ];
 
+const NON_RESTRICTABLE = new Set([
+  "section_header",
+  "divider",
+  "paragraph",
+  "page_break",
+  "captcha",
+]);
+
 function grantAllowed(grant: CapabilityGrant): boolean {
   return grant.allowed === true;
 }
 
 function grantWhen(grant: CapabilityGrant): Condition | undefined {
   return grant.allowed === true ? grant.when : undefined;
+}
+
+function restrictableFields(fields: FormField[]): FormField[] {
+  return fields.filter(
+    (field) => field.key && !NON_RESTRICTABLE.has(field.type),
+  );
+}
+
+function FieldDenyPicker({
+  label,
+  help,
+  fields,
+  selected,
+  onChange,
+}: {
+  label: string;
+  help: string;
+  fields: FormField[];
+  selected: string[];
+  onChange: (keys: string[]) => void;
+}) {
+  if (fields.length === 0) {
+    return null;
+  }
+  const selectedSet = new Set(selected);
+
+  function toggle(key: string, checked: boolean) {
+    if (checked) {
+      onChange([...selectedSet, key].filter((value, index, all) => all.indexOf(value) === index));
+    } else {
+      onChange(selected.filter((value) => value !== key));
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5 border-t border-neutral-100 pt-2">
+      <div className="flex flex-col gap-0.5">
+        <span className="text-xs font-medium text-neutral-700">{label}</span>
+        <span className="text-[11px] leading-snug text-neutral-400">{help}</span>
+      </div>
+      <ul className="max-h-36 overflow-y-auto rounded-md border border-neutral-200 bg-neutral-50/80 p-2">
+        {fields.map((field) => (
+          <li key={field.id}>
+            <label className="flex items-center gap-2 rounded px-1 py-0.5 text-[11px] text-neutral-700 hover:bg-white">
+              <input
+                type="checkbox"
+                checked={selectedSet.has(field.key)}
+                onChange={(event) => toggle(field.key, event.target.checked)}
+                className="size-3.5 rounded border-neutral-300 text-primary-500 focus:ring-primary-500"
+              />
+              <span className="min-w-0 truncate">
+                {field.label || field.key}
+                <span className="ml-1 font-mono text-[10px] text-neutral-400">
+                  {field.key}
+                </span>
+              </span>
+            </label>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
 }
 
 export function FormRolesEditor({
@@ -44,6 +114,7 @@ export function FormRolesEditor({
 }) {
   const roles = normalizeFormRoles(settings.roles);
   const ruleTargets = permissionConditionFields(fields);
+  const fieldOptions = restrictableFields(fields);
 
   function updateRoles(next: FormRoleDef[]) {
     onChange({ roles: normalizeFormRoles(next) });
@@ -99,6 +170,8 @@ export function FormRolesEditor({
         view: { allowed: true },
         edit: { allowed: false },
         delete: { allowed: false },
+        cannotViewFields: [],
+        cannotEditFields: [],
       },
     ]);
   }
@@ -116,8 +189,8 @@ export function FormRolesEditor({
       <div className="flex items-start justify-between gap-2">
         <p className="text-xs leading-snug text-neutral-400">
           Define who can view, edit, or delete submissions when this form is
-          shared. Assign roles on the Access page. Optional conditions reuse
-          the same rule builder as visibility and actions.
+          shared. Optionally hide or lock individual fields per role. Assign
+          roles on the Access page.
         </p>
         <HelpBubble article="record-roles" align="right" />
       </div>
@@ -213,6 +286,32 @@ export function FormRolesEditor({
                 </div>
               );
             })}
+
+            <FieldDenyPicker
+              label="Cannot view fields"
+              help="Hidden on records, table, exports, and PDFs for this role."
+              fields={fieldOptions}
+              selected={role.cannotViewFields ?? []}
+              onChange={(cannotViewFields) =>
+                patchRole(role.id, {
+                  cannotViewFields,
+                  cannotEditFields: (role.cannotEditFields ?? []).filter(
+                    (key) => !cannotViewFields.includes(key),
+                  ),
+                })
+              }
+            />
+            <FieldDenyPicker
+              label="Cannot edit fields"
+              help="Visible but read-only; values are preserved on save."
+              fields={fieldOptions.filter(
+                (field) => !(role.cannotViewFields ?? []).includes(field.key),
+              )}
+              selected={role.cannotEditFields ?? []}
+              onChange={(cannotEditFields) =>
+                patchRole(role.id, { cannotEditFields })
+              }
+            />
           </li>
         ))}
       </ul>
